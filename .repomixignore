@@ -1,0 +1,64 @@
+# ==========================================
+
+# Expo and Native Platform Build Folders
+
+# ==========================================
+
+.expo/
+android/
+ios/
+dist/
+
+# ==========================================
+
+# Project Assets, Binaries & Images
+
+# ==========================================
+
+assets/
+public/canvaskit.wasm
+
+# ==========================================
+
+# Supabase Local CLI Cache & Metadata
+
+# ==========================================
+
+supabase/.branches/
+supabase/.temp/
+
+# ==========================================
+
+# AI Agent Caches & Heavy Reports (CRITICAL)
+
+# ==========================================
+
+.agents/
+.claude/
+.cursor/
+.github/modernize/
+_.md
+!README.md
+_.log
+
+# ==========================================
+
+# Package Managers & Build Artifacts
+
+# ==========================================
+
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+
+# ==========================================
+
+# Environment Secrets, Keystores & Outputs
+
+# ==========================================
+
+.env
+_.jks
+repomix-output._

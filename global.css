@@ -1,3 +1,21 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-base: #011325;
+    --bg-card: #0101244e;
+    --neon-cyan: #00f0ff;
+    --neon-purple: #8a2be2;
+    --neon-pink: #ff007f;
+  }
+}
+
+html,
+body {
+  background: linear-gradient(160deg, #011325 0%, #0a1419 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  color: white;
+}
