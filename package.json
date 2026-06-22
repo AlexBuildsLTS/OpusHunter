@@ -17,6 +17,7 @@
     "functions:serve": "npx supabase functions serve",
     "validate": "npm run typecheck && npm run lint",
     "clean": "rm -rf node_modules .expo dist .turbo && npm cache clean --force && npm install",
+    "supabase:gen-types": "npx supabase gen types typescript --linked > types/database.types.ts",
     "functions:deploy": "npx supabase functions deploy"
   },
   "dependencies": {
