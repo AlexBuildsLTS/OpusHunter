@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_rules: {
+        Row: {
+          base_cover_letter: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          keywords: string[]
+          location: string
+          user_id: string
+          work_types: string[]
+        }
+        Insert: {
+          base_cover_letter: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          keywords: string[]
+          location: string
+          user_id: string
+          work_types: string[]
+        }
+        Update: {
+          base_cover_letter?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          keywords?: string[]
+          location?: string
+          user_id?: string
+          work_types?: string[]
+        }
+        Relationships: []
+      }
       job_vault: {
         Row: {
           company: string
