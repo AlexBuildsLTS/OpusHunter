@@ -1,0 +1,8 @@
+{
+    "expo": {
+        "name": "OpusHunter",
+        "slug": "opushunter",
+        "version": "1.0.0",
+        "userInterfaceStyle": "dark"
+    }
+}
