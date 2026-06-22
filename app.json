@@ -14,7 +14,7 @@
         "icon": "./assets/icon.png",
         "ios": {
             "supportsTablet": true,
-            "bundleIdentifier": "com.veraxai.app",
+            "bundleIdentifier": "com.opushunter.app",
             "infoPlist": {
                 "NSMicrophoneUsageDescription": "This app needs access to the microphone to transcribe your speech in real-time.",
                 "NSPhotoLibraryUsageDescription": "This app needs access to your library to import video files for transcription.",
@@ -27,11 +27,11 @@
             }
         },
         "android": {
-            "package": "com.veraxai.app",
+            "package": "com.opushunter.app",
             "adaptiveIcon": {
                 "foregroundImage": "./assets/adaptive-icon-foreground.png",
                 "backgroundImage": "./assets/adaptive-icon-background.png",
-                "backgroundColor": "#020205"
+                "backgroundColor": "#0A1419"
             },
             "permissions": [
                 "android.permission.RECORD_AUDIO",
@@ -68,7 +68,7 @@
                 {
                     "image": "./assets/splash-icon.png",
                     "resizeMode": "contain",
-                    "backgroundColor": "#020205"
+                    "backgroundColor": "#0A1419"
                 }
             ],
             [

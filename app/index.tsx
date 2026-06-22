@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Redirect } from 'expo-router';
 import { supabase } from '../lib/supabase';
+import type { Session } from '@supabase/supabase-js';
 
 export default function IndexScreen() {
   const [isReady, setIsReady] = useState(false);
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -16,11 +17,17 @@ export default function IndexScreen() {
 
   if (!isReady) {
     return (
-      <View className="flex-1 bg-[rgba(0,212,255,0.1] items-center justify-center">
+      <View style={{ flex: 1, backgroundColor: '#02021a', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color="#00F0FF" />
       </View>
     );
   }
 
-  return <Redirect href="/(tabs)/dashboard" />;
+  // ✅ FIX P1-01: Gate redirect on session presence.
+  // Previously this always redirected to dashboard regardless of auth state.
+  if (session) {
+    return <Redirect href="/(tabs)/dashboard" />;
+  }
+
+  return <Redirect href="/(auth)/login" />;
 }
