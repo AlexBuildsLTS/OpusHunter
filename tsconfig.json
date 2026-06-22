@@ -1,0 +1,51 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "module": "esnext",
+    "baseUrl": ".",
+    "paths": {
+      "@/app/*": [
+        "./app/*"
+      ],
+      "@/components/*": [
+        "./components/*"
+      ],
+      "@/constants/*": [
+        "./constants/*"
+      ],
+      "@/hooks/*": [
+        "./hooks/*"
+      ],
+      "@/lib/*": [
+        "./lib/*"
+      ],
+      "@/services/*": [
+        "./services/*"
+      ],
+      "@/store/*": [
+        "./store/*"
+      ],
+      "@/types/*": [
+        "./types/*"
+      ],
+      "@/utils/*": [
+        "./utils/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "nativewind-env.d.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "babel.config.cjs",
+    "metro.config.cjs",
+    "jest.config.js",
+    "supabase/functions/**/*"
+  ]
+}
