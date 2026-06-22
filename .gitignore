@@ -192,3 +192,5 @@ Expo_SDK_56__Architectural_Evo.txt
 .agents/skills/virtualtabs/scripts/vt.bundle.js
 .cursor/rules/scripts/vt.bundle.js
 supabase/seed.sql
+.vscode/.settings*
+.vscode/*
