@@ -1314,3 +1314,20 @@
 {"_e":"metro:client_log","_t":1782168985050,"level":"log","data":["Running application \"main\" with appParams:\n","{\"hydrate\": undefined, \"rootTag\": \"#root\"}","\nDevelopment-level warnings: ON.\nPerformance optimizations: OFF."]}
 {"_e":"metro:client_log","_t":1782168985254,"level":"warn","data":["\"shadow*\" style props are deprecated. Use \"boxShadow\"."]}
 {"_e":"metro:client_log","_t":1782168986431,"level":"warn","data":["props.pointerEvents is deprecated. Use style.pointerEvents"]}
+{"_e":"metro:bundling:started","_t":1782169558653,"id":"8","platform":"web","environment":null,"entry":"node_modules/expo-router/entry.js"}
+{"_e":"metro:bundling:progress","_t":1782169558665,"id":"8","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:started","_t":1782169558672,"id":"9","platform":"web","environment":"node","entry":"node_modules/@expo/router-server/node/render.js"}
+{"_e":"metro:bundling:progress","_t":1782169558673,"id":"8","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:progress","_t":1782169558673,"id":"9","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:done","_t":1782169559324,"id":"9","total":1,"ms":651.779154}
+{"_e":"metro:bundling:progress","_t":1782169559325,"id":"8","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:done","_t":1782169559930,"id":"8","total":1,"ms":1275.197597}
+{"_e":"metro:bundling:started","_t":1782169562062,"id":"a","platform":"web","environment":null,"entry":"node_modules/expo-router/entry.js"}
+{"_e":"metro:bundling:progress","_t":1782169562063,"id":"a","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:done","_t":1782169562653,"id":"a","total":1,"ms":590.73821}
+{"_e":"metro:client_log","_t":1782169565273,"level":"info","data":["%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools","font-weight:bold"]}
+{"_e":"metro:client_log","_t":1782169565276,"level":"log","data":["Running application \"main\" with appParams:\n","{\"hydrate\": undefined, \"rootTag\": \"#root\"}","\nDevelopment-level warnings: ON.\nPerformance optimizations: OFF."]}
+{"_e":"metro:client_log","_t":1782169567307,"level":"warn","data":["\"shadow*\" style props are deprecated. Use \"boxShadow\"."]}
+{"_e":"metro:client_log","_t":1782169574958,"level":"warn","data":["props.pointerEvents is deprecated. Use style.pointerEvents"]}
+{"_e":"metro:client_log","_t":1782169574960,"level":"warn","data":["[Reanimated] Property [opacity] may be overwritten by a layout animation. Please wrap your component with an animated view and apply the layout animation on the wrapper."]}
+{"_e":"metro:client_log","_t":1782169574961,"level":"warn","data":["[Reanimated] Property [opacity] may be overwritten by a layout animation. Please wrap your component with an animated view and apply the layout animation on the wrapper."]}
