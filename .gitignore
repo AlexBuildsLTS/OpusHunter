@@ -25,7 +25,6 @@ android/
 *.p12
 *.mobileprovision
 
-
 # --- 3. SUPABASE (LOCAL STATE & SECRETS) ---
 # Ignore internal Supabase CLI state and local DB data
 supabase/.temp/
@@ -47,6 +46,9 @@ supabase/db/data/
 .claude/
 .gemini/
 .remember/
+.agents/
+.kombai/
+.cursor/
 *.GEMINI.md
 *.md
 .directory
@@ -57,10 +59,11 @@ supabase/db/data/
 STRUCTURE.md
 GEMINI.md
 .GEMINI.md
-.
-
 repomix-output.xml
 repomix-output.md
+repomix-output.txt
+repomix-output-AlexBuildsLTS-VeraxAI.xml
+Expo_SDK_56__Architectural_Evo.txt
 # Whitelist essential documentation
 !README.md
 
@@ -71,7 +74,6 @@ repomix-output.md
 Thumbs.db
 *.swp
 *.tsbuildinfo
-.gemini/
 
 # --- 7. LOGS & TEMPORARY FILES ---
 *.log
@@ -82,116 +84,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-
-# --- 8. EXPO CLI GENERATED ---
+# --- 8. CLI & SCRIPT GENERATED ---
 expo-env.d.ts
-repomix-output-AlexBuildsLTS-VeraxAI.xml
 files_list.txt
 scripts/parse_repomix.py
-supabase/functions/check_logs.ts
-.kombai/stack.json
-repomix-output.txt
-Expo_SDK_56__Architectural_Evo.txt
-.cursor/rules/virtualtabs.mdc
-.agents/skills/virtualtabs/scripts/vt.bundle.js
-.cursor/rules/scripts/vt.bundle.js
-# ==============================================================================
-# VERT AI — ENTERPRISE .GITIGNORE
-# Architecture: Expo SDK 55, Supabase, React Native 0.83, Node.js
-# ==============================================================================
-
-# --- 1. DEPENDENCIES ---
-node_modules/
-.pnp
-.pnp.*
-.deno/
-vendor/
-deno.lock
-
-# --- 2. EXPO & NATIVE ARTIFACTS ---
-.expo/
-dist/
-web-build/
-ios/
-android/
-.eas/
-.kotlin/
-*.jks
-*.keystore
-*.p8
-*.p12
-*.mobileprovision
-
-
-# --- 3. SUPABASE (LOCAL STATE & SECRETS) ---
-# Ignore internal Supabase CLI state and local DB data
-supabase/.temp/
-supabase/.branches/
-supabase/.env*
-supabase/db/data/
-# Explicitly whitelist critical infrastructure
-!supabase/functions/
-!supabase/seed.sql
-!supabase/config.toml
-
-# --- 4. ENVIRONMENT & SECRETS (CRITICAL) ---
-.env
-.env.*
-.env.local
-!.env.example
-
-# --- 5. AI & TOOLING ARTIFACTS (CLEANUP) ---
-.claude/
-.gemini/
-.remember/
-*.GEMINI.md
-*.md
-.directory
-*.directory
-# Specifically ignore the DB audit reports and structure files
-*.supabase-db-audit-report.md
-.STRUCTURE.md
-STRUCTURE.md
-GEMINI.md
-.GEMINI.md
-
-
-repomix-output.xml
-repomix-output.md
-# Whitelist essential documentation
-!README.md
-
-# --- 6. IDE & OS ARTIFACTS ---
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-*.swp
-*.tsbuildinfo
-.gemini/
-
-# --- 7. LOGS & TEMPORARY FILES ---
-*.log
-logs/
-temp/
-tmp/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-
-# --- 8. EXPO CLI GENERATED ---
-expo-env.d.ts
-repomix-output-AlexBuildsLTS-VeraxAI.xml
-files_list.txt
-scripts/parse_repomix.py
-.kombai/stack.json
-repomix-output.txt
-Expo_SDK_56__Architectural_Evo.txt
-.cursor/rules/virtualtabs.mdc
-.agents/skills/virtualtabs/scripts/vt.bundle.js
-.cursor/rules/scripts/vt.bundle.js
-supabase/seed.sql
-.vscode/.settings*
-.vscode/*
-.expo/dev/logs/start.log
