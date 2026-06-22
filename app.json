@@ -102,6 +102,6 @@
         "runtimeVersion": {
             "policy": "appVersion"
         },
-        "owner": "alexbuildslts",
+        "owner": "alexbuildslts"
     }
 }
