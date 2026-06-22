@@ -194,3 +194,4 @@ Expo_SDK_56__Architectural_Evo.txt
 supabase/seed.sql
 .vscode/.settings*
 .vscode/*
+.expo/dev/logs/start.log
