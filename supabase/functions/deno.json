@@ -1,0 +1,23 @@
+{
+  "tasks": {
+    "check": "deno check main.ts"
+  },
+  "nodeModulesDir": "none",
+  "compilerOptions": {
+    "lib": ["esnext", "dom", "deno.ns"],
+    "strict": true
+  },
+  "imports": {
+    "std/": "https://deno.land/std@0.168.0/",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2",
+    "@google/generative-ai": "npm:@google/generative-ai@^0.24.1",
+    "@google/generative-ai/language": "https://esm.sh/@google/generative-ai@0.24.1/language",
+    "openai": "npm:openai@^4.47.1",
+    "std/youtubei.js": "https://esm.sh/youtubei.js@10.5.0",
+    "stripe": "https://esm.sh/stripe@14?target=deno"
+  },
+  "devImports": {
+    "std/": "https://deno.land/std@0.168.0/",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2"
+  }
+}
