@@ -59,6 +59,7 @@
     "@babel/core": "^7.24.0",
     "@types/node": "^20.0.0",
     "@types/react": "~19.2.14",
+    "babel-plugin-transform-remove-console": "^6.9.4",
     "eas-cli-local-build-plugin": "^20.3.0",
     "prettier": "^3.8.4",
     "prettier-plugin-tailwindcss": "^0.8.0",

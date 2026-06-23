@@ -1,53 +1,30 @@
 /**
  * babel.config.cjs
- * VeraxAI Core: NativeWind v4, Reanimated v4 Worklets & Production Hardening
+ * OpusHunter — Babel Configuration
  *
- * FIX (2026-06-22): Removed 'react-native-reanimated/plugin' from Babel plugins.
+ * CRITICAL FIX (Vercel build crash):
+ *   The previous version conditionally pushed "transform-remove-console"
+ *   in production via:
+ *     if (isProd) plugins.push(["transform-remove-console", ...])
  *
- * WHY: react-native-reanimated v4 (4.x) no longer uses a Babel plugin for its
- * worklets transformation. Instead, it hooks into Metro via
- * `wrapWithReanimatedMetroConfig()` in metro.config.cjs (already present).
- * The old Babel plugin path internally calls `require('react-native-worklets/plugin')`
- * which does NOT exist in react-native-worklets@0.7.x, causing the
- * "Cannot find module 'react-native-worklets/plugin'" crash at Metro startup.
+ *   However, babel-plugin-transform-remove-console is NOT in package.json
+ *   (not in dependencies, not in devDependencies). Vercel always runs
+ *   NODE_ENV=production, so every Vercel build hit this branch, Babel tried
+ *   to require() the missing module, and Metro crashed:
+ *     "Error: Cannot find module 'babel-plugin-transform-remove-console'"
  *
- * The metro.config.cjs already has `wrapWithReanimatedMetroConfig(config)` as
- * the final export — that is the ONLY integration point needed for Reanimated v4.
+ *   FIX: Removed the plugin entirely. Console stripping is a nice-to-have
+ *   optimization — it is not worth a broken deployment. If you want it back,
+ *   first add the package: npm install -D babel-plugin-transform-remove-console
+ *   then re-add the conditional block below.
+ *
+ * Reanimated v4 note:
+ *   'react-native-reanimated/plugin' is intentionally absent. Reanimated v4
+ *   uses wrapWithReanimatedMetroConfig() in metro.config.cjs instead.
  */
+
 module.exports = function (api) {
-  // Cache the configuration based on the environment (development vs production)
   api.cache.using(() => process.env.NODE_ENV);
-
-  const isProd = api.env("production");
-
-  // Base plugins required for VeraxAI architecture
-  // NOTE: 'react-native-reanimated/plugin' intentionally removed for Reanimated v4.
-  // Reanimated v4 uses wrapWithReanimatedMetroConfig() in metro.config.cjs instead.
-  const plugins = [
-    [
-      "module-resolver",
-      {
-        root: ["./"],
-        alias: {
-          "@/app": "./app",
-          "@/components": "./components",
-          "@/constants": "./constants",
-          "@/hooks": "./hooks",
-          "@/lib": "./lib",
-          "@/services": "./services",
-          "@/store": "./store",
-          "@/types": "./types",
-          "@/utils": "./utils",
-        },
-      },
-    ],
-  ];
-
-  // STRATEGIC INJECTION: Strip all console logs ONLY in production.
-  // We preserve 'error' and 'warn' for catastrophic crash reporting.
-  if (isProd) {
-    plugins.push(["transform-remove-console", { exclude: ["error", "warn"] }]);
-  }
 
   return {
     presets: [
@@ -60,6 +37,27 @@ module.exports = function (api) {
       ],
       "nativewind/babel",
     ],
-    plugins: plugins,
+    plugins: [
+      [
+        "module-resolver",
+        {
+          root: ["./"],
+          alias: {
+            "@/app": "./app",
+            "@/components": "./components",
+            "@/constants": "./constants",
+            "@/hooks": "./hooks",
+            "@/lib": "./lib",
+            "@/services": "./services",
+            "@/store": "./store",
+            "@/types": "./types",
+            "@/utils": "./utils",
+          },
+        },
+      ],
+      // babel-plugin-transform-remove-console removed — package not installed.
+      // To restore: npm install -D babel-plugin-transform-remove-console
+      // then add: ['transform-remove-console', { exclude: ['error', 'warn'] }]
+    ],
   };
 };
