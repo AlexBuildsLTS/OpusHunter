@@ -1,3 +1,15 @@
+/**
+ * components/pipeline/SwipeableJobCard.tsx
+ * OpusHunter — Swipeable Job Card
+ * Updated: adds onPress prop for tap-to-expand (JobDetailModal)
+ *
+ * Tap  → opens JobDetailModal (full description + cover letter preview)
+ * Swipe right → apply
+ * Swipe left  → pass
+ *
+ * Physics unchanged from previous version.
+ */
+
 import React from 'react';
 import { View, Text, Platform, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -14,6 +26,7 @@ const C = {
     cyan: '#00D4FF',
     purple: '#7B5EA7',
     pink: '#E8436A',
+    amber: '#F59E0B',
     text: '#D8E4EC',
     sub: 'rgba(216,228,236,0.45)',
     card: '#0B1822',
@@ -22,7 +35,7 @@ const C = {
 
 const SWIPE_THRESHOLD = 80;
 const scoreColor = (s: number) =>
-    s >= 85 ? C.cyan : s >= 65 ? C.purple : s >= 45 ? '#F59E0B' : C.pink;
+    s >= 85 ? C.cyan : s >= 65 ? C.purple : s >= 45 ? C.amber : C.pink;
 
 export interface JobData {
     id: string;
@@ -33,24 +46,34 @@ export interface JobData {
     match_score?: number | null;
     description?: string | null;
     tech_stack?: string[] | null;
+    source_url?: string;
 }
 
 interface Props {
     job: JobData;
     onSwipeRight: (job: JobData) => void;
     onSwipeLeft: (job: JobData) => void;
+    /** Optional: tap to open detail modal */
+    onPress?: (job: JobData) => void;
 }
 
-export function SwipeableJobCard({ job, onSwipeRight, onSwipeLeft }: Props) {
+export function SwipeableJobCard({ job, onSwipeRight, onSwipeLeft, onPress }: Props) {
     const tx = useSharedValue(0);
     const ty = useSharedValue(0);
+    const isDragging = useSharedValue(false);
 
     const pan = Gesture.Pan()
         .activeOffsetX([-8, 8])
-        .onUpdate((e) => { tx.value = e.translationX; ty.value = e.translationY * 0.25; })
+        .onStart(() => { isDragging.value = true; })
+        .onUpdate((e) => {
+            tx.value = e.translationX;
+            ty.value = e.translationY * 0.25;
+        })
         .onEnd((e) => {
+            isDragging.value = false;
             const goRight = e.translationX > SWIPE_THRESHOLD || (e.velocityX > 800 && e.translationX > 20);
             const goLeft = e.translationX < -SWIPE_THRESHOLD || (e.velocityX < -800 && e.translationX < -20);
+
             if (goRight) {
                 tx.value = withSpring(650, { velocity: e.velocityX, damping: 15 });
                 runOnJS(onSwipeRight)(job);
@@ -62,6 +85,16 @@ export function SwipeableJobCard({ job, onSwipeRight, onSwipeLeft }: Props) {
                 ty.value = withSpring(0, { damping: 18, stiffness: 200 });
             }
         });
+
+    // Tap gesture — fires only when not swiping
+    const tap = Gesture.Tap()
+        .maxDistance(8)
+        .onEnd(() => {
+            if (onPress) runOnJS(onPress)(job);
+        });
+
+    // Compose: tap runs simultaneously, pan takes priority on horizontal movement
+    const composed = Gesture.Simultaneous(tap, pan);
 
     const cardAnim = useAnimatedStyle(() => ({
         transform: [
@@ -86,7 +119,7 @@ export function SwipeableJobCard({ job, onSwipeRight, onSwipeLeft }: Props) {
     const stack = job.tech_stack ?? [];
 
     return (
-        <GestureDetector gesture={pan}>
+        <GestureDetector gesture={composed}>
             <Animated.View style={[s.wrapper, cardAnim]}>
 
                 {/* APPLY stamp */}
@@ -138,7 +171,9 @@ export function SwipeableJobCard({ job, onSwipeRight, onSwipeLeft }: Props) {
                 {/* Footer */}
                 <View style={s.footer}>
                     <Text style={[s.footerLabel, { color: C.pink }]}>← PASS</Text>
-                    <View style={s.footerDot} />
+                    {onPress && (
+                        <Text style={s.tapHint}>TAP FOR DETAILS</Text>
+                    )}
                     <Text style={[s.footerLabel, { color: C.cyan }]}>APPLY →</Text>
                 </View>
 
@@ -183,9 +218,14 @@ const s = StyleSheet.create({
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 },
     chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: `${C.purple}45`, backgroundColor: `${C.purple}10` },
     chipText: { fontSize: 10, color: C.purple, fontWeight: '700', letterSpacing: 0.5 },
-    footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, marginTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(120,200,240,0.07)' },
+    footer: {
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+        paddingTop: 14, marginTop: 8,
+        borderTopWidth: 1, borderTopColor: 'rgba(120,200,240,0.07)',
+    },
     footerLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 2.5 },
-    footerDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(216,228,236,0.15)' },
+    tapHint: {
+        fontSize: 9, fontWeight: '700', color: 'rgba(216,228,236,0.2)',
+        letterSpacing: 1.5, textTransform: 'uppercase',
+    },
 });
-
-
