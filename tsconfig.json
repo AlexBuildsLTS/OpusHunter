@@ -3,6 +3,7 @@
   "compilerOptions": {
     "strict": true,
     "module": "esnext",
+    "ignoreDeprecations": "5.0",
     "baseUrl": ".",
     "paths": {
       "@/app/*": [
