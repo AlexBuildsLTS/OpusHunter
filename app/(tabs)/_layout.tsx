@@ -1,35 +1,25 @@
 /**
  * app/(tabs)/_layout.tsx
- * OpusHunter — Tab / Sidebar Navigation
- *
- * Three tabs: Engine (dashboard), Configure (rules), Vault (documents)
- * Desktop: icon-only sidebar, properly spaced
- * Mobile: floating pill tab bar
+ * OpusHunter — Tab Navigation
+ * Desktop: icon sidebar (68px). Mobile/APK/iOS: floating pill tab bar.
+ * 4 tabs: Dashboard · Configure · Vault · Profile
  */
-
 import React from 'react';
 import {
   Platform, View, Pressable, Text, Image,
   useWindowDimensions, StyleSheet,
 } from 'react-native';
 import { Tabs, useRouter, usePathname } from 'expo-router';
-import { Zap, Settings2, Archive } from 'lucide-react-native';
+import { Zap, SlidersHorizontal, Archive, UserCircle } from 'lucide-react-native';
+
+const C = { cyan: '#00D4FF', purple: '#7B5EA7', bg: '#0A1419' };
 
 const NAV = [
-  { route: '/(tabs)/dashboard', name: 'dashboard', Icon: Zap, label: 'ENGINE', color: '#00D4FF' },
-  { route: '/(tabs)/configure', name: 'configure', Icon: Settings2, label: 'RULES', color: '#7B5EA7' },
-  { route: '/(tabs)/vault', name: 'vault', Icon: Archive, label: 'VAULT', color: '#7B5EA7' },
+  { name: 'dashboard', Icon: Zap, label: 'ENGINE', color: C.cyan },
+  { name: 'configure', Icon: SlidersHorizontal, label: 'RULES', color: C.purple },
+  { name: 'vault', Icon: Archive, label: 'VAULT', color: C.purple },
+  { name: 'profile', Icon: UserCircle, label: 'PROFILE', color: C.purple },
 ] as const;
-
-function AmbientBg() {
-  if (Platform.OS !== 'web') return null;
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* @ts-ignore web-only */}
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 45% at 90% 95%, rgba(0,180,210,0.06) 0%, transparent 70%)' }} />
-    </View>
-  );
-}
 
 export default function TabLayout() {
   const isWeb = Platform.OS === 'web';
@@ -38,41 +28,45 @@ export default function TabLayout() {
   const router = useRouter();
   const pathname = usePathname();
 
+  /* ── Desktop sidebar ─────────────────────────────────────────────────────── */
   if (isDesktop) {
     return (
-      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: '#0A1419' }}>
-        <AmbientBg />
-
-        {/* ── Sidebar ── */}
-        <View style={styles.sidebar}>
+      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: C.bg }}>
+        <View style={s.sidebar}>
           {/* Logo */}
-          <View style={styles.logoBox}>
+          <Pressable onPress={() => router.push('/(tabs)/dashboard')} style={s.logoWrap}>
             <Image
               source={require('../../assets/icon.png')}
-              style={{ width: 24, height: 24, borderRadius: 6 }}
+              style={{ width: 26, height: 26, borderRadius: 7 }}
               resizeMode="contain"
             />
-          </View>
+          </Pressable>
 
-          {/* Nav items */}
-          <View style={styles.navItems}>
-            {NAV.map(({ route, name, Icon, label, color }) => {
-              const active = pathname.includes(name);
+          <View style={{ flex: 1, gap: 4, alignItems: 'center', paddingTop: 8 }}>
+            {NAV.map(({ name, Icon, label, color }) => {
+              const active = pathname.startsWith(`/${name}`) ||
+                pathname === `/(tabs)/${name}`;
               return (
                 <Pressable
-                  key={route}
-                  onPress={() => router.push(route as any)}
+                  key={name}
+                  onPress={() => router.push(`/(tabs)/${name}` as any)}
                   style={[
-                    styles.navBtn,
+                    s.navBtn,
                     active && {
-                      backgroundColor: `${color}12`,
-                      borderColor: `${color}30`,
+                      backgroundColor: `${color}14`,
+                      borderColor: `${color}35`,
                       borderWidth: 1,
                     },
                   ]}
                 >
-                  <Icon size={18} color={active ? color : 'rgba(255,255,255,0.28)'} />
-                  <Text style={[styles.navLabel, { color: active ? color : 'rgba(255,255,255,0.2)' }]}>
+                  <Icon
+                    size={19}
+                    color={active ? color : 'rgba(255,255,255,0.25)'}
+                  />
+                  <Text style={[
+                    s.navLabel,
+                    { color: active ? color : 'rgba(255,255,255,0.18)' },
+                  ]}>
                     {label}
                   </Text>
                 </Pressable>
@@ -81,86 +75,87 @@ export default function TabLayout() {
           </View>
         </View>
 
-        {/* ── Page content ── */}
-        <View style={{ flex: 1 }}>
+        {/* Page content — Tabs renders the matched screen */}
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Tabs screenOptions={{ headerShown: false, tabBarStyle: { display: 'none' } }}>
-            <Tabs.Screen name="dashboard" />
-            <Tabs.Screen name="configure" />
-            <Tabs.Screen name="vault" />
+            {NAV.map(({ name }) => <Tabs.Screen key={name} name={name} />)}
           </Tabs>
         </View>
       </View>
     );
   }
 
-  // ── Mobile: floating tab bar ──
+  /* ── Mobile / APK / iOS floating tab bar ─────────────────────────────────── */
   return (
-    <View style={{ flex: 1, backgroundColor: '#0A1419' }}>
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarStyle: {
-            backgroundColor: 'rgba(11,24,34,0.97)',
-            borderTopWidth: 1,
-            borderTopColor: 'rgba(120,200,240,0.07)',
-            position: 'absolute',
-            bottom: 16,
-            left: 16,
-            right: 16,
-            borderRadius: 22,
-            height: 64,
-            paddingBottom: 0,
-            elevation: 0,
-          },
-          tabBarActiveTintColor: '#00D4FF',
-          tabBarInactiveTintColor: 'rgba(255,255,255,0.25)',
-          tabBarShowLabel: false,
-        }}
-      >
-        {NAV.map(({ name, Icon }) => (
-          <Tabs.Screen
-            key={name}
-            name={name}
-            options={{
-              tabBarIcon: ({ color }) => <Icon size={21} color={color} />,
-            }}
-          />
-        ))}
-      </Tabs>
-    </View>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          position: 'absolute',
+          bottom: 14,
+          left: 12,
+          right: 12,
+          borderRadius: 24,
+          height: 62,
+          paddingBottom: 0,
+          paddingTop: 0,
+          backgroundColor: 'rgba(10,20,26,0.97)',
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(0,212,255,0.07)',
+          elevation: 0,
+        },
+        tabBarActiveTintColor: C.cyan,
+        tabBarInactiveTintColor: 'rgba(255,255,255,0.22)',
+        tabBarShowLabel: false,
+      }}
+    >
+      {NAV.map(({ name, Icon }) => (
+        <Tabs.Screen
+          key={name}
+          name={name}
+          options={{ tabBarIcon: ({ color }) => <Icon size={22} color={color} /> }}
+        />
+      ))}
+    </Tabs>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   sidebar: {
     width: 68,
-    backgroundColor: 'rgba(8,16,22,0.95)',
+    backgroundColor: 'rgba(6,14,20,0.98)',
     borderRightWidth: 1,
-    borderRightColor: 'rgba(120,200,240,0.06)',
-    paddingVertical: 20,
+    borderRightColor: 'rgba(0,212,255,0.06)',
+    paddingVertical: 16,
+    paddingHorizontal: 0,
     alignItems: 'center',
     zIndex: 10,
   },
-  logoBox: {
-    width: 38, height: 38, borderRadius: 11,
+  logoWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: 'rgba(0,212,255,0.08)',
-    borderWidth: 1, borderColor: 'rgba(0,212,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 24,
-  },
-  navItems: {
-    flex: 1,
-    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0,212,255,0.2)',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   navBtn: {
-    width: 48, height: 48, borderRadius: 13,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'transparent',
+    width: 48,
+    height: 50,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
     gap: 3,
   },
   navLabel: {
-    fontSize: 6, fontWeight: '800', letterSpacing: 1,
+    fontSize: 6,
+    fontWeight: '800',
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
 });
