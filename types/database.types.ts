@@ -324,7 +324,9 @@ export type Database = {
           cv_storage_path: string | null
           email: string
           full_name: string | null
+          gemini_key: string | null
           id: string
+          rapidapi_key: string | null
           role: string
           updated_at: string
         }
@@ -333,7 +335,9 @@ export type Database = {
           cv_storage_path?: string | null
           email: string
           full_name?: string | null
+          gemini_key?: string | null
           id: string
+          rapidapi_key?: string | null
           role?: string
           updated_at?: string
         }
@@ -342,7 +346,9 @@ export type Database = {
           cv_storage_path?: string | null
           email?: string
           full_name?: string | null
+          gemini_key?: string | null
           id?: string
+          rapidapi_key?: string | null
           role?: string
           updated_at?: string
         }
@@ -353,7 +359,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_key_for_provider: {
+        Args: { p_provider: string; p_user_id: string }
+        Returns: string
+      }
       get_user_pipeline_metrics: { Args: never; Returns: Json }
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       job_status: "pending" | "approved" | "rejected" | "applied"
