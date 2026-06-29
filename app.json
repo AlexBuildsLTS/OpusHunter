@@ -16,7 +16,13 @@
             "supportsTablet": true,
             "bundleIdentifier": "com.opushunter.app",
             "infoPlist": {
-                "ITSAppUsesNonExemptEncryption": false
+                "ITSAppUsesNonExemptEncryption": false,
+                "NSCameraUsageDescription": "OpusHunter needs camera access to capture certification documents or profile pictures.",
+                "NSPhotoLibraryUsageDescription": "OpusHunter needs photo library access to upload your profile picture and saved certifications.",
+                "UIBackgroundModes": [
+                    "fetch",
+                    "processing"
+                ]
             }
         },
         "android": {
@@ -24,7 +30,7 @@
             "adaptiveIcon": {
                 "foregroundImage": "./assets/adaptive-icon-foreground.png",
                 "backgroundImage": "./assets/adaptive-icon-background.png",
-                "backgroundColor": "#0A1419"
+                "backgroundColor": "#020205"
             },
             "permissions": [
                 "android.permission.INTERNET",
@@ -33,13 +39,16 @@
                 "android.permission.VIBRATE",
                 "android.permission.WAKE_LOCK",
                 "android.permission.READ_EXTERNAL_STORAGE",
-                "android.permission.WRITE_EXTERNAL_STORAGE"
+                "android.permission.WRITE_EXTERNAL_STORAGE",
+                "android.permission.CAMERA"
             ]
         },
         "web": {
             "bundler": "metro",
             "output": "static",
-            "favicon": "./assets/favicon.png"
+            "favicon": "./assets/favicon.png",
+            "backgroundColor": "#020205",
+            "themeColor": "#00F0FF"
         },
         "plugins": [
             "expo-router",
@@ -55,7 +64,7 @@
                 {
                     "image": "./assets/splash-icon.png",
                     "resizeMode": "contain",
-                    "backgroundColor": "#0A1419"
+                    "backgroundColor": "#020205"
                 }
             ],
             [
@@ -74,6 +83,10 @@
                                 "lib/arm64-v8a/libc++_shared.so"
                             ]
                         }
+                    },
+                    "ios": {
+                        "deploymentTarget": "16.4",
+                        "useFrameworks": "static"
                     }
                 }
             ]
