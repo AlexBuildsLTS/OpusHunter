@@ -1,375 +1,640 @@
 /**
- * app/(tabs)/dashboard.tsx — OpusHunter Pipeline Dashboard
- * Updated: 2026-06-26
- * - Full ProfileDropdown: Profile / Settings & Rules / Admin Panel (admin-only) / Sign Out
- * - JobDetailModal wired (tap card)
- * - job_status enum: 'pending' (fix for 'active' bug)
- * - Swipe right → auto-apply with optional edited cover letter
- * - Filter chips fully functional
+ * app/(tabs)/dashboard.tsx
+ * OpusHunter — Main Job Hunt Dashboard
+ * 2026-06-29
+ *
+ * Features:
+ *   - Live pipeline metrics from get_user_pipeline_metrics() RPC (single call)
+ *   - Pending job cards from job_vault (swipeable)
+ *   - Batch Apply Queue: processes 5 applications at a time, progress bar, no OOM
+ *   - Premium gate: members see limited jobs (20), premium/admin see unlimited
+ *   - "Run Scraper" shortcut button
+ *   - Web: max-w-5xl centered content, sidebar-aware
+ *   - Mobile: full width, scroll-safe
  */
-import React, { useEffect, useState, useCallback } from 'react';
-import {
-  View, Text, Image, Pressable, Platform, ScrollView,
-  RefreshControl, StyleSheet, TouchableOpacity,
-} from 'react-native';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import Animated, { FadeIn, FadeInDown, FadeOutUp, Layout } from 'react-native-reanimated';
-import { useRouter } from 'expo-router';
-import { User, Settings, LogOut, ChevronDown, ShieldAlert, Zap } from 'lucide-react-native';
-import { supabase } from '../../lib/supabase';
-import { usePipelineStore } from '../../store/usePipelineStore';
-import { SwipeableJobCard } from '../../components/pipeline/SwipeableJobCard';
-import { JobDetailModal } from '../../components/pipeline/JobDetailModal';
-import { GlassCard } from '../../components/ui/GlassCard';
-import { useEdgeScraper } from '../../hooks/useEdgeScraper';
-import type { Database } from '../../types/database.types';
-import type { JobData } from '../../components/pipeline/SwipeableJobCard';
 
-type JobVaultRow = Database['public']['Tables']['job_vault']['Row'];
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity,
+  StyleSheet, Platform, ActivityIndicator, Pressable,
+} from 'react-native';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import Animated, { FadeInDown, FadeInUp, Layout } from 'react-native-reanimated';
+import { useRouter } from 'expo-router';
+import {
+  Zap, BarChart2, CheckCircle2, Clock, Briefcase,
+  AlertCircle, RefreshCw, TrendingUp, Play, Pause,
+  ChevronRight, Lock, Target,
+} from 'lucide-react-native';
+import { supabase } from '../../lib/supabase';
+import { SwipeableJobCard } from '../../components/pipeline/SwipeableJobCard';
+import { useEdgeScraper } from '../../hooks/useEdgeScraper';
+import type { Job } from '../../types/app.types';
 
 const C = {
-  green: '#00C67D', cyan: '#00D4FF', purple: '#7B5EA7',
-  pink: '#E8436A', amber: '#F59E0B', bg: '#0A1419',
-  border: 'rgba(120,200,240,0.09)',
+  cyan: '#00D4FF',
+  purple: '#7B5EA7',
+  pink: '#E8436A',
+  amber: '#F59E0B',
+  green: '#00C67D',
+  bg: '#020507',
+  card: 'rgba(8,16,24,0.88)',
+  border: 'rgba(255,255,255,0.065)',
+  borderC: 'rgba(0,212,255,0.10)',
+  text: '#D8E4EC',
+  sub: 'rgba(216,228,236,0.45)',
+  dim: 'rgba(216,228,236,0.22)',
 };
 
-const FILTER_CHIPS = [
-  { label: 'Remote Only', field: 'location', value: 'remote' },
-  { label: 'Hybrid', field: 'location', value: 'hybrid' },
-  { label: 'Onsite', field: 'location', value: 'onsite' },
-  { label: 'React Native', field: 'tech', value: 'React Native' },
-  { label: 'TypeScript', field: 'tech', value: 'TypeScript' },
-  { label: 'Senior', field: 'tech', value: 'Senior' },
-  { label: 'Python', field: 'tech', value: 'Python' },
-  { label: 'Deno', field: 'tech', value: 'Deno' },
-];
+// ── METRIC CARD ────────────────────────────────────────────────────────────────
 
-function AmbientBg() {
-  if (Platform.OS !== 'web') return null;
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* @ts-ignore */}
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 45% at 90% 95%, rgba(0,180,210,0.07) 0%, transparent 70%)' }} />
+const MetricCard = ({
+  label, value, color, icon: Icon, trend,
+}: {
+  label: string; value: number | string; color: string;
+  icon: React.ElementType; trend?: string;
+}) => (
+  <View style={[mS.card, { borderColor: `${color}18`, backgroundColor: `${color}06` }]}>
+    <View style={[mS.iconBox, { backgroundColor: `${color}12`, borderColor: `${color}22` }]}>
+      <Icon size={16} color={color} strokeWidth={2.5} />
     </View>
-  );
-}
-
-const StatPill = ({ label, value, color }: { label: string; value: number; color: string }) => (
-  <View style={{ flex: 1, alignItems: 'center', paddingVertical: 16, borderRadius: 16, borderWidth: 1, borderColor: `${color}25`, backgroundColor: `${color}0D` }}>
-    <Text style={{ fontSize: 24, fontWeight: '800', color, letterSpacing: -0.5 }}>{value}</Text>
-    <Text style={{ fontSize: 9, fontWeight: '700', color: `${color}90`, letterSpacing: 2, textTransform: 'uppercase', marginTop: 3 }}>{label}</Text>
+    <Text style={[mS.value, { color }]}>{value}</Text>
+    <Text style={mS.label}>{label}</Text>
+    {trend && <Text style={[mS.trend, { color: `${color}80` }]}>{trend}</Text>}
   </View>
 );
+const mS = StyleSheet.create({
+  card: {
+    flex: 1, minWidth: 100, borderRadius: 18, borderWidth: 1,
+    padding: 16, gap: 6, alignItems: 'flex-start',
+  },
+  iconBox: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  value: { fontSize: 26, fontWeight: '900', letterSpacing: -0.5, marginTop: 4 },
+  label: { fontSize: 10, fontWeight: '700', color: 'rgba(216,228,236,0.45)', letterSpacing: 1.5, textTransform: 'uppercase' },
+  trend: { fontSize: 10, fontWeight: '600' },
+});
 
-const SkeletonCard = () => (
-  <Animated.View entering={FadeIn} exiting={FadeOutUp} style={[styles.cardSlot, { zIndex: 20 }]}>
-    <GlassCard style={{ flex: 1, padding: 24, gap: 14 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-        <View style={{ width: '60%', height: 22, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.06)' }} />
-        <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(0,212,255,0.06)' }} />
-      </View>
-      {[1, 0.85, 0.7, 0.55, 0.4].map((w, i) => (
-        <View key={i} style={{ width: `${w * 100}%`, height: 11, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.04)' }} />
-      ))}
-    </GlassCard>
-  </Animated.View>
-);
+// ── BATCH APPLY QUEUE ──────────────────────────────────────────────────────────
+// Processes CHUNK_SIZE applications at a time to prevent OOM and Vercel timeout
 
-// ── Full ProfileDropdown ──────────────────────────────────────────────────────
-function ProfileDropdown({ initials, email, role }: { initials: string; email: string; role: string }) {
-  const [open, setOpen] = useState(false);
-  const router = useRouter();
-  const isAdmin = role === 'admin';
+const CHUNK_SIZE = 5;
 
-  const go = useCallback((path: string) => { setOpen(false); router.push(path as any); }, [router]);
-  const signOut = useCallback(async () => {
-    setOpen(false);
-    await supabase.auth.signOut();
-    router.replace('/(auth)/login');
-  }, [router]);
-
-  return (
-    <View style={{ position: 'relative', zIndex: 100 }}>
-      <TouchableOpacity onPress={() => setOpen(p => !p)} activeOpacity={0.8} style={styles.avatarBtn}>
-        <Text style={styles.avatarText}>{initials}</Text>
-        <ChevronDown size={11} color={`${C.purple}99`} style={{ marginLeft: 3 }} />
-      </TouchableOpacity>
-      {open && (
-        <>
-          <Pressable style={[StyleSheet.absoluteFill, { position: 'fixed' as any }]} onPress={() => setOpen(false)} />
-          <Animated.View entering={FadeInDown.duration(160).springify()} style={styles.dropdown}>
-            {/* Header */}
-            <View style={styles.ddHeader}>
-              <View style={styles.ddAvatar}><Text style={styles.ddAvatarText}>{initials}</Text></View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.ddName} numberOfLines={1}>{email.split('@')[0]}</Text>
-                <Text style={styles.ddEmail} numberOfLines={1}>{email}</Text>
-              </View>
-            </View>
-            <View style={styles.ddDivider} />
-            {/* Profile */}
-            <TouchableOpacity onPress={() => go('/(tabs)/profile')} style={styles.ddItem} activeOpacity={0.7}>
-              <View style={[styles.ddIcon, { backgroundColor: `${C.purple}14` }]}><User size={14} color={C.purple} /></View>
-              <Text style={styles.ddItemText}>Profile</Text>
-            </TouchableOpacity>
-            {/* Settings */}
-            <TouchableOpacity onPress={() => go('/(tabs)/configure')} style={styles.ddItem} activeOpacity={0.7}>
-              <View style={[styles.ddIcon, { backgroundColor: `${C.cyan}10` }]}><Settings size={14} color={C.cyan} /></View>
-              <Text style={styles.ddItemText}>Settings & Rules</Text>
-            </TouchableOpacity>
-            {/* Admin — role-gated */}
-            {isAdmin && (
-              <TouchableOpacity onPress={() => go('/(admin)')} style={styles.ddItem} activeOpacity={0.7}>
-                <View style={[styles.ddIcon, { backgroundColor: `${C.pink}12` }]}><ShieldAlert size={14} color={C.pink} /></View>
-                <Text style={[styles.ddItemText, { color: C.pink }]}>Admin Panel</Text>
-              </TouchableOpacity>
-            )}
-            <View style={styles.ddDivider} />
-            {/* Sign out */}
-            <TouchableOpacity onPress={signOut} style={styles.ddItem} activeOpacity={0.7}>
-              <View style={[styles.ddIcon, { backgroundColor: `${C.pink}10` }]}><LogOut size={14} color={C.pink} /></View>
-              <Text style={[styles.ddItemText, { color: C.pink }]}>Sign Out</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </>
-      )}
-    </View>
-  );
+interface QueueState {
+  running: boolean;
+  total: number;
+  done: number;
+  failed: number;
+  current: string | null; // job title currently being applied to
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+const INITIAL_QUEUE: QueueState = { running: false, total: 0, done: 0, failed: 0, current: null };
+
+// ── PREMIUM GATE BANNER ────────────────────────────────────────────────────────
+
+const PremiumGate = ({ onUpgrade }: { onUpgrade: () => void }) => (
+  <Animated.View entering={FadeInDown.springify()} style={pgS.wrap}>
+    <Lock size={18} color={C.amber} />
+    <View style={{ flex: 1 }}>
+      <Text style={pgS.title}>Premium Unlocks Unlimited Applications</Text>
+      <Text style={pgS.sub}>Free plan processes 20 jobs/day. Upgrade to remove limits.</Text>
+    </View>
+    <TouchableOpacity onPress={onUpgrade} style={pgS.btn} activeOpacity={0.8}>
+      <Text style={pgS.btnText}>UPGRADE</Text>
+    </TouchableOpacity>
+  </Animated.View>
+);
+const pgS = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: `${C.amber}08`, borderWidth: 1, borderColor: `${C.amber}30`,
+    borderRadius: 16, padding: 16, marginBottom: 20,
+  },
+  title: { fontSize: 13, fontWeight: '700', color: C.text, marginBottom: 2 },
+  sub: { fontSize: 11, color: C.sub, lineHeight: 16 },
+  btn: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
+    backgroundColor: C.amber, alignItems: 'center',
+  },
+  btnText: { fontSize: 10, fontWeight: '900', color: '#000', letterSpacing: 1.5 },
+});
+
+// ── MAIN SCREEN ────────────────────────────────────────────────────────────────
+
 export default function DashboardScreen() {
-  const { jobQueue, setJobQueue, popJob } = usePipelineStore();
-  const queryClient = useQueryClient();
-  const [refreshing, setRefreshing] = useState(false);
-  const [metrics, setMetrics] = useState({ matches: 0, pending: 0, interviews: 0 });
-  const [activeFilters, setActiveFilters] = useState<string[]>([]);
-  const [userInfo, setUserInfo] = useState({ initials: '?', email: '', role: 'member' });
-  const [selectedJob, setSelectedJob] = useState<JobData | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
+  const router = useRouter();
+  const qc = useQueryClient();
   const { triggerScrape, isLoading: isScraping } = useEdgeScraper();
+  const [queue, setQueue] = useState<QueueState>(INITIAL_QUEUE);
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
 
-  useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const email = user.email ?? '';
-      const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single();
-      const name = profile?.full_name ?? email;
-      const parts = name.trim().split(' ');
-      const initials = parts.length >= 2 ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase() : name.slice(0, 2).toUpperCase();
-      setUserInfo({ initials, email, role: profile?.role ?? 'member' });
-    })();
-  }, []);
-
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['pipeline_jobs', activeFilters],
+  // ── Profile + role ──────────────────────────────────────────────────────────
+  const { data: profile } = useQuery({
+    queryKey: ['my_profile'],
     queryFn: async () => {
-      let q = supabase.from('job_vault')
-        .select('id, title, company, description, salary, location, match_score, tech_stack, source_url, url')
-        .eq('status', 'pending')
-        .order('match_score', { ascending: false })
-        .limit(30);
-
-      const locFilters = activeFilters.map(f => FILTER_CHIPS.find(c => c.label === f)).filter(c => c?.field === 'location').map(c => c!.value);
-      if (locFilters.length > 0) q = q.or(locFilters.map(v => `location.ilike.%${v}%`).join(','));
-
-      const { data: jobs, error } = await q;
-      if (error) throw new Error(error.message);
-
-      const techFilters = activeFilters.map(f => FILTER_CHIPS.find(c => c.label === f)).filter(c => c?.field === 'tech').map(c => c!.value.toLowerCase());
-      return (techFilters.length > 0
-        ? (jobs ?? []).filter(j => techFilters.some(t => ((j.tech_stack ?? []) as string[]).some(s => s.toLowerCase().includes(t)) || (j.title ?? '').toLowerCase().includes(t)))
-        : (jobs ?? [])) as JobVaultRow[];
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const { data } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single();
+      return data;
     },
-    staleTime: 1000 * 60 * 3,
+    staleTime: 60_000,
   });
 
-  const { data: metricsData } = useQuery({
+  const role = profile?.role ?? 'member';
+  const isPremium = role === 'premium' || role === 'admin';
+  const jobLimit = isPremium ? 999 : 20;
+
+  // ── Pipeline metrics ────────────────────────────────────────────────────────
+  const { data: metrics, isLoading: metricsLoading } = useQuery({
     queryKey: ['pipeline_metrics'],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_user_pipeline_metrics');
-      if (error) throw new Error(error.message);
-      return data as { matches: number; pending: number; interviews: number };
+      if (error) throw error;
+      return data as {
+        total_jobs: number; pending: number; applied: number;
+        interviews: number; total_rules: number; active_rules: number; cover_letters: number;
+      };
     },
-    staleTime: 1000 * 60 * 2,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 
-  useEffect(() => { if (metricsData) setMetrics(metricsData); }, [metricsData]);
-  useEffect(() => { if (data && jobQueue.length === 0) setJobQueue(data as any); }, [data]);
+  // ── Pending jobs for swipe deck ─────────────────────────────────────────────
+  const { data: pendingJobs = [], isLoading: jobsLoading, isError } = useQuery<Job[]>({
+    queryKey: ['pending_jobs', jobLimit],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('job_vault')
+        .select('id,title,company,description,salary,location,match_score,tech_stack,status,source_url,url,created_at')
+        .eq('status', 'pending')
+        .order('match_score', { ascending: false })
+        .limit(jobLimit);
+      if (error) throw error;
+      return (data ?? []) as Job[];
+    },
+    staleTime: 15_000,
+  });
 
-  const onRefresh = useCallback(async () => { setRefreshing(true); await refetch(); setRefreshing(false); }, [refetch]);
+  // ── Approve / Reject single job ─────────────────────────────────────────────
+  const approveMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated.');
 
-  const handleSwipeRight = useCallback(async (job: JobData, editedCoverLetter?: string) => {
-    popJob();
-    setMetrics(prev => ({ ...prev, matches: prev.matches + 1 }));
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: app } = await supabase.from('job_applications')
-      .insert({ job_id: job.id, user_id: user.id, status: 'pending_auto_apply' }).select('id').single();
-    if (app?.id) {
-      supabase.functions.invoke('auto-apply', {
-        body: { job_application_id: app.id, ...(editedCoverLetter ? { cover_letter_override: editedCoverLetter } : {}) },
-      }).then(({ error }) => {
-        if (error) console.warn('[auto-apply]', error.message);
-        else queryClient.invalidateQueries({ queryKey: ['pipeline_metrics'] });
+      // Update job status
+      await supabase.from('job_vault').update({ status: 'approved' }).eq('id', jobId).eq('user_id', user.id);
+
+      // Create application record
+      const { error } = await supabase.from('job_applications').insert({
+        user_id: user.id,
+        job_id: jobId,
+        status: 'pending_auto_apply',
       });
-    }
-  }, [popJob, queryClient]);
+      if (error && !error.message.includes('duplicate')) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pending_jobs'] });
+      qc.invalidateQueries({ queryKey: ['pipeline_metrics'] });
+    },
+  });
 
-  const handleSwipeLeft = useCallback(async (job: JobData) => {
-    popJob();
+  const rejectMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated.');
+      await supabase.from('job_vault').update({ status: 'rejected' }).eq('id', jobId).eq('user_id', user.id);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pending_jobs'] });
+      qc.invalidateQueries({ queryKey: ['pipeline_metrics'] });
+    },
+  });
+
+  // ── BATCH APPLY QUEUE ───────────────────────────────────────────────────────
+  // Gets all pending_auto_apply applications, processes CHUNK_SIZE at a time
+
+  const startBatchApply = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from('job_applications').insert({ job_id: job.id, user_id: user.id, status: 'passed' });
-    await supabase.from('job_vault').update({ status: 'rejected' }).eq('id', job.id).eq('user_id', user.id);
-  }, [popJob]);
 
-  const handleCardPress = useCallback((job: JobData) => { setSelectedJob(job); setModalVisible(true); }, []);
-  const handleModalApply = useCallback((job: JobData, cl: string) => handleSwipeRight(job, cl), [handleSwipeRight]);
-  const handleModalPass = useCallback((job: JobData) => handleSwipeLeft(job), [handleSwipeLeft]);
+    // Fetch pending applications
+    const { data: apps, error } = await supabase
+      .from('job_applications')
+      .select('id, job_id, job_vault(title, company)')
+      .eq('user_id', user.id)
+      .eq('status', 'pending_auto_apply')
+      .limit(isPremium ? 200 : 20);
 
-  const handleRunScraper = useCallback(() => {
-    triggerScrape();
-    setTimeout(() => {
-      queryClient.invalidateQueries({ queryKey: ['pipeline_jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['pipeline_metrics'] });
-    }, 4000);
-  }, [triggerScrape, queryClient]);
+    if (error || !apps?.length) return;
 
-  const toggleFilter = useCallback((label: string) => {
-    setActiveFilters(prev => prev.includes(label) ? prev.filter(f => f !== label) : [...prev, label]);
-    setJobQueue([]);
-  }, [setJobQueue]);
+    setQueue({ running: true, total: apps.length, done: 0, failed: 0, current: null });
 
-  const renderQueue = () => {
-    if ((isLoading || isScraping) && !refreshing) return <SkeletonCard />;
-    if (isError) return (
-      <Animated.View entering={FadeInDown} style={styles.errorCard}>
-        <Text style={styles.errorTitle}>TELEMETRY FAILURE</Text>
-        <Text style={styles.errorBody}>{(error as Error)?.message}</Text>
-        <Pressable onPress={() => refetch()} style={styles.errorBtn}><Text style={styles.errorBtnText}>Re-Initialize</Text></Pressable>
-      </Animated.View>
-    );
-    if (jobQueue.length === 0) return (
-      <Animated.View entering={FadeIn} style={styles.emptyState}>
-        <View style={styles.emptyIcon}><Text style={{ fontSize: 30, color: C.purple }}>∅</Text></View>
-        <Text style={styles.emptyTitle}>Pipeline Empty</Text>
-        <Text style={styles.emptyBody}>{activeFilters.length > 0 ? 'No jobs match your filters.' : 'Trigger the scraper to populate your queue.'}</Text>
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
-          {activeFilters.length > 0 && <Pressable onPress={() => { setActiveFilters([]); setJobQueue([]); }} style={[styles.emptyBtn, { borderColor: `${C.cyan}50`, backgroundColor: `${C.cyan}0D` }]}><Text style={[styles.emptyBtnText, { color: C.cyan }]}>Clear Filters</Text></Pressable>}
-          <Pressable onPress={onRefresh} style={[styles.emptyBtn, { borderColor: `${C.cyan}50`, backgroundColor: `${C.cyan}0D` }]}><Text style={[styles.emptyBtnText, { color: C.cyan }]}>Refresh</Text></Pressable>
-          <Pressable onPress={handleRunScraper} disabled={isScraping} style={[styles.emptyBtn, { borderColor: `${C.purple}60`, backgroundColor: `${C.purple}18`, opacity: isScraping ? 0.6 : 1 }]}><Text style={[styles.emptyBtnText, { color: C.purple }]}>{isScraping ? 'Scraping…' : 'Run Scraper'}</Text></Pressable>
-        </View>
-      </Animated.View>
-    );
-    return [...jobQueue].slice(0, 3).map((job, index) => {
-      const isTop = index === 0;
-      return (
-        <Animated.View key={job.id} layout={Layout.springify().damping(15)}
-          style={[styles.cardSlot, { zIndex: isTop ? 20 : 10 - index }, !isTop ? { transform: [{ scale: 1 - index * 0.035 }, { translateY: index * 20 }], opacity: 1 - index * 0.18 } : {}]}>
-          <SwipeableJobCard job={job as any} onSwipeRight={handleSwipeRight} onSwipeLeft={handleSwipeLeft} onPress={handleCardPress} />
-        </Animated.View>
+    // Process in chunks to avoid OOM / timeout
+    for (let i = 0; i < apps.length; i += CHUNK_SIZE) {
+      if (!queueRef.current.running) break; // user paused
+
+      const chunk = apps.slice(i, i + CHUNK_SIZE);
+
+      await Promise.allSettled(
+        chunk.map(async (app: any) => {
+          const jobTitle = (app.job_vault as any)?.title ?? 'Unknown Job';
+          setQueue((prev) => ({ ...prev, current: `${jobTitle} @ ${(app.job_vault as any)?.company ?? ''}` }));
+
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const resp = await fetch(
+              `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/auto-apply`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${session?.access_token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ job_application_id: app.id }),
+              }
+            );
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            setQueue((prev) => ({ ...prev, done: prev.done + 1 }));
+          } catch {
+            setQueue((prev) => ({ ...prev, failed: prev.failed + 1 }));
+          }
+        })
       );
-    }).reverse();
-  };
+
+      // Breathe between chunks — prevents event loop starvation
+      await new Promise((r) => setTimeout(r, 300));
+    }
+
+    setQueue((prev) => ({ ...prev, running: false, current: null }));
+    qc.invalidateQueries({ queryKey: ['pipeline_metrics'] });
+    qc.invalidateQueries({ queryKey: ['pending_jobs'] });
+  }, [isPremium]);
+
+  const pauseQueue = useCallback(() => {
+    setQueue((prev) => ({ ...prev, running: false }));
+  }, []);
+
+  const resetQueue = useCallback(() => setQueue(INITIAL_QUEUE), []);
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  const isDesktop = Platform.OS === 'web';
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <AmbientBg />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.cyan} colors={[C.cyan]} progressBackgroundColor="#050A0D" />}>
-        <Animated.View entering={FadeInDown.delay(60).springify()} style={styles.header}>
-          <View>
-            <Image source={require('../../assets/favicon.png')} style={styles.logoImg} resizeMode="contain" />
-            <View style={styles.activeRow}><View style={styles.activeDot} /><Text style={styles.activeText}>Active</Text></View>
+    <ScrollView
+      style={s.root}
+      contentContainerStyle={[s.scroll, isDesktop && s.scrollDesktop]}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Web ambient background */}
+      {isDesktop && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          {/* @ts-ignore */}
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 400, background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,212,255,0.05) 0%, transparent 70%)' }} />
+        </View>
+      )}
+
+      {/* ── Header ── */}
+      <Animated.View entering={FadeInDown.delay(40).springify()} style={s.header}>
+        <View>
+          <Text style={s.greeting}>
+            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'},{' '}
+            <Text style={{ color: C.cyan }}>{profile?.full_name?.split(' ')[0] ?? 'Hunter'}</Text>
+          </Text>
+          <Text style={s.headerSub}>Your pipeline is{' '}
+            <Text style={{ color: C.green, fontWeight: '700' }}>active</Text>
+          </Text>
+        </View>
+
+        {/* Scrape CTA */}
+        <TouchableOpacity
+          onPress={() => triggerScrape()}
+          disabled={isScraping || !metrics?.active_rules}
+          style={[s.scrapeBtn, (isScraping || !metrics?.active_rules) && { opacity: 0.5 }]}
+          activeOpacity={0.8}
+        >
+          {isScraping
+            ? <ActivityIndicator size="small" color={C.cyan} />
+            : (
+              <>
+                <RefreshCw size={14} color={C.cyan} />
+                <Text style={s.scrapeBtnText}>SCRAPE</Text>
+              </>
+            )
+          }
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* ── Premium gate ── */}
+      {!isPremium && pendingJobs.length >= 18 && (
+        <PremiumGate onUpgrade={() => router.push('/(settings)/' as any)} />
+      )}
+
+      {/* ── Metrics row ── */}
+      <Animated.View entering={FadeInDown.delay(80).springify()} style={s.metricsRow}>
+        {metricsLoading ? (
+          [0, 1, 2, 3].map((i) => (
+            <View key={i} style={[mS.card, s.skeleton]} />
+          ))
+        ) : (
+          <>
+            <MetricCard label="Scraped" value={metrics?.total_jobs ?? 0} color={C.cyan} icon={Target} />
+            <MetricCard label="Applied" value={metrics?.applied ?? 0} color={C.green} icon={CheckCircle2} />
+            <MetricCard label="Pending" value={metrics?.pending ?? 0} color={C.amber} icon={Clock} />
+            <MetricCard label="Interviews" value={metrics?.interviews ?? 0} color={C.purple} icon={TrendingUp} />
+          </>
+        )}
+      </Animated.View>
+
+      {/* ── Batch Apply Engine ── */}
+      {(queue.running || queue.done > 0 || queue.total > 0) && (
+        <Animated.View entering={FadeInDown.springify()} style={s.batchCard}>
+          <View style={s.batchHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Zap size={16} color={C.cyan} />
+              <Text style={s.batchTitle}>Auto-Apply Engine</Text>
+              {queue.running && <ActivityIndicator size="small" color={C.cyan} />}
+            </View>
+            <Text style={s.batchCount}>
+              {queue.done}/{queue.total} {queue.failed > 0 && <Text style={{ color: C.pink }}>({queue.failed} failed)</Text>}
+            </Text>
           </View>
-          <ProfileDropdown initials={userInfo.initials} email={userInfo.email} role={userInfo.role} />
-        </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(120).springify()} style={styles.statsRow}>
-          <StatPill label="Matches" value={metrics.matches} color={C.cyan} />
-          <StatPill label="Pending" value={metrics.pending} color={C.purple} />
-          <StatPill label="Applied" value={metrics.interviews} color={C.pink} />
-        </Animated.View>
+          {/* Progress bar */}
+          <View style={s.progressTrack}>
+            <Animated.View
+              style={[
+                s.progressFill,
+                { width: queue.total > 0 ? `${Math.round((queue.done / queue.total) * 100)}%` : '0%' as any }
+              ]}
+            />
+          </View>
 
-        <Animated.View entering={FadeInDown.delay(180).springify()} style={{ marginBottom: 24 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
-            {FILTER_CHIPS.map(chip => {
-              const active = activeFilters.includes(chip.label);
-              return <Pressable key={chip.label} onPress={() => toggleFilter(chip.label)}
-                style={[styles.chip, active ? { borderColor: `${C.cyan}60`, backgroundColor: `${C.cyan}12` } : { borderColor: C.border, backgroundColor: 'rgba(255,255,255,0.03)' }]}>
-                <Text style={[styles.chipText, { color: active ? C.cyan : 'rgba(216,228,236,0.45)' }]}>{chip.label}</Text>
-              </Pressable>;
+          {queue.current && (
+            <Text style={s.batchCurrent} numberOfLines={1}>
+              → Applying to <Text style={{ color: C.cyan }}>{queue.current}</Text>
+            </Text>
+          )}
+
+          {/* Controls */}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+            {queue.running ? (
+              <TouchableOpacity onPress={pauseQueue} style={[s.queueBtn, { borderColor: `${C.amber}40` }]} activeOpacity={0.8}>
+                <Pause size={13} color={C.amber} />
+                <Text style={[s.queueBtnText, { color: C.amber }]}>Pause</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={startBatchApply} style={[s.queueBtn, { borderColor: `${C.cyan}40` }]} activeOpacity={0.8}>
+                <Play size={13} color={C.cyan} />
+                <Text style={[s.queueBtnText, { color: C.cyan }]}>
+                  {queue.done > 0 ? 'Resume' : 'Start Engine'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {!queue.running && queue.total > 0 && (
+              <TouchableOpacity onPress={resetQueue} style={[s.queueBtn, { borderColor: C.border }]} activeOpacity={0.8}>
+                <RefreshCw size={13} color={C.sub} />
+                <Text style={[s.queueBtnText, { color: C.sub }]}>Reset</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
+      )}
+
+      {/* ── Start Apply Engine CTA (when no queue active) ── */}
+      {queue.total === 0 && (metrics?.pending ?? 0) > 0 && (
+        <Animated.View entering={FadeInDown.delay(160).springify()}>
+          <TouchableOpacity onPress={startBatchApply} style={s.startEngineBtn} activeOpacity={0.85}>
+            <Zap size={18} color="#000" strokeWidth={2.5} />
+            <View>
+              <Text style={s.startEngineBtnTitle}>START AUTO-APPLY ENGINE</Text>
+              <Text style={s.startEngineBtnSub}>
+                {metrics?.pending ?? 0} jobs queued · {CHUNK_SIZE} concurrent · AI cover letters
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      {/* ── Swipe Deck ── */}
+      <Animated.View entering={FadeInDown.delay(200).springify()} style={s.deckSection}>
+        <View style={s.sectionHeader}>
+          <Text style={s.sectionTitle}>Job Pipeline</Text>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/vault' as any)} style={s.sectionLink} activeOpacity={0.8}>
+            <Text style={s.sectionLinkText}>View Vault</Text>
+            <ChevronRight size={14} color={C.cyan} />
+          </TouchableOpacity>
+        </View>
+
+        {jobsLoading ? (
+          <View style={s.center}>
+            <ActivityIndicator color={C.cyan} size="large" />
+            <Text style={s.centerText}>Loading pipeline…</Text>
+          </View>
+        ) : isError ? (
+          <View style={[s.center, s.errorBox]}>
+            <AlertCircle size={28} color={C.pink} />
+            <Text style={[s.centerText, { color: C.pink }]}>Failed to load jobs</Text>
+            <TouchableOpacity onPress={() => qc.invalidateQueries({ queryKey: ['pending_jobs'] })} style={s.retryBtn}>
+              <Text style={{ color: C.cyan, fontSize: 13, fontWeight: '700' }}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : pendingJobs.length === 0 ? (
+          <Animated.View entering={FadeInUp.springify()} style={s.emptyDeck}>
+            <CheckCircle2 size={40} color={C.green} />
+            <Text style={s.emptyTitle}>All Clear!</Text>
+            <Text style={s.emptySub}>
+              No pending jobs. Run the scraper to fetch new listings from your active rules.
+            </Text>
+            <TouchableOpacity
+              onPress={() => triggerScrape()}
+              disabled={isScraping || !metrics?.active_rules}
+              style={[s.emptyBtn, (!metrics?.active_rules) && { opacity: 0.5 }]}
+              activeOpacity={0.8}
+            >
+              <Zap size={14} color={C.cyan} />
+              <Text style={{ color: C.cyan, fontWeight: '800', fontSize: 13, letterSpacing: 0.5 }}>Run Scraper</Text>
+            </TouchableOpacity>
+            {!metrics?.active_rules && (
+              <TouchableOpacity onPress={() => router.push('/(tabs)/configure' as any)} style={{ marginTop: 10 }} activeOpacity={0.8}>
+                <Text style={{ color: C.sub, fontSize: 12 }}>
+                  No active rules —{' '}
+                  <Text style={{ color: C.cyan, fontWeight: '700' }}>add one →</Text>
+                </Text>
+              </TouchableOpacity>
+            )}
+          </Animated.View>
+        ) : (
+          <View style={s.deck}>
+            {/* Top 3 cards stacked — only top one is interactive */}
+            {pendingJobs.slice(0, Math.min(3, pendingJobs.length)).reverse().map((job, i, arr) => {
+              const isTop = i === arr.length - 1;
+              return (
+                <View
+                  key={job.id}
+                  style={[
+                    s.cardLayer,
+                    {
+                      zIndex: i,
+                      transform: [
+                        { scale: 1 - (arr.length - 1 - i) * 0.025 },
+                        { translateY: (arr.length - 1 - i) * 10 },
+                      ],
+                    },
+                  ]}
+                >
+                  {isTop ? (
+                    <SwipeableJobCard
+                      job={job}
+                      onSwipeRight={() => approveMutation.mutate(job.id)}
+                      onSwipeLeft={() => rejectMutation.mutate(job.id)}
+                      onPress={() => router.push(`/(tabs)/vault` as any)}
+                    />
+                  ) : (
+                    <View style={[s.bgCard, { backgroundColor: `rgba(8,16,24,${0.6 - (arr.length - 1 - i) * 0.15})` }]} />
+                  )}
+                </View>
+              );
             })}
-          </ScrollView>
-        </Animated.View>
 
-        {isScraping && (
-          <Animated.View entering={FadeInDown} exiting={FadeOutUp} style={styles.scrapingBanner}>
-            <View style={styles.scrapingDot} /><Text style={styles.scrapingText}>Scraping jobs from JSearch API…</Text>
-          </Animated.View>
+            {/* Remaining count */}
+            {pendingJobs.length > 1 && (
+              <Animated.View entering={FadeInDown.delay(300).springify()} style={s.remainingBadge}>
+                <Text style={s.remainingText}>{pendingJobs.length} jobs pending</Text>
+              </Animated.View>
+            )}
+          </View>
         )}
+      </Animated.View>
 
-        <Animated.View entering={FadeInDown.delay(240).springify()} style={styles.stackContainer}>
-          {renderQueue()}
-        </Animated.View>
+      {/* ── Quick Nav Cards ── */}
+      <Animated.View entering={FadeInDown.delay(280).springify()} style={s.quickNav}>
+        {[
+          { label: 'Search Rules', sub: `${metrics?.active_rules ?? 0} active`, route: '/(tabs)/configure', color: C.purple, icon: Briefcase },
+          { label: 'Cover Letters', sub: `${metrics?.cover_letters ?? 0} saved`, route: '/(tabs)/vault', color: C.cyan, icon: BarChart2 },
+        ].map(({ label, sub, route, color, icon: Icon }) => (
+          <TouchableOpacity
+            key={route}
+            onPress={() => router.push(route as any)}
+            style={[s.quickCard, { borderColor: `${color}18` }]}
+            activeOpacity={0.8}
+          >
+            <View style={[s.quickIcon, { backgroundColor: `${color}10`, borderColor: `${color}20` }]}>
+              <Icon size={18} color={color} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.quickLabel, { color }]}>{label}</Text>
+              <Text style={s.quickSub}>{sub}</Text>
+            </View>
+            <ChevronRight size={16} color={`${color}60`} />
+          </TouchableOpacity>
+        ))}
+      </Animated.View>
 
-        {!isScraping && jobQueue.length > 0 && (
-          <Animated.View entering={FadeIn.delay(400)} style={{ alignItems: 'center', marginTop: 16 }}>
-            <Pressable onPress={handleRunScraper} style={styles.refreshScraperBtn}>
-              <Zap size={12} color={C.purple} /><Text style={styles.refreshScraperText}>Fetch More Jobs</Text>
-            </Pressable>
-          </Animated.View>
-        )}
-      </ScrollView>
-
-      <JobDetailModal visible={modalVisible} job={selectedJob}
-        onClose={() => { setModalVisible(false); setSelectedJob(null); }}
-        onConfirmApply={handleModalApply} onConfirmPass={handleModalPass} />
-    </View>
+      <View style={{ height: 60 }} />
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: { flexGrow: 1, paddingTop: Platform.OS === 'web' ? 32 : 52, paddingHorizontal: 20, paddingBottom: 120 },
-  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 },
-  logoImg: { width: 36, height: 36, borderRadius: 9 },
-  activeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 5 },
-  activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.green },
-  activeText: { fontSize: 10, color: C.green, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 100, borderWidth: 1 },
-  chipText: { fontSize: 12, fontWeight: '600' },
-  scrapingBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: `${C.purple}35`, backgroundColor: `${C.purple}0D`, marginBottom: 16 },
-  scrapingDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: C.purple },
-  scrapingText: { fontSize: 12, color: C.purple, fontWeight: '600', letterSpacing: 0.5 },
-  stackContainer: { flex: 1, position: 'relative', alignItems: 'center', minHeight: 520 },
-  cardSlot: { position: 'absolute', top: 0, left: 0, right: 0, height: 500 },
-  emptyState: { alignItems: 'center', paddingVertical: 60 },
-  emptyIcon: { width: 72, height: 72, borderRadius: 36, borderWidth: 1, borderColor: `${C.purple}50`, backgroundColor: `${C.purple}12`, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
-  emptyTitle: { color: C.cyan, fontSize: 20, fontWeight: '800', letterSpacing: 0.5, marginBottom: 8 },
-  emptyBody: { color: 'rgba(255,255,255,0.38)', textAlign: 'center', paddingHorizontal: 32, fontSize: 13, lineHeight: 20 },
-  emptyBtn: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 100, borderWidth: 1 },
-  emptyBtnText: { fontWeight: '700', letterSpacing: 1.2, fontSize: 10, textTransform: 'uppercase' },
-  errorCard: { width: '100%', padding: 28, borderRadius: 20, borderWidth: 1, borderColor: `${C.pink}35`, backgroundColor: `${C.pink}0A`, alignItems: 'center' },
-  errorTitle: { color: C.pink, fontSize: 17, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8, textTransform: 'uppercase' },
-  errorBody: { color: 'rgba(255,255,255,0.5)', textAlign: 'center', fontSize: 13, marginBottom: 20 },
-  errorBtn: { paddingHorizontal: 22, paddingVertical: 10, borderRadius: 100, borderWidth: 1, borderColor: C.pink, backgroundColor: `${C.pink}15` },
-  errorBtnText: { color: C.pink, fontWeight: '700', letterSpacing: 2, fontSize: 11, textTransform: 'uppercase' },
-  refreshScraperBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 100, borderWidth: 1, borderColor: `${C.purple}40`, backgroundColor: `${C.purple}0D` },
-  refreshScraperText: { color: C.purple, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' },
-  // dropdown
-  avatarBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, height: 40, borderRadius: 20, backgroundColor: `${C.purple}20`, borderWidth: 1, borderColor: `${C.purple}40` },
-  avatarText: { color: C.purple, fontWeight: '800', fontSize: 13 },
-  dropdown: { position: 'absolute', right: 0, top: 48, width: 230, backgroundColor: '#0A1520', borderWidth: 1, borderColor: 'rgba(120,200,240,0.14)', borderRadius: 16, overflow: 'hidden', zIndex: 999, shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.5, shadowRadius: 24, elevation: 16 },
-  ddHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14 },
-  ddAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: `${C.purple}25`, borderWidth: 1, borderColor: `${C.purple}40`, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  ddAvatarText: { color: C.purple, fontWeight: '800', fontSize: 12 },
-  ddName: { fontSize: 13, fontWeight: '700', color: '#D8E4EC' },
-  ddEmail: { fontSize: 10, color: 'rgba(216,228,236,0.4)', marginTop: 1 },
-  ddDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)' },
-  ddItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 11 },
-  ddIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  ddItemText: { fontSize: 13, fontWeight: '600', color: '#D8E4EC' },
+// ── STYLES ─────────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.bg },
+  scroll: { flexGrow: 1, paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 56 : Platform.OS === 'web' ? 32 : 20 },
+  scrollDesktop: { maxWidth: 1100, width: '100%', alignSelf: 'center' as any },
+
+  /* Header */
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
+  greeting: { fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.3 },
+  headerSub: { fontSize: 13, color: C.sub, marginTop: 3 },
+  scrapeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12,
+    borderWidth: 1, borderColor: `${C.cyan}30`,
+    backgroundColor: `${C.cyan}08`,
+  },
+  scrapeBtnText: { fontSize: 10, fontWeight: '800', color: C.cyan, letterSpacing: 1.5 },
+
+  /* Metrics */
+  metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 20, flexWrap: 'wrap' },
+  skeleton: { flex: 1, minWidth: 100, height: 100, backgroundColor: 'rgba(255,255,255,0.03)' },
+
+  /* Batch apply */
+  batchCard: {
+    backgroundColor: 'rgba(8,16,24,0.88)',
+    borderWidth: 1, borderColor: `${C.cyan}22`, borderRadius: 20,
+    padding: 18, marginBottom: 20,
+  },
+  batchHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  batchTitle: { fontSize: 14, fontWeight: '800', color: C.text },
+  batchCount: { fontSize: 13, fontWeight: '700', color: C.sub },
+  batchCurrent: { fontSize: 12, color: C.sub, marginTop: 8, fontStyle: 'italic' },
+
+  progressTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' },
+  progressFill: {
+    height: '100%' as any, borderRadius: 2,
+    backgroundColor: C.cyan,
+  },
+
+  queueBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1,
+  },
+  queueBtnText: { fontSize: 12, fontWeight: '700' },
+
+  /* Start engine */
+  startEngineBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: C.cyan, borderRadius: 18, padding: 18, marginBottom: 24,
+    shadowColor: C.cyan, shadowOpacity: 0.35, shadowRadius: 20, shadowOffset: { width: 0, height: 4 },
+  },
+  startEngineBtnTitle: { fontSize: 13, fontWeight: '900', color: '#000', letterSpacing: 1.5, marginBottom: 2 },
+  startEngineBtnSub: { fontSize: 11, color: 'rgba(0,0,0,0.55)', fontWeight: '600' },
+
+  /* Deck */
+  deckSection: { marginBottom: 24 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  sectionTitle: { fontSize: 17, fontWeight: '800', color: C.text, letterSpacing: -0.2 },
+  sectionLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  sectionLinkText: { fontSize: 12, fontWeight: '700', color: C.cyan },
+
+  deck: { height: 440, position: 'relative', alignItems: 'center' },
+  cardLayer: { position: 'absolute', width: '100%', height: 400 },
+  bgCard: { width: '100%', height: 400, borderRadius: 24, borderWidth: 1, borderColor: C.border },
+
+  remainingBadge: {
+    position: 'absolute', bottom: 0, alignSelf: 'center',
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+    backgroundColor: 'rgba(8,16,24,0.8)', borderWidth: 1, borderColor: C.border,
+  },
+  remainingText: { fontSize: 11, fontWeight: '700', color: C.sub, letterSpacing: 1 },
+
+  /* Empty deck */
+  emptyDeck: {
+    alignItems: 'center', paddingVertical: 50,
+    backgroundColor: C.card, borderRadius: 24, borderWidth: 1, borderColor: C.border,
+  },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: C.text, marginTop: 16, marginBottom: 8 },
+  emptySub: { fontSize: 13, color: C.sub, textAlign: 'center', paddingHorizontal: 32, lineHeight: 20 },
+  emptyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20,
+    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14,
+    borderWidth: 1, borderColor: `${C.cyan}35`, backgroundColor: `${C.cyan}08`,
+  },
+
+  /* Error */
+  center: { alignItems: 'center', paddingVertical: 40 },
+  centerText: { fontSize: 14, color: C.sub, marginTop: 12 },
+  errorBox: { backgroundColor: `${C.pink}05`, borderRadius: 20, borderWidth: 1, borderColor: `${C.pink}18` },
+  retryBtn: { marginTop: 14, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: `${C.cyan}35` },
+
+  /* Quick nav */
+  quickNav: { gap: 10 },
+  quickCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: C.card, borderWidth: 1, borderRadius: 18, padding: 16,
+  },
+  quickIcon: { width: 46, height: 46, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  quickLabel: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
+  quickSub: { fontSize: 12, color: C.sub },
 });
