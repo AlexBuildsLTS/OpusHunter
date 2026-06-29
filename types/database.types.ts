@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       api_keys: {
@@ -73,15 +48,7 @@ export type Database = {
           provider?: string
           tier?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "api_keys_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       automation_rules: {
         Row: {
@@ -144,15 +111,7 @@ export type Database = {
           uploaded_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "certifications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       cover_letters: {
         Row: {
@@ -202,13 +161,6 @@ export type Database = {
             referencedRelation: "automation_rules"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "cover_letters_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
         ]
       }
       job_applications: {
@@ -248,13 +200,6 @@ export type Database = {
             columns: ["job_id"]
             isOneToOne: false
             referencedRelation: "job_vault"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "job_applications_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -308,18 +253,11 @@ export type Database = {
           url?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "job_vault_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
+          avatar_url: string | null
           created_at: string
           cv_storage_path: string | null
           email: string
@@ -327,10 +265,11 @@ export type Database = {
           gemini_key: string | null
           id: string
           rapidapi_key: string | null
-          role: string
+          role: Database["public"]["Enums"]["user_role"]
           updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           cv_storage_path?: string | null
           email: string
@@ -338,10 +277,11 @@ export type Database = {
           gemini_key?: string | null
           id: string
           rapidapi_key?: string | null
-          role?: string
+          role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           cv_storage_path?: string | null
           email?: string
@@ -349,7 +289,7 @@ export type Database = {
           gemini_key?: string | null
           id?: string
           rapidapi_key?: string | null
-          role?: string
+          role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
         }
         Relationships: []
@@ -359,15 +299,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_key_for_provider: {
-        Args: { p_provider: string; p_user_id: string }
-        Returns: string
+      admin_delete_user: { Args: { target_id: string }; Returns: undefined }
+      force_set_role: {
+        Args: { target_email: string; target_role: string }
+        Returns: undefined
       }
+      get_key_for_provider:
+        | { Args: { p_provider: string; p_user_id: string }; Returns: string }
+        | { Args: { p_provider: string; p_user_id: string }; Returns: string }
       get_user_pipeline_metrics: { Args: never; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       job_status: "pending" | "approved" | "rejected" | "applied"
+      user_role: "member" | "premium" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -493,12 +438,10 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       job_status: ["pending", "approved", "rejected", "applied"],
+      user_role: ["member", "premium", "admin"],
     },
   },
 } as const
