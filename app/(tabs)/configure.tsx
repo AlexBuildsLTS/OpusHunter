@@ -15,7 +15,7 @@
  *   - Existing automation_rules CRUD (keywords + location + work types + cover letter)
  */
 
-import React, { useState, useCallback, useEffect, memo } from 'react';
+import React, { useState, useCallback, useEffect, memo, useMemo } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, ScrollView,
     Platform, StyleSheet, ActivityIndicator, Modal, Switch,

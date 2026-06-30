@@ -284,8 +284,7 @@ export default function DashboardScreen() {
       <Animated.View entering={FadeInDown.delay(40).springify()} style={s.header}>
         <View>
           <Text style={s.greeting}>
-            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'},{' '}
-            <Text style={{ color: C.cyan }}>{profile?.full_name?.split(' ')[0] ?? 'Hunter'}</Text>
+            Hello <Text style={{ color: C.cyan }}>{profile?.full_name?.split(' ')[0] ?? 'Hunter'}</Text>
           </Text>
           <Text style={s.headerSub}>Your pipeline is{' '}
             <Text style={{ color: C.green, fontWeight: '700' }}>active</Text>
@@ -304,7 +303,7 @@ export default function DashboardScreen() {
             : (
               <>
                 <RefreshCw size={14} color={C.cyan} />
-                <Text style={s.scrapeBtnText}>SCRAPE</Text>
+                <Text style={s.scrapeBtnText}>REFRESH</Text>
               </>
             )
           }
