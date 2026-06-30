@@ -16,12 +16,7 @@ import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Plus, Trash2, X, Eye, EyeOff, CheckCircle2, AlertCircle, Key } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
-
-const C = {
-    cyan: '#00D4FF', purple: '#7B5EA7', pink: '#E8436A',
-    green: '#00C67D', amber: '#F59E0B',
-    bg: '#0A1419', border: 'rgba(120,200,240,0.09)', text: '#D8E4EC', sub: 'rgba(216,228,236,0.45)',
-};
+import { C } from '../../lib/theme';
 
 type Provider = 'rapidapi' | 'gemini';
 
@@ -166,7 +161,7 @@ export default function ApiKeysScreen() {
                     </View>
                 ) : (
                     <View style={{ gap: 10, marginTop: 4 }}>
-                        {keys.map(key => (
+                        {keys.map((key: any) => (
                             <Animated.View key={key.id} entering={FadeInDown.springify()} style={s.keyCard}>
                                 <View style={{ flex: 1 }}>
                                     <Text style={s.keyLabel}>{key.label ?? `${key.provider} key`}</Text>
@@ -210,14 +205,17 @@ export default function ApiKeysScreen() {
                             <View>
                                 <Text style={s.fieldLabel}>PROVIDER</Text>
                                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-                                    {(['rapidapi', 'gemini'] as Provider[]).map(p => (
-                                        <TouchableOpacity key={p} onPress={() => setNewProvider(p)}
-                                            style={[s.providerChip, newProvider === p && { borderColor: `${C.cyan}55`, backgroundColor: `${C.cyan}10` }]}>
-                                            <Text style={[s.providerChipText, { color: newProvider === p ? C.cyan : C.sub }]}>
-                                                {p === 'rapidapi' ? 'RapidAPI' : 'Gemini'}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
+                                    {(['rapidapi', 'gemini'] as const).map(p => {
+                                        const isRapidAPI = p === 'rapidapi';
+                                        return (
+                                            <TouchableOpacity key={p} onPress={() => setNewProvider(p)}
+                                                style={[s.providerChip, newProvider === p && { borderColor: `${C.cyan}55`, backgroundColor: `${C.cyan}10` }]}>
+                                                <Text style={[s.providerChipText, { color: newProvider === p ? C.cyan : C.sub }]}>
+                                                    {isRapidAPI ? 'RapidAPI' : 'Gemini'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
                                 </View>
                             </View>
 
@@ -226,7 +224,7 @@ export default function ApiKeysScreen() {
                                 <Text style={s.fieldLabel}>LABEL <Text style={s.fieldOptional}>(optional)</Text></Text>
                                 <TextInput style={s.input} placeholder="e.g. Backup key 1" placeholderTextColor="#3D4A55"
                                     value={newLabel} onChangeText={setNewLabel} autoCorrect={false}
-                                    {...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {})} />
+                                    {...(Platform.OS === ('web' as const) ? { outlineStyle: 'none' as const } as any : {})} />
                             </View>
 
                             {/* API Key */}
@@ -241,7 +239,7 @@ export default function ApiKeysScreen() {
                                         secureTextEntry={!showKey}
                                         autoCapitalize="none"
                                         autoCorrect={false}
-                                        {...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {})}
+                                        {...(Platform.OS === ('web' as const) ? { outlineStyle: 'none' as const } as any : {})}
                                     />
                                     <TouchableOpacity onPress={() => setShowKey(p => !p)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                                         {showKey ? <EyeOff size={16} color={C.sub} /> : <Eye size={16} color={C.sub} />}
@@ -318,7 +316,7 @@ const s = StyleSheet.create({
     emptySub: { fontSize: 12, color: `${C.sub}80`, textAlign: 'center', paddingHorizontal: 32, lineHeight: 18 },
     // modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-    modalCard: { backgroundColor: '#0B1520', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, borderColor: 'rgba(120,200,240,0.1)', maxHeight: '88%', overflow: 'hidden' },
+    modalCard: { backgroundColor: C.core, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, borderColor: C.borderCyan, maxHeight: '88%', overflow: 'hidden' },
     modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
     modalTitle: { fontSize: 16, fontWeight: '800', color: C.text },
     modalFooter: { padding: 20, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
@@ -326,8 +324,8 @@ const s = StyleSheet.create({
     saveBtnText: { color: '#000', fontWeight: '900', fontSize: 14, letterSpacing: 1 },
     fieldLabel: { fontSize: 9, fontWeight: '900', color: C.cyan, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 },
     fieldOptional: { color: C.sub, fontWeight: '500' },
-    input: { backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(120,200,240,0.1)', borderRadius: 12, padding: 14, color: C.text, fontSize: 14 },
-    keyInputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(120,200,240,0.1)', borderRadius: 12, paddingRight: 14, gap: 4 },
+    input: { backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: C.borderCyan, borderRadius: 12, padding: 14, color: C.text, fontSize: 14 },
+    keyInputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: C.borderCyan, borderRadius: 12, paddingRight: 14, gap: 4 },
     keyWarning: { fontSize: 11, color: C.amber, marginTop: 6, lineHeight: 16 },
     providerChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, borderWidth: 1, borderColor: C.border },
     providerChipText: { fontSize: 12, fontWeight: '700' },

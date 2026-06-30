@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Redirect } from 'expo-router';
 import { supabase } from '../lib/supabase';
+import { C } from '../lib/theme';
 import type { Session } from '@supabase/supabase-js';
 
 export default function IndexScreen() {
@@ -17,8 +18,8 @@ export default function IndexScreen() {
 
   if (!isReady) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#02021a', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#00F0FF" />
+      <View style={{ flex: 1, backgroundColor: C.obsidian, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={C.cyan} />
       </View>
     );
   }

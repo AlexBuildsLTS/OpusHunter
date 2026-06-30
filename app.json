@@ -30,7 +30,7 @@
             "adaptiveIcon": {
                 "foregroundImage": "./assets/adaptive-icon-foreground.png",
                 "backgroundImage": "./assets/adaptive-icon-background.png",
-                "backgroundColor": "#020205"
+                "backgroundColor": "#020507"
             },
             "permissions": [
                 "android.permission.INTERNET",
@@ -47,8 +47,8 @@
             "bundler": "metro",
             "output": "static",
             "favicon": "./assets/favicon.png",
-            "backgroundColor": "#020205",
-            "themeColor": "#00F0FF"
+            "backgroundColor": "#020507",
+            "themeColor": "#00D4FF"
         },
         "plugins": [
             "expo-router",
@@ -64,7 +64,7 @@
                 {
                     "image": "./assets/splash-icon.png",
                     "resizeMode": "contain",
-                    "backgroundColor": "#020205"
+                    "backgroundColor": "#020507"
                 }
             ],
             [
@@ -83,10 +83,6 @@
                                 "lib/arm64-v8a/libc++_shared.so"
                             ]
                         }
-                    },
-                    "ios": {
-                        "deploymentTarget": "16.4",
-                        "useFrameworks": "static"
                     }
                 }
             ]
@@ -95,12 +91,7 @@
             "typedRoutes": true
         },
         "extra": {
-            "router": {},
-            "eas": {}
-        },
-        "runtimeVersion": {
-            "policy": "appVersion"
-        },
-        "owner": "alexbuildslts"
+            "router": {}
+        }
     }
 }
