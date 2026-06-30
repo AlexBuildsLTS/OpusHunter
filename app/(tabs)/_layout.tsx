@@ -17,37 +17,26 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Platform,
-  useWindowDimensions, Modal, Pressable,
+  useWindowDimensions, Modal, Pressable, Image,
 } from 'react-native';
 import { Tabs, useRouter, usePathname } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import {
   LayoutDashboard, Settings, Briefcase, Database,
   LogOut, Shield, User, ChevronDown,
+  Cog,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useQuery } from '@tanstack/react-query';
 import type { Database as DB } from '../../types/database.types';
-
-const C = {
-  cyan: '#00D4FF',
-  purple: '#7B5EA7',
-  pink: '#E8436A',
-  amber: '#F59E0B',
-  obsidian: '#020507',
-  sidebar: '#050A0D',
-  border: 'rgba(255,255,255,0.065)',
-  text: '#D8E4EC',
-  sub: 'rgba(216,228,236,0.45)',
-  dim: 'rgba(216,228,236,0.22)',
-};
+import { C, ROLE_CFG } from '../../lib/theme';
 
 const NAV_ITEMS = [
-  { name: 'dashboard', label: 'HUNT', Icon: LayoutDashboard },
+  { name: 'dashboard', label: 'DASH', Icon: LayoutDashboard },
   { name: 'vault', label: 'VAULT', Icon: Database },
-  { name: 'configure', label: 'RULES', Icon: Briefcase },
-  { name: 'profile', label: 'PROFILE', Icon: User },
+  { name: 'configure', label: 'RULES', Icon: Briefcase }
+
 ] as const;
 
 type NavItemName = typeof NAV_ITEMS[number]['name'];
@@ -60,7 +49,7 @@ function Avatar({ profile, size = 36 }: { profile?: ProfileRow | null; size?: nu
   const initials = profile?.full_name
     ? profile.full_name.trim().split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
     : profile?.email?.slice(0, 2).toUpperCase() ?? '??';
-  const roleColors: Record<string, string> = { admin: C.pink, premium: C.amber, member: C.cyan };
+  const roleColors: Record<string, string> = { admin: ROLE_CFG.admin.color, premium: ROLE_CFG.premium.color, member: ROLE_CFG.member.color };
   const color = roleColors[profile?.role ?? 'member'];
   return (
     <View style={[avatarS.wrap, { width: size, height: size, borderRadius: size / 2, borderColor: `${color}60` }]}>
@@ -80,7 +69,7 @@ const avatarS = StyleSheet.create({
 
 function UserMenu({ profile, visible, onClose }: { profile?: ProfileRow | null; visible: boolean; onClose: () => void }) {
   const router = useRouter();
-  const roleColors: Record<string, string> = { admin: C.pink, premium: C.amber, member: C.purple };
+  const roleColors: Record<string, string> = { admin: ROLE_CFG.admin.color, premium: ROLE_CFG.premium.color, member: ROLE_CFG.member.color };
   const role = profile?.role ?? 'member';
   const color = roleColors[role];
 
@@ -171,7 +160,7 @@ function WebSidebar({ active, profile }: { active: string; profile?: ProfileRow 
       <View style={sidebarS.root}>
         {/* Logo */}
         <TouchableOpacity style={sidebarS.logoBtn} onPress={() => router.push('/(tabs)/dashboard')} activeOpacity={0.8}>
-          <Text style={sidebarS.logoIcon}>⊙</Text>
+          <Image source={require('../../assets/icon.png')} style={{ width: 32, height: 32 }} />
         </TouchableOpacity>
 
         <View style={{ flex: 1, gap: 4 }}>
@@ -194,12 +183,12 @@ function WebSidebar({ active, profile }: { active: string; profile?: ProfileRow 
 
         {/* Settings */}
         <TouchableOpacity
-          onPress={() => router.push('/(settings)/' as any)}
+          onPress={() => router.push('/(tabs)/(settings)' as any)}
           style={sidebarS.navItem}
           activeOpacity={0.8}
         >
           <Settings size={20} color={C.sub} strokeWidth={2} />
-          <Text style={sidebarS.navLabel}>SET</Text>
+          <Text style={sidebarS.navLabel}>SETTINGS</Text>
         </TouchableOpacity>
       </View>
 

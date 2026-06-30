@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Platform, StyleSheet, ViewProps } from 'react-native';
+import { C } from '../../lib/theme';
 
 interface GlassCardProps extends ViewProps {
   children: React.ReactNode;
@@ -22,13 +23,13 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(120,200,240,0.12)',
-    backgroundColor: 'rgba(140,210,255,0.05)',
+    borderColor: C.borderCyan,
+    backgroundColor: C.card,
     overflow: 'hidden',
     ...(Platform.OS === 'ios' ? {
-      shadowColor: 'rgba(0,212,255,0.1',
+      shadowColor: C.cyan,
       shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.4,
+      shadowOpacity: 0.1,
       shadowRadius: 24,
     } : {}),
   },
@@ -37,7 +38,7 @@ const styles = StyleSheet.create({
     inset: 0,
     backdropFilter: 'blur(24px) saturate(160%) brightness(1.08)' as any,
     WebkitBackdropFilter: 'blur(24px) saturate(160%) brightness(1.08)' as any,
-    backgroundColor: 'rgba(100,180,220,0.06)',
+    backgroundColor: 'rgba(0,212,255,0.04)',
   } as any,
   inner: {
     position: 'relative',

@@ -39,7 +39,8 @@ import {
     Github,
 } from 'lucide-react-native';
 
-import type { AuthMode, AuthMessage } from '@/types/app.types';
+export type AuthMode = 'sign-in' | 'sign-up';
+export interface AuthMessage { type: 'error' | 'success' | 'warning'; text: string; }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
