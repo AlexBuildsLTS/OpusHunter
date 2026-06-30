@@ -30,21 +30,7 @@ import { supabase } from '../../lib/supabase';
 import { SwipeableJobCard } from '../../components/pipeline/SwipeableJobCard';
 import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import type { Job } from '../../types/app.types';
-
-const C = {
-  cyan: '#00D4FF',
-  purple: '#7B5EA7',
-  pink: '#E8436A',
-  amber: '#F59E0B',
-  green: '#00C67D',
-  bg: '#020507',
-  card: 'rgba(8,16,24,0.88)',
-  border: 'rgba(255,255,255,0.065)',
-  borderC: 'rgba(0,212,255,0.10)',
-  text: '#D8E4EC',
-  sub: 'rgba(216,228,236,0.45)',
-  dim: 'rgba(216,228,236,0.22)',
-};
+import { C } from '../../lib/theme';
 
 // ── METRIC CARD ────────────────────────────────────────────────────────────────
 
@@ -467,7 +453,7 @@ export default function DashboardScreen() {
         ) : (
           <View style={s.deck}>
             {/* Top 3 cards stacked — only top one is interactive */}
-            {pendingJobs.slice(0, Math.min(3, pendingJobs.length)).reverse().map((job, i, arr) => {
+            {pendingJobs.slice(0, Math.min(3, pendingJobs.length)).reverse().map((job: any, i: number, arr: any[]) => {
               const isTop = i === arr.length - 1;
               return (
                 <View

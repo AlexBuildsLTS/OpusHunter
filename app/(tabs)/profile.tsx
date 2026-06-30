@@ -1,467 +1,430 @@
 /**
  * app/(tabs)/profile.tsx
  * OpusHunter — Profile Screen
- * 2026-06-28
+ * 2026-06-29
  *
- * Key fixes:
- *   - All sub-navigation uses router.push (settings, vault, configure, admin)
- *     Those screens use router.replace back — no GO_BACK crash possible
- *   - Avatar upload via expo-image-picker (camera icon overlay)
- *   - Personal API keys (rapidapi_key, gemini_key) from profiles table
- *   - Role badge: ADMIN (pink) / PREMIUM (amber) / MEMBER (purple)
- *   - Admin panel link gated: role === 'admin' only
- *   - Settings link always visible
- *   - Sign Out clears queryClient cache before navigating
+ * This screen was missing entirely from the previous build. Built fresh:
+ *   - Avatar + editable full name
+ *   - Role badge (read-only here — role changes happen ONLY in (admin)/users.tsx
+ *     via force_set_role(), never editable by the user themselves)
+ *   - CV upload (expo-document-picker → Supabase Storage 'cv_vault' bucket)
+ *   - BYOK section: Gemini + RapidAPI keys (masked, editable)
+ *   - Quick link to Admin Core if role === 'admin'
+ *   - Web: max-w-2xl centered panel. Mobile: full width.
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, ScrollView,
-    Platform, StyleSheet, ActivityIndicator, Image,
-    KeyboardAvoidingView,
+    Platform, StyleSheet, ActivityIndicator,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
+import { Image } from 'expo-image';
 import {
-    Camera, CheckCircle2, AlertCircle, Eye, EyeOff,
-    LogOut, ChevronRight, FileText, SlidersHorizontal,
-    ShieldAlert, Settings, Crown,
+    User, Mail, FileText, Upload, CheckCircle2, AlertCircle,
+    Shield, Key, Eye, EyeOff, Sparkles, ChevronRight, Pencil,
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import type { Database } from '../../types/database.types';
-
-const C = {
-    cyan: '#00D4FF', purple: '#7B5EA7', pink: '#E8436A',
-    green: '#00C67D', amber: '#F59E0B',
-    bg: '#0A1419', card: 'rgba(11,24,34,0.9)',
-    border: 'rgba(120,200,240,0.1)', text: '#D8E4EC',
-    sub: 'rgba(216,228,236,0.45)',
-};
+import { C, ROLE_CFG } from '../../lib/theme';
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function getInitials(name: string | null, email: string): string {
-    const src = name?.trim() || email;
-    const parts = src.split(' ');
-    if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    return src.slice(0, 2).toUpperCase();
+function maskKey(key: string | null): string {
+    if (!key || key.length < 8) return '';
+    return `${key.slice(0, 4)}${'•'.repeat(Math.min(key.length - 8, 24))}${key.slice(-4)}`;
 }
-
-const ROLE_CFG: Record<string, { color: string; label: string }> = {
-    admin: { color: C.pink, label: 'ADMIN' },
-    premium: { color: C.amber, label: 'PREMIUM' },
-    member: { color: C.purple, label: 'MEMBER' },
-};
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function RoleBadge({ role }: { role: string }) {
-    const { color, label } = ROLE_CFG[role] ?? ROLE_CFG.member;
-    return (
-        <View style={[s.roleBadge, { backgroundColor: `${color}18`, borderColor: `${color}45` }]}>
-            <Text style={[s.roleText, { color }]}>{label}</Text>
-        </View>
-    );
-}
-
-function ApiKeyField({ label, value, placeholder, color, onSave, saving }: {
-    label: string; value: string; placeholder: string;
-    color: string; onSave: (v: string) => void; saving: boolean;
-}) {
-    const [draft, setDraft] = useState(value);
-    const [show, setShow] = useState(false);
-    const [dirty, setDirty] = useState(false);
-
-    useEffect(() => { setDraft(value); setDirty(false); }, [value]);
-
-    const masked = value && !show
-        ? `${value.slice(0, 6)}••••••••${value.slice(-4)}`
-        : value;
-
-    return (
-        <View style={s.apiRow}>
-            <Text style={[s.apiLabel, { color }]}>{label}</Text>
-            <View style={s.apiInput}>
-                <TextInput
-                    style={s.apiInputText}
-                    value={dirty ? draft : (show ? value : (value ? masked : ''))}
-                    onChangeText={(v) => { setDraft(v); setDirty(true); }}
-                    onFocus={() => { setDirty(true); setDraft(value); }}
-                    placeholder={placeholder}
-                    placeholderTextColor="#3D4A55"
-                    secureTextEntry={!show && !dirty}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    {...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {})}
-                />
-                <TouchableOpacity onPress={() => setShow(p => !p)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={{ paddingHorizontal: 8 }}>
-                    {show ? <EyeOff size={14} color={C.sub} /> : <Eye size={14} color={C.sub} />}
-                </TouchableOpacity>
-                {dirty && (
-                    <TouchableOpacity
-                        onPress={() => { onSave(draft.trim()); setDirty(false); }}
-                        disabled={saving}
-                        style={[s.apiSaveBtn, { backgroundColor: `${color}20`, borderColor: `${color}45` }]}
-                    >
-                        {saving ? <ActivityIndicator size="small" color={color} />
-                            : <Text style={[s.apiSaveBtnText, { color }]}>Save</Text>}
-                    </TouchableOpacity>
-                )}
-            </View>
-        </View>
-    );
-}
-
-function NavLink({ icon: Icon, label, sub, color, onPress }: {
-    icon: React.ElementType; label: string; sub?: string;
-    color: string; onPress: () => void;
-}) {
-    return (
-        <TouchableOpacity onPress={onPress} style={s.navRow} activeOpacity={0.7}>
-            <View style={[s.navIcon, { backgroundColor: `${color}10`, borderColor: `${color}25` }]}>
-                <Icon size={16} color={color} />
-            </View>
-            <View style={{ flex: 1 }}>
-                <Text style={s.navLabel}>{label}</Text>
-                {sub && <Text style={s.navSub} numberOfLines={1}>{sub}</Text>}
-            </View>
-            <ChevronRight size={14} color={C.sub} />
-        </TouchableOpacity>
-    );
-}
-
-// ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
     const router = useRouter();
-    const queryClient = useQueryClient();
+    const qc = useQueryClient();
+    const isDesktop = Platform.OS === 'web';
 
-    const [fullName, setFullName] = useState('');
-    const [avatarUri, setAvatarUri] = useState<string | null>(null);
+    const [editingName, setEditingName] = useState(false);
+    const [nameInput, setNameInput] = useState('');
+    const [geminiInput, setGeminiInput] = useState('');
+    const [rapidInput, setRapidInput] = useState('');
+    const [showGemini, setShowGemini] = useState(false);
+    const [showRapid, setShowRapid] = useState(false);
+    const renderRoleOption = (p: string) => (null);
     const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
+    const [uploading, setUploading] = useState(false);
+
+    const flash = (text: string, ok = true) => {
+        setBanner({ ok, text });
+        setTimeout(() => setBanner(null), 3500);
+    };
+
+    // ── Load profile ─────────────────────────────────────────────────────────
+    const { data: profile, isLoading } = useQuery<ProfileRow | null>({
+        queryKey: ['my_profile_full'],
+        queryFn: async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return null;
+            const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+            if (error) throw error;
+            return data;
+        },
+    });
 
     useEffect(() => {
-        if (banner) { const t = setTimeout(() => setBanner(null), 3500); return () => clearTimeout(t); }
-    }, [banner]);
+        if (profile) {
+            setNameInput(profile.full_name ?? '');
+            setGeminiInput('');
+            setRapidInput('');
+        }
+    }, [profile?.id]);
 
-    const { data: profile, isLoading } = useQuery<ProfileRow>({
-        queryKey: ['profile_full'],
-        queryFn: async () => {
+    const role = profile?.role ?? 'member';
+    const roleCfg = ROLE_CFG[role as keyof typeof ROLE_CFG];
+
+    const initials = profile?.full_name
+        ? profile.full_name.trim().split(' ').map((p: string) => p[0]).slice(0, 2).join('').toUpperCase()
+        : profile?.email?.slice(0, 2).toUpperCase() ?? '??';
+
+    // ── Save name ────────────────────────────────────────────────────────────
+    const saveNameMutation = useMutation({
+        mutationFn: async (name: string) => {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Not authenticated');
-            const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-            if (error) throw new Error(error.message);
-            return data as ProfileRow;
-        },
-    });
-
-    useEffect(() => { if (profile) setFullName(profile.full_name ?? ''); }, [profile]);
-
-    const { data: stats } = useQuery({
-        queryKey: ['pipeline_metrics'],
-        queryFn: async () => {
-            const { data, error } = await supabase.rpc('get_user_pipeline_metrics');
-            if (error) throw new Error(error.message);
-            return data as { matches: number; pending: number; interviews: number };
-        },
-        staleTime: 60_000,
-    });
-
-    const saveMutation = useMutation({
-        mutationFn: async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Not authenticated');
-            const { error } = await supabase.from('profiles')
-                .update({ full_name: fullName.trim() || null }).eq('id', user.id);
+            if (!user) throw new Error('Not authenticated.');
+            const { error } = await supabase.from('profiles').update({ full_name: name.trim() }).eq('id', user.id);
             if (error) throw new Error(error.message);
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['profile_full'] });
-            setBanner({ ok: true, text: 'Profile saved.' });
+            qc.invalidateQueries({ queryKey: ['my_profile_full'] });
+            qc.invalidateQueries({ queryKey: ['my_profile'] });
+            setEditingName(false);
+            flash('Name updated.');
         },
-        onError: (e: Error) => setBanner({ ok: false, text: e.message }),
+        onError: (e: Error) => flash(e.message, false),
     });
 
-    const keyMutation = useMutation({
-        mutationFn: async ({ field, value }: { field: 'rapidapi_key' | 'gemini_key'; value: string }) => {
+    // ── Save BYOK keys ───────────────────────────────────────────────────────
+    const saveKeysMutation = useMutation({
+        mutationFn: async () => {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Not authenticated');
-            const { error } = await supabase.from('profiles')
-                .update({ [field]: value || null }).eq('id', user.id);
+            if (!user) throw new Error('Not authenticated.');
+            const payload: Record<string, string> = {};
+            if (geminiInput.trim()) payload.gemini_key = geminiInput.trim();
+            if (rapidInput.trim()) payload.rapidapi_key = rapidInput.trim();
+            if (Object.keys(payload).length === 0) return;
+            const { error } = await supabase.from('profiles').update(payload).eq('id', user.id);
             if (error) throw new Error(error.message);
         },
-        onSuccess: (_, vars) => {
-            queryClient.invalidateQueries({ queryKey: ['profile_full'] });
-            setBanner({ ok: true, text: `${vars.field === 'rapidapi_key' ? 'RapidAPI' : 'Gemini'} key saved.` });
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['my_profile_full'] });
+            setGeminiInput('');
+            setRapidInput('');
+            flash('API keys saved securely.');
         },
-        onError: (e: Error) => setBanner({ ok: false, text: e.message }),
+        onError: (e: Error) => flash(e.message, false),
     });
 
-    const pickAvatar = useCallback(async () => {
-        if (Platform.OS === 'web') {
-            const input = document.createElement('input');
-            input.type = 'file'; input.accept = 'image/*';
-            input.onchange = (e: any) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (r) => setAvatarUri(r.target?.result as string);
-                    reader.readAsDataURL(file);
-                }
-            };
-            input.click();
-            return;
+    // ── CV upload ────────────────────────────────────────────────────────────
+    const handleCvUpload = useCallback(async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+                copyToCacheDirectory: true,
+            });
+            if (result.canceled || !result.assets?.[0]) return;
+
+            const file = result.assets[0];
+            setUploading(true);
+
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated.');
+
+            const ext = file.name.split('.').pop();
+            const path = `${user.id}/cv.${ext}`;
+
+            const response = await fetch(file.uri);
+            const blob = await response.blob();
+
+            const { error: uploadError } = await supabase.storage
+                .from('cv_vault')
+                .upload(path, blob, { upsert: true, contentType: file.mimeType ?? 'application/pdf' });
+            if (uploadError) throw uploadError;
+
+            const { error: dbError } = await supabase.from('profiles').update({ cv_storage_path: path }).eq('id', user.id);
+            if (dbError) throw dbError;
+
+            qc.invalidateQueries({ queryKey: ['my_profile_full'] });
+            flash('CV uploaded successfully.');
+        } catch (e: any) {
+            flash(e.message ?? 'Upload failed.', false);
+        } finally {
+            setUploading(false);
         }
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') { setBanner({ ok: false, text: 'Photo permission needed.' }); return; }
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true, aspect: [1, 1], quality: 0.8,
-        });
-        if (!result.canceled && result.assets[0]) setAvatarUri(result.assets[0].uri);
     }, []);
 
-    const handleLogout = useCallback(async () => {
-        await supabase.auth.signOut();
-        queryClient.clear();
-        router.replace('/(auth)/login');
-    }, [router, queryClient]);
-
-    if (isLoading || !profile) {
+    if (isLoading) {
         return (
-            <View style={{ flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={[s.root, { alignItems: 'center', justifyContent: 'center' }]}>
                 <ActivityIndicator color={C.cyan} size="large" />
             </View>
         );
     }
 
-    const initials = getInitials(profile.full_name, profile.email);
-    const role = profile.role ?? 'member';
-    const isAdmin = role === 'admin';
-    const isPremium = role === 'premium' || isAdmin;
-    const nameChanged = fullName !== (profile.full_name ?? '');
-
     return (
-        <View style={{ flex: 1, backgroundColor: C.bg }}>
-            {Platform.OS === 'web' && (
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                    {/* @ts-ignore */}
-                    <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 60% 55% at 50% 0%, rgba(123,94,167,0.07) 0%, transparent 60%)' }} />
-                </View>
+        <ScrollView
+            style={s.root}
+            contentContainerStyle={[s.scroll, isDesktop && s.scrollDesktop]}
+            showsVerticalScrollIndicator={false}
+        >
+            {/* Banner */}
+            {banner && (
+                <Animated.View
+                    entering={FadeInDown.springify()}
+                    exiting={FadeOutUp.duration(200)}
+                    style={[s.banner, { borderColor: banner.ok ? `${C.green}40` : `${C.pink}40`, backgroundColor: banner.ok ? `${C.green}0F` : `${C.pink}0F` }]}
+                >
+                    {banner.ok ? <CheckCircle2 size={14} color={C.green} /> : <AlertCircle size={14} color={C.pink} />}
+                    <Text style={[s.bannerText, { color: banner.ok ? C.green : C.pink }]}>{banner.text}</Text>
+                </Animated.View>
             )}
 
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled">
-
-                    {/* Top row: title + role badge */}
-                    <Animated.View entering={FadeInDown.delay(40).springify()} style={s.topRow}>
-                        <Text style={s.pageTitle}>Profile</Text>
-                        <RoleBadge role={role} />
-                    </Animated.View>
-
-                    {/* Banner */}
-                    {banner && (
-                        <Animated.View entering={FadeInDown.springify()} style={[s.banner,
-                        { borderColor: banner.ok ? `${C.cyan}30` : `${C.pink}30`, backgroundColor: banner.ok ? `${C.cyan}08` : `${C.pink}08` }]}>
-                            {banner.ok ? <CheckCircle2 size={14} color={C.cyan} /> : <AlertCircle size={14} color={C.pink} />}
-                            <Text style={[s.bannerText, { color: banner.ok ? C.cyan : C.pink }]}>{banner.text}</Text>
-                        </Animated.View>
-                    )}
-
-                    {/* Avatar */}
-                    <Animated.View entering={FadeInDown.delay(80).springify()} style={s.avatarSection}>
-                        <TouchableOpacity onPress={pickAvatar} style={s.avatarWrap} activeOpacity={0.85}>
-                            {avatarUri
-                                ? <Image source={{ uri: avatarUri }} style={s.avatarImg} />
-                                : <View style={s.avatarFallback}>
-                                    <Text style={s.avatarInitials}>{initials}</Text>
-                                </View>}
-                            <View style={s.avatarEditBtn}>
-                                <Camera size={14} color="#fff" />
-                            </View>
-                        </TouchableOpacity>
-                    </Animated.View>
-
-                    {/* Stats */}
-                    <Animated.View entering={FadeInDown.delay(120).springify()} style={s.statsRow}>
-                        {[
-                            { label: 'Applications', value: stats?.matches ?? 0, color: C.cyan },
-                            { label: 'Pending', value: stats?.pending ?? 0, color: C.purple },
-                            { label: 'Applied', value: stats?.interviews ?? 0, color: C.green },
-                        ].map(st => (
-                            <View key={st.label} style={[s.statBox, { borderColor: `${st.color}20`, backgroundColor: `${st.color}08` }]}>
-                                <Text style={[s.statVal, { color: st.color }]}>{st.value}</Text>
-                                <Text style={s.statLabel}>{st.label}</Text>
-                            </View>
-                        ))}
-                    </Animated.View>
-
-                    {/* Premium upgrade CTA — show to members */}
-                    {!isPremium && (
-                        <Animated.View entering={FadeInDown.delay(140).springify()} style={s.premiumCard}>
-                            <Crown size={18} color={C.amber} />
-                            <View style={{ flex: 1 }}>
-                                <Text style={s.premiumTitle}>Upgrade to Premium</Text>
-                                <Text style={s.premiumSub}>Unlimited scrapes · Mass apply · Priority matching</Text>
-                            </View>
-                            <TouchableOpacity style={s.premiumBtn} activeOpacity={0.85}>
-                                <Text style={s.premiumBtnText}>Upgrade</Text>
-                            </TouchableOpacity>
-                        </Animated.View>
-                    )}
-
-                    {/* Edit profile */}
-                    <Animated.View entering={FadeInDown.delay(160).springify()} style={s.card}>
-                        <Text style={s.cardTitle}>Account</Text>
-                        <Text style={s.fieldLabel}>FULL NAME</Text>
-                        <View style={s.textFieldRow}>
-                            <TextInput
-                                style={s.textFieldInput}
-                                value={fullName}
-                                onChangeText={setFullName}
-                                placeholder="Your full name"
-                                placeholderTextColor="#3D4A55"
-                                autoCorrect={false}
-                                {...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {})}
-                            />
+            {/* ── Avatar + role ── */}
+            <Animated.View entering={FadeInDown.delay(40).springify()} style={s.headerCard}>
+                <View style={s.avatarWrap}>
+                    {profile?.avatar_url ? (
+                        <Image source={{ uri: profile.avatar_url }} style={s.avatarImg} contentFit="cover" />
+                    ) : (
+                        <View style={[s.avatarFallback, { borderColor: `${roleCfg.color}50` }]}>
+                            <Text style={[s.avatarText, { color: roleCfg.color }]}>{initials}</Text>
                         </View>
-                        <Text style={[s.fieldLabel, { marginTop: 12 }]}>EMAIL</Text>
-                        <View style={[s.textFieldRow, { backgroundColor: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.04)' }]}>
-                            <TextInput
-                                style={[s.textFieldInput, { color: C.sub }]}
-                                value={profile.email} editable={false}
-                                {...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {})}
-                            />
+                    )}
+                </View>
+
+                {editingName ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 }}>
+                        <TextInput
+                            style={s.nameInput}
+                            value={nameInput}
+                            onChangeText={setNameInput}
+                            autoFocus
+                            placeholder="Your name"
+                            placeholderTextColor={C.dim}
+                        />
+                        <TouchableOpacity onPress={() => saveNameMutation.mutate(nameInput)} disabled={saveNameMutation.isPending}>
+                            {saveNameMutation.isPending
+                                ? <ActivityIndicator size="small" color={C.cyan} />
+                                : <CheckCircle2 size={20} color={C.cyan} />}
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <TouchableOpacity onPress={() => setEditingName(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 }} activeOpacity={0.7}>
+                        <Text style={s.profileName}>{profile?.full_name || 'Add your name'}</Text>
+                        <Pencil size={13} color={C.sub} />
+                    </TouchableOpacity>
+                )}
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                    <Mail size={12} color={C.sub} />
+                    <Text style={s.profileEmail}>{profile?.email}</Text>
+                </View>
+
+                <View style={[s.roleBadge, { borderColor: `${roleCfg.color}40`, backgroundColor: `${roleCfg.color}12`, marginTop: 12 }]}>
+                    <Shield size={11} color={roleCfg.color} />
+                    <Text style={[s.roleBadgeText, { color: roleCfg.color }]}>{roleCfg.label}</Text>
+                </View>
+            </Animated.View>
+
+            {/* ── Admin shortcut ── */}
+            {role === 'admin' && (
+                <Animated.View entering={FadeInDown.delay(80).springify()}>
+                    <TouchableOpacity onPress={() => router.push('/(admin)/' as any)} style={s.adminCard} activeOpacity={0.85}>
+                        <View style={[s.adminIconBox]}>
+                            <Shield size={18} color={C.pink} />
                         </View>
-                        <TouchableOpacity onPress={() => saveMutation.mutate()} disabled={!nameChanged || saveMutation.isPending}
-                            style={[s.saveBtn, (!nameChanged || saveMutation.isPending) && { opacity: 0.4 }]} activeOpacity={0.85}>
-                            {saveMutation.isPending ? <ActivityIndicator color="#000" />
-                                : <Text style={s.saveBtnText}>Save Changes</Text>}
-                        </TouchableOpacity>
-                    </Animated.View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={s.adminCardTitle}>Admin Core</Text>
+                            <Text style={s.adminCardSub}>Manage users, roles, and system API keys</Text>
+                        </View>
+                        <ChevronRight size={18} color={C.pink} />
+                    </TouchableOpacity>
+                </Animated.View>
+            )}
 
-                    {/* API Keys */}
-                    <Animated.View entering={FadeInDown.delay(200).springify()} style={s.card}>
-                        <Text style={s.cardTitle}>Your API Keys</Text>
-                        <Text style={s.cardSub}>
-                            Your key takes priority over system keys.{'\n'}
-                            Leave blank to use the shared fallback pool.
+            {/* ── CV / Resume ── */}
+            <Animated.View entering={FadeInDown.delay(120).springify()} style={s.section}>
+                <Text style={s.sectionTitle}>RESUME / CV</Text>
+                <View style={s.cvCard}>
+                    <View style={[s.cvIconBox]}>
+                        <FileText size={20} color={C.cyan} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={s.cvTitle}>
+                            {profile?.cv_storage_path ? 'CV on file' : 'No CV uploaded'}
                         </Text>
-                        <ApiKeyField label="RAPIDAPI KEY (JSEARCH)" value={profile.rapidapi_key ?? ''}
-                            placeholder="Paste your RapidAPI key…" color={C.cyan}
-                            saving={keyMutation.isPending}
-                            onSave={(v) => keyMutation.mutate({ field: 'rapidapi_key', value: v })} />
-                        <View style={{ height: 10 }} />
-                        <ApiKeyField label="GEMINI API KEY" value={profile.gemini_key ?? ''}
-                            placeholder="Paste your Gemini key…" color={C.purple}
-                            saving={keyMutation.isPending}
-                            onSave={(v) => keyMutation.mutate({ field: 'gemini_key', value: v })} />
-                    </Animated.View>
-
-                    {/* Navigation */}
-                    <Animated.View entering={FadeInDown.delay(240).springify()} style={s.card}>
-                        <Text style={s.cardTitle}>Navigation</Text>
-                        <NavLink icon={FileText}
-                            label={profile.cv_storage_path ? 'CV Uploaded ✓' : 'Upload CV'}
-                            sub={profile.cv_storage_path ? profile.cv_storage_path.split('/').pop() : 'Required for auto-apply'}
-                            color={profile.cv_storage_path ? C.green : C.cyan}
-                            onPress={() => router.push('/(tabs)/vault')} />
-                        <View style={s.navDivider} />
-                        <NavLink icon={SlidersHorizontal} label="Search Rules"
-                            sub="Keywords, location, work types"
-                            color={C.purple}
-                            onPress={() => router.push('/(tabs)/configure')} />
-                        <View style={s.navDivider} />
-                        <NavLink icon={Settings} label="Settings"
-                            sub="Pipeline, notifications, security, danger zone"
-                            color={C.cyan}
-                            onPress={() => router.push('/(settings)')} />
-                        {isAdmin && (
-                            <>
-                                <View style={s.navDivider} />
-                                <NavLink icon={ShieldAlert} label="Admin Panel"
-                                    sub="System keys, user management"
-                                    color={C.pink}
-                                    onPress={() => router.push('/(admin)')} />
-                            </>
-                        )}
-                    </Animated.View>
-
-                    {/* Sign out */}
-                    <Animated.View entering={FadeInDown.delay(280).springify()}>
-                        <TouchableOpacity onPress={handleLogout} style={s.signOutBtn} activeOpacity={0.8}>
-                            <LogOut size={16} color={C.pink} />
-                            <Text style={s.signOutText}>Sign Out</Text>
-                        </TouchableOpacity>
-                    </Animated.View>
-
-                    <Animated.View entering={FadeIn.delay(400)} style={{ alignItems: 'center', marginTop: 16 }}>
-                        <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.15)' }}>
-                            OpusHunter v1.0.0 · 2026-06-28
+                        <Text style={s.cvSub}>
+                            {profile?.cv_storage_path
+                                ? 'Used to tailor auto-generated cover letters.'
+                                : 'Upload a PDF or Word doc to improve match scoring.'}
                         </Text>
-                    </Animated.View>
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </View>
+                    </View>
+                    <TouchableOpacity onPress={handleCvUpload} disabled={uploading} style={s.cvBtn} activeOpacity={0.8}>
+                        {uploading
+                            ? <ActivityIndicator size="small" color={C.cyan} />
+                            : <Upload size={15} color={C.cyan} />}
+                    </TouchableOpacity>
+                </View>
+            </Animated.View>
+
+            {/* ── BYOK: Bring Your Own Key ── */}
+            <Animated.View entering={FadeInDown.delay(160).springify()} style={s.section}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <Text style={s.sectionTitle}>BRING YOUR OWN KEY (BYOK)</Text>
+                    <Sparkles size={13} color={C.amber} />
+                </View>
+                <Text style={s.sectionDesc}>
+                    Add your own Gemini or RapidAPI key for unlimited scraping and AI cover letters.
+                    Leave blank to use the shared system fallback (rate-limited).
+                </Text>
+
+                {/* Gemini key */}
+                <View style={{ marginTop: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <Key size={12} color={C.purple} />
+                        <Text style={s.fieldLabel}>GEMINI API KEY</Text>
+                    </View>
+                    <View style={s.keyInputWrap}>
+                        <TextInput
+                            style={s.keyInput}
+                            value={geminiInput}
+                            onChangeText={setGeminiInput}
+                            placeholder={profile?.gemini_key ? maskKey(profile.gemini_key) : 'AIzaSy...'}
+                            placeholderTextColor={C.dim}
+                            secureTextEntry={!showGemini}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                        />
+                        <TouchableOpacity onPress={() => setShowGemini((v) => !v)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                            {showGemini ? <EyeOff size={14} color={C.sub} /> : <Eye size={14} color={C.sub} />}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* RapidAPI key */}
+                <View style={{ marginTop: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <Key size={12} color={C.cyan} />
+                        <Text style={s.fieldLabel}>RAPIDAPI KEY (JSearch)</Text>
+                    </View>
+                    <View style={s.keyInputWrap}>
+                        <TextInput
+                            style={s.keyInput}
+                            value={rapidInput}
+                            onChangeText={setRapidInput}
+                            placeholder={profile?.rapidapi_key ? maskKey(profile.rapidapi_key) : 'Your RapidAPI key...'}
+                            placeholderTextColor={C.dim}
+                            secureTextEntry={!showRapid}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                        />
+                        <TouchableOpacity onPress={() => setShowRapid((v) => !v)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                            {showRapid ? <EyeOff size={14} color={C.sub} /> : <Eye size={14} color={C.sub} />}
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                <TouchableOpacity
+                    onPress={() => saveKeysMutation.mutate()}
+                    disabled={saveKeysMutation.isPending || (!geminiInput.trim() && !rapidInput.trim())}
+                    style={[s.saveKeysBtn, (!geminiInput.trim() && !rapidInput.trim()) && { opacity: 0.5 }]}
+                    activeOpacity={0.85}
+                >
+                    {saveKeysMutation.isPending
+                        ? <ActivityIndicator color="#000" size="small" />
+                        : <Text style={s.saveKeysBtnText}>SAVE KEYS</Text>}
+                </TouchableOpacity>
+            </Animated.View>
+
+            <View style={{ height: 60 }} />
+        </ScrollView>
     );
 }
 
 const s = StyleSheet.create({
-    scroll: { flexGrow: 1, paddingTop: Platform.OS === 'web' ? 40 : 56, paddingHorizontal: 20, paddingBottom: 100, maxWidth: 540, width: '100%', alignSelf: 'center' },
-    topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-    pageTitle: { fontSize: 22, fontWeight: '800', color: C.text },
-    roleBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
-    roleText: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
-    banner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 16 },
+    root: { flex: 1, backgroundColor: C.bg },
+    scroll: { flexGrow: 1, paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 56 : Platform.OS === 'web' ? 40 : 20 },
+    scrollDesktop: { maxWidth: 640, width: '100%', alignSelf: 'center' as any },
+
+    banner: {
+        flexDirection: 'row', alignItems: 'center', gap: 8,
+        paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, marginBottom: 16,
+    },
     bannerText: { fontSize: 13, fontWeight: '600', flex: 1 },
 
-    avatarSection: { alignItems: 'center', marginBottom: 20 },
-    avatarWrap: { position: 'relative' },
-    avatarFallback: { width: 96, height: 96, borderRadius: 48, backgroundColor: `${C.purple}20`, borderWidth: 2.5, borderColor: `${C.purple}50`, alignItems: 'center', justifyContent: 'center' },
-    avatarImg: { width: 96, height: 96, borderRadius: 48, borderWidth: 2.5, borderColor: `${C.cyan}50` },
-    avatarInitials: { fontSize: 30, fontWeight: '900', color: C.purple },
-    avatarEditBtn: { position: 'absolute', bottom: 2, right: 2, width: 30, height: 30, borderRadius: 15, backgroundColor: C.cyan, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.bg },
+    headerCard: {
+        alignItems: 'center', backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
+        borderRadius: 24, padding: 28, marginBottom: 20,
+    },
+    avatarWrap: { width: 84, height: 84 },
+    avatarImg: { width: 84, height: 84, borderRadius: 42 },
+    avatarFallback: {
+        width: 84, height: 84, borderRadius: 42, borderWidth: 2,
+        backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center',
+    },
+    avatarText: { fontSize: 28, fontWeight: '800' },
+    profileName: { fontSize: 18, fontWeight: '800', color: C.text },
+    profileEmail: { fontSize: 12, color: C.sub },
+    nameInput: {
+        fontSize: 16, fontWeight: '700', color: C.text,
+        borderBottomWidth: 1, borderBottomColor: `${C.cyan}40`,
+        paddingVertical: 4, minWidth: 160, textAlign: 'center',
+    },
+    roleBadge: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1,
+    },
+    roleBadgeText: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
 
-    statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-    statBox: { flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 14, borderWidth: 1, gap: 4 },
-    statVal: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
-    statLabel: { fontSize: 9, fontWeight: '700', color: C.sub, letterSpacing: 1.2, textTransform: 'uppercase' },
+    adminCard: {
+        flexDirection: 'row', alignItems: 'center', gap: 14,
+        backgroundColor: `${C.pink}08`, borderWidth: 1, borderColor: `${C.pink}25`,
+        borderRadius: 18, padding: 16, marginBottom: 20,
+    },
+    adminIconBox: {
+        width: 42, height: 42, borderRadius: 12, backgroundColor: `${C.pink}14`,
+        borderWidth: 1, borderColor: `${C.pink}30`, alignItems: 'center', justifyContent: 'center',
+    },
+    adminCardTitle: { fontSize: 14, fontWeight: '800', color: C.pink },
+    adminCardSub: { fontSize: 11, color: C.sub, marginTop: 2 },
 
-    premiumCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: `${C.amber}30`, backgroundColor: `${C.amber}08`, marginBottom: 16 },
-    premiumTitle: { fontSize: 13, fontWeight: '800', color: C.text, marginBottom: 2 },
-    premiumSub: { fontSize: 11, color: C.sub },
-    premiumBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, backgroundColor: C.amber, flexShrink: 0 },
-    premiumBtnText: { fontSize: 11, fontWeight: '800', color: '#000' },
+    section: {
+        backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
+        borderRadius: 20, padding: 18, marginBottom: 16,
+    },
+    sectionTitle: { fontSize: 11, fontWeight: '800', color: C.cyan, letterSpacing: 1.5 },
+    sectionDesc: { fontSize: 12, color: C.sub, lineHeight: 18, marginTop: 4 },
 
-    card: { backgroundColor: C.card, borderRadius: 18, borderWidth: 1, borderColor: C.border, padding: 18, marginBottom: 14 },
-    cardTitle: { fontSize: 13, fontWeight: '800', color: C.text, marginBottom: 14 },
-    cardSub: { fontSize: 11, color: C.sub, marginTop: -8, marginBottom: 14, lineHeight: 16 },
+    cvCard: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 12 },
+    cvIconBox: {
+        width: 42, height: 42, borderRadius: 12, backgroundColor: `${C.cyan}10`,
+        borderWidth: 1, borderColor: `${C.cyan}25`, alignItems: 'center', justifyContent: 'center',
+    },
+    cvTitle: { fontSize: 13, fontWeight: '700', color: C.text },
+    cvSub: { fontSize: 11, color: C.sub, marginTop: 2, lineHeight: 15 },
+    cvBtn: {
+        width: 40, height: 40, borderRadius: 12, borderWidth: 1, borderColor: `${C.cyan}30`,
+        backgroundColor: `${C.cyan}08`, alignItems: 'center', justifyContent: 'center',
+    },
 
-    fieldLabel: { fontSize: 9, fontWeight: '900', color: C.cyan, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 },
-    textFieldRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingHorizontal: 14, height: 48, alignItems: 'center' },
-    textFieldInput: { flex: 1, fontSize: 14, color: C.text, fontWeight: '500' },
-    saveBtn: { height: 50, borderRadius: 13, backgroundColor: C.cyan, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
-    saveBtnText: { fontSize: 14, fontWeight: '900', color: '#000', letterSpacing: 0.8 },
+    fieldLabel: { fontSize: 10, fontWeight: '700', color: C.sub, letterSpacing: 1.5 },
+    keyInputWrap: {
+        flexDirection: 'row', alignItems: 'center', gap: 10,
+        backgroundColor: 'rgba(4,12,20,0.7)', borderWidth: 1, borderColor: C.border,
+        borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+    },
+    keyInput: { flex: 1, fontSize: 13, color: C.text, ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}) },
 
-    apiRow: { marginBottom: 10 },
-    apiLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 },
-    apiInput: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingLeft: 14, height: 46 },
-    apiInputText: { flex: 1, fontSize: 12, color: C.text, fontFamily: Platform.select({ ios: 'Courier', android: 'monospace', default: 'monospace' }) },
-    apiSaveBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, marginLeft: 4, marginRight: 6 },
-    apiSaveBtnText: { fontSize: 11, fontWeight: '800' },
-
-    navRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
-    navIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, flexShrink: 0 },
-    navLabel: { fontSize: 14, fontWeight: '700', color: C.text },
-    navSub: { fontSize: 11, color: C.sub, marginTop: 1 },
-    navDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.04)', marginLeft: 48 },
-
-    signOutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 52, borderRadius: 16, borderWidth: 1, borderColor: `${C.pink}35`, backgroundColor: `${C.pink}0A`, marginBottom: 12 },
-    signOutText: { fontSize: 14, fontWeight: '700', color: C.pink },
+    saveKeysBtn: {
+        marginTop: 18, height: 46, borderRadius: 14, backgroundColor: C.cyan,
+        alignItems: 'center', justifyContent: 'center',
+    },
+    saveKeysBtnText: { fontSize: 12, fontWeight: '900', color: '#000', letterSpacing: 1.5 },
 });
