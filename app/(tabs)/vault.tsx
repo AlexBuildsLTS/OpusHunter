@@ -26,21 +26,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { usePipelineStore } from '../../store/usePipelineStore';
 import { useCVVault } from '../../hooks/useCVVault';
-
-// ── Theme ─────────────────────────────────────────────────────────────────────
-
-const C = {
-  cyan: '#00D4FF',
-  purple: '#7B5EA7',
-  pink: '#E8436A',
-  green: '#00C67D',
-  amber: '#F59E0B',
-  bg: '#0A1419',
-  card: '#0B1822',
-  border: 'rgba(120,200,240,0.09)',
-  text: '#D8E4EC',
-  sub: 'rgba(216,228,236,0.45)',
-};
+import { C } from '../../lib/theme';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -347,7 +333,7 @@ export default function VaultScreen() {
             </View>
           ) : (
             <View style={{ gap: 10 }}>
-              {certs.map((cert) => (
+              {certs.map((cert: any, i: number) => (
                 <CertificationRow
                   key={cert.id}
                   cert={cert}
@@ -460,7 +446,7 @@ const styles = StyleSheet.create({
   certRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     padding: 14, borderRadius: 14, borderWidth: 1,
-    borderColor: C.border, backgroundColor: 'rgba(11,24,34,0.8)',
+    borderColor: C.border, backgroundColor: C.card,
   },
   certIconBox: {
     width: 40, height: 40, borderRadius: 11,
