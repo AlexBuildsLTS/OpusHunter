@@ -15,12 +15,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Key, Users, ArrowLeft, Activity, Database } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
-
-const C = {
-    cyan: '#00D4FF', purple: '#7B5EA7', pink: '#E8436A',
-    green: '#00C67D', amber: '#F59E0B',
-    bg: '#0A1419', border: 'rgba(120,200,240,0.09)', text: '#D8E4EC', sub: 'rgba(216,228,236,0.45)',
-};
+import { C } from '../../lib/theme';
 
 function AmbientBg() {
     if (Platform.OS !== 'web') return null;
@@ -147,7 +142,7 @@ const s = StyleSheet.create({
     statBox: { width: '47%', alignItems: 'center', gap: 6, paddingVertical: 18, borderRadius: 16, borderWidth: 1 },
     statVal: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },
     statLabel: { fontSize: 9, fontWeight: '700', color: C.sub, letterSpacing: 1.5, textTransform: 'uppercase' },
-    menuCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18, borderRadius: 18, borderWidth: 1, backgroundColor: 'rgba(11,24,34,0.8)' },
+    menuCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 18, borderRadius: 18, borderWidth: 1, backgroundColor: C.card },
     menuIcon: { width: 50, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, flexShrink: 0 },
     menuLabel: { fontSize: 15, fontWeight: '800', marginBottom: 3 },
     menuSub: { fontSize: 12, color: C.sub, lineHeight: 17 },
