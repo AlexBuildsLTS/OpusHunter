@@ -1,13 +1,23 @@
 /**
  * supabase/functions/generate-cover-letter/index.ts
  * OpusHunter — AI Cover Letter Generator
- * Updated: 2026-06-26
+ * 2026-07-01 — CV bucket fixed, BYOK cascade wired in
  *
- * Model: gemini-3.1-flash-lite
+ * WHAT CHANGED AND WHY:
+ *   1. FIXED: was downloading the candidate's CV from a bucket called
+ *      `cv_payloads`, which was never created anywhere (not in seed.sql,
+ *      not by profile.tsx's upload flow, which correctly uses `cv_vault`).
+ *      Every single generation silently got an empty cvText and produced
+ *      a generic, non-CV-personalised letter — with no error, because the
+ *      download failure was caught and swallowed. Now reads from `cv_vault`,
+ *      matching the bucket that actually has the file in it.
+ *   2. Now resolves the Gemini key via BYOK → pool → env (was env → pool
+ *      only — profile.gemini_key was saved by the client but never read).
+ *   3. Uses the shared `createAdminClient()` for a clear startup error if
+ *      SUPABASE_SERVICE_ROLE_KEY isn't configured as an Edge Function
+ *      secret, instead of a silent `?? ''` fallback.
  *
- * Key resolution order:
- *   1. GEMINI_API_KEY env secret (Supabase secrets)
- *   2. api_keys table (admin-managed fallback pool, provider = 'gemini')
+ * Model: gemini-3.1-flash-lite — verified current & GA as of 2026-07-01.
  *
  * POST body:
  *   { job_id: string, preview: true }           ← pre-apply modal preview (not saved)
@@ -16,9 +26,8 @@
 
 // deno-lint-ignore-file no-explicit-any
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient } from 'npm:@supabase/supabase-js@2';
-
-declare const Deno: { env: { get: (k: string) => string | undefined } };
+import { createAdminClient } from '../_shared/supabaseAdmin.ts';
+import { resolveKey, markKeyUsed } from '../_shared/keyResolver.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -30,6 +39,9 @@ const corsHeaders = {
 const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
+// ── CV storage bucket — MUST match seed.sql and profile.tsx's upload target ──
+const CV_BUCKET = 'cv_vault';
+
 // ── Gemini call ───────────────────────────────────────────────────────────────
 
 async function callGemini(prompt: string, apiKey: string): Promise<string> {
@@ -38,12 +50,7 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: {
-                temperature: 0.72,
-                topK: 40,
-                topP: 0.95,
-                maxOutputTokens: 650,
-            },
+            generationConfig: { temperature: 0.72, topK: 40, topP: 0.95, maxOutputTokens: 650 },
             safetySettings: [
                 { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
                 { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
@@ -62,30 +69,6 @@ async function callGemini(prompt: string, apiKey: string): Promise<string> {
     const text: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     if (!text) throw new Error('Gemini returned empty content.');
     return text.trim();
-}
-
-// ── Key resolution: env → api_keys pool ──────────────────────────────────────
-
-async function resolveGeminiKey(supabase: any): Promise<string | null> {
-    const envKey = Deno.env.get('GEMINI_API_KEY');
-    if (envKey) return envKey;
-
-    const { data: keys } = await supabase
-        .from('api_keys')
-        .select('id, api_key')
-        .eq('provider', 'gemini')
-        .eq('is_active', true)
-        .order('last_used', { ascending: true, nullsFirst: true })
-        .limit(3);
-
-    if (keys?.length) {
-        await supabase
-            .from('api_keys')
-            .update({ last_used: new Date().toISOString() })
-            .eq('id', keys[0].id);
-        return keys[0].api_key;
-    }
-    return null;
 }
 
 // ── Template fallback ─────────────────────────────────────────────────────────
@@ -121,7 +104,7 @@ function buildPrompt(p: {
 CANDIDATE:
 - Name: ${p.candidateName}
 - Key skills: ${p.keywords.slice(0, 8).join(', ')}
-- CV excerpt: ${p.cvText.substring(0, 600)}
+- CV excerpt: ${p.cvText.substring(0, 600) || '(no CV on file — write generically but confidently)'}
 
 JOB:
 - Role: ${p.jobTitle}
@@ -152,11 +135,7 @@ serve(async (req: Request) => {
                 { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        const supabase = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-            { auth: { persistSession: false } },
-        );
+        const supabase = createAdminClient();
 
         const { data: { user }, error: authErr } = await supabase.auth.getUser(
             authHeader.replace('Bearer ', '').trim()
@@ -169,7 +148,6 @@ serve(async (req: Request) => {
         const body = await req.json() as { job_application_id?: string; job_id?: string; preview?: boolean };
         const isPreview = body.preview === true;
 
-        // Resolve job_id
         let jobId = body.job_id;
         if (!jobId && body.job_application_id) {
             const { data: app } = await supabase
@@ -182,7 +160,6 @@ serve(async (req: Request) => {
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        // Load job
         const { data: job } = await supabase
             .from('job_vault').select('id, title, company, description, tech_stack')
             .eq('id', jobId).single();
@@ -191,26 +168,29 @@ serve(async (req: Request) => {
                 { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        // Load profile
         const { data: profile } = await supabase
             .from('profiles').select('full_name, cv_storage_path')
             .eq('id', user.id).single();
 
         const candidateName = profile?.full_name ?? user.email?.split('@')[0] ?? 'Candidate';
 
-        // Best-effort CV text
+        // ── CV text — now reads from the bucket that actually has the file ──
         let cvText = '';
         if (profile?.cv_storage_path) {
             try {
-                const { data: cvBlob } = await supabase.storage.from('cv_payloads').download(profile.cv_storage_path);
+                const { data: cvBlob, error: cvErr } = await supabase.storage
+                    .from(CV_BUCKET)
+                    .download(profile.cv_storage_path);
+                if (cvErr) console.warn('[gcl] CV download failed:', cvErr.message);
                 if (cvBlob) {
                     const raw = await cvBlob.text();
                     cvText = raw.replace(/[^\x20-\x7E\n]/g, ' ').replace(/\s+/g, ' ').substring(0, 1200);
                 }
-            } catch { /* binary PDF — skip */ }
+            } catch (e: any) {
+                console.warn('[gcl] CV read exception (likely binary PDF, still usable as text-ish):', e.message);
+            }
         }
 
-        // Best matching automation rule
         const { data: rules } = await supabase
             .from('automation_rules').select('keywords, base_cover_letter')
             .eq('user_id', user.id).eq('is_active', true)
@@ -230,28 +210,30 @@ serve(async (req: Request) => {
         const baseTpl = bestRule?.base_cover_letter?.trim() || DEFAULT_TEMPLATE;
         const keywords: string[] = bestRule?.keywords ?? (job.tech_stack ?? []).slice(0, 6);
 
-        // Generate
-        const geminiKey = await resolveGeminiKey(supabase);
+        // ── Generate — BYOK first, then pool, then env ────────────────────────
+        const resolved = await resolveKey(supabase, user.id, 'gemini');
         let coverLetter = '';
-        let generatedBy: 'gemini' | 'template' = 'template';
+        let generatedBy: string = 'template';
 
-        if (geminiKey) {
+        if (resolved) {
             try {
                 coverLetter = await callGemini(
                     buildPrompt({
                         jobTitle: job.title, company: job.company,
                         jobDescription: job.description ?? '', cvText, baseCoverLetter: baseTpl,
-                        candidateName, keywords
+                        candidateName, keywords,
                     }),
-                    geminiKey,
+                    resolved.key,
                 );
-                generatedBy = 'gemini';
+                generatedBy = `gemini:${resolved.source}`;
+                await markKeyUsed(supabase, resolved);
             } catch (e: any) {
                 console.warn('[gcl] Gemini failed, falling back to template:', e.message);
                 coverLetter = applyTemplate(baseTpl, {
                     company: job.company, role: job.title,
                     name: candidateName, skills: keywords.slice(0, 3).join(', '),
                 });
+                generatedBy = 'template_fallback';
             }
         } else {
             coverLetter = applyTemplate(baseTpl, {
@@ -260,7 +242,6 @@ serve(async (req: Request) => {
             });
         }
 
-        // Persist if not preview
         let coverLetterId: string | null = null;
         if (!isPreview) {
             const { data: saved } = await supabase

@@ -19,9 +19,10 @@ import { ProfileDropdown } from '../../components/ui/ProfileDropdown';
 
 type ProfileRow = DB['public']['Tables']['profiles']['Row'];
 
+
 const NAV_ITEMS = [
   { name: 'dashboard', label: 'DASH', Icon: LayoutDashboard },
-  { name: 'vault', label: 'VAULT', Icon: Database },
+  { name: 'vault', label: 'Database', Icon: Database },
   { name: 'configure', label: 'RULES', Icon: Briefcase }
 ]
 
@@ -37,7 +38,7 @@ function WebSidebar({ active }: { active: string }) {
       {/* Logo */}
       <TouchableOpacity
         className="w-[44px] h-[44px] rounded-2xl border border-brand-cyan/20 items-center justify-center mb-8 shadow-lg shadow-brand-cyan/20"
-        style={{ backgroundColor: 'rgba(0, 212, 255, 0.08)' }}
+        style={{ backgroundColor: 'rgba(0, 212, 255, 0.12)' }}
         onPress={() => router.push('/(tabs)/dashboard')}
         activeOpacity={0.8}
       >
@@ -52,7 +53,7 @@ function WebSidebar({ active }: { active: string }) {
               key={name}
               onPress={() => router.push(`/(tabs)/${name}` as any)}
               activeOpacity={0.8}
-              className={`w-[56px] h-[56px] rounded-2xl items-center justify-center gap-1 relative ${isActive ? 'bg-brand-cyan/10' : ''}`}
+              className={`w-[56px] h-[56px] rounded-2xl items-center justify-center gap-1 relative ${isActive ? 'bg-brand-cyan/20' : ''}`}
             >
               {isActive && (
                 <View className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-md bg-brand-cyan shadow-[0_0_8px_rgba(0,212,255,0.8)]" />
@@ -79,7 +80,7 @@ export default function TabsLayout() {
     return (
       <View className="flex-1" style={{
         backgroundColor: C.bg,
-        backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 60%)',
+        backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 40%)',
       }}>
         <WebSidebar active={pathname} />
         <View className="flex-1 pl-[120px] relative">
@@ -104,7 +105,7 @@ export default function TabsLayout() {
     <View style={{
       flex: 1,
       backgroundColor: C.bg,
-      backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 60%)',
+      backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 40%)',
     }}>
       {/* Project Icon - Top Left */}
       <Image
@@ -123,7 +124,7 @@ export default function TabsLayout() {
           headerShown: false,
           sceneStyle: { backgroundColor: 'transparent', paddingTop: 70 },
           tabBarStyle: {
-            backgroundColor: 'rgba(10, 18, 26, 0.95)',
+            backgroundColor: 'rgba(10, 18, 26, 0.65)',
             borderTopColor: 'transparent',
             borderColor: 'rgba(0, 212, 255, 0.1)',
             borderWidth: 1,

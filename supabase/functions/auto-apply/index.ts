@@ -1,25 +1,54 @@
 /**
  * supabase/functions/auto-apply/index.ts
  * OpusHunter — Auto-Apply Edge Function
+ * 2026-07-01 — Fixed broken deploy, BYOK cascade wired in
+ *
+ * WHAT CHANGED AND WHY:
+ *   1. FIXED — DEPLOY-BREAKING: this file imported
+ *      `import { createClient } from "@supabase/supabase-js"` — a bare
+ *      specifier with no `npm:` prefix. Your deno.json import map only has
+ *      an entry for the full `npm:@supabase/supabase-js@2` specifier, not
+ *      the bare one, so Deno cannot resolve this import at all. This
+ *      function would fail to deploy (or fail on every cold start) with a
+ *      module-resolution error, regardless of any key or secret
+ *      configuration. Fixed to the same `npm:@supabase/supabase-js@2`
+ *      import the other two functions correctly use.
+ *   2. Also pinned `std@0.177.0` (a full URL, so it did resolve, but was
+ *      an unrelated old version vs. 0.224.0 used everywhere else) up to
+ *      0.224.0 for consistency.
+ *   3. Replaced the hardcoded, stale `gemini-1.5-flash` model with the
+ *      current `gemini-3.1-flash-lite` (verified current & GA as of
+ *      2026-07-01), matching generate-cover-letter.
+ *   4. Now resolves the Gemini key via BYOK → pool → env (previously only
+ *      checked the env var — profile.gemini_key was never read here).
+ *   5. Uses the shared `createAdminClient()` for a clear startup error if
+ *      SUPABASE_SERVICE_ROLE_KEY isn't configured.
  *
  * Called after a user swipes RIGHT on a job card.
  * Flow:
  *   1. Verify JWT → get user
  *   2. Load the job from job_vault
- *   3. Load the user's profile + cv_storage_path
+ *   3. Load the user's profile
  *   4. Find the best matching cover letter (or use base from automation_rule)
- *   5. Generate a personalised cover letter via Gemini if GEMINI_API_KEY is set
+ *   5. Generate a personalised cover letter via Gemini (BYOK → pool → env)
  *   6. Update job_applications.status → 'applied'
- *   7. Return the cover letter text so the client can display it
+ *   7. Return the cover letter text + apply_url so the client can open it
+ *
+ * NOTE ON SCOPE: this endpoint tracks the application and prepares the
+ * cover letter — it returns `apply_url` for the client to open, it does
+ * not itself submit a form on the employer's/ATS's site. If "auto-apply"
+ * is meant to mean full unattended form submission, that's a distinct,
+ * much larger feature (real browser automation against arbitrary ATS
+ * platforms) and isn't something this function does today — flagging so
+ * it's an explicit decision, not a silent gap.
  *
  * POST body: { job_application_id: string }
  */
 
 // deno-lint-ignore-file no-explicit-any
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from "@supabase/supabase-js";
-
-declare const Deno: { env: { get: (k: string) => string | undefined } };
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createAdminClient } from '../_shared/supabaseAdmin.ts';
+import { resolveKey, markKeyUsed } from '../_shared/keyResolver.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -27,19 +56,22 @@ const corsHeaders = {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+
 // ── Gemini cover letter generation ────────────────────────────────────────────
 
-async function generateCoverLetter(params: {
-    jobTitle: string;
-    company: string;
-    jobDescription: string;
-    baseCoverLetter: string;
-    fullName: string;
-    keywords: string[];
-}): Promise<string> {
-    const geminiKey = Deno.env.get('GEMINI_API_KEY');
+async function generateCoverLetter(
+    params: {
+        jobTitle: string;
+        company: string;
+        jobDescription: string;
+        baseCoverLetter: string;
+        fullName: string;
+        keywords: string[];
+    },
+    geminiKey: string | null,
+): Promise<string> {
     if (!geminiKey) {
-        // Graceful fallback — return the base cover letter personalised minimally
         return params.baseCoverLetter
             .replace(/\[COMPANY\]/gi, params.company)
             .replace(/\[ROLE\]/gi, params.jobTitle)
@@ -65,7 +97,7 @@ Do NOT include placeholders like [DATE] or [ADDRESS].
 Return ONLY the cover letter body, no preamble.`;
 
     const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -94,42 +126,32 @@ serve(async (req: Request) => {
     }
 
     try {
-        // ── Auth ────────────────────────────────────────────────────────────────
         const authHeader = req.headers.get('Authorization');
         if (!authHeader?.startsWith('Bearer ')) {
             return new Response(JSON.stringify({ error: 'Missing Authorization header.' }), {
-                status: 401,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }
 
-        const supabase = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-            { auth: { persistSession: false } },
-        );
+        const supabase = createAdminClient();
 
         const token = authHeader.replace('Bearer ', '').trim();
         const { data: { user }, error: authError } = await supabase.auth.getUser(token);
         if (authError || !user) {
             return new Response(JSON.stringify({ error: 'Invalid or expired token.' }), {
-                status: 401,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }
 
-        // ── Parse body ──────────────────────────────────────────────────────────
         const body = await req.json();
         const { job_application_id } = body as { job_application_id: string };
 
         if (!job_application_id) {
             return new Response(JSON.stringify({ error: 'job_application_id is required.' }), {
-                status: 400,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }
 
-        // ── Load job application ────────────────────────────────────────────────
         const { data: application, error: appError } = await supabase
             .from('job_applications')
             .select('id, job_id, status, user_id')
@@ -139,8 +161,7 @@ serve(async (req: Request) => {
 
         if (appError || !application) {
             return new Response(JSON.stringify({ error: 'Application not found.' }), {
-                status: 404,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }
 
@@ -151,7 +172,6 @@ serve(async (req: Request) => {
             );
         }
 
-        // ── Load job details ────────────────────────────────────────────────────
         const { data: job, error: jobError } = await supabase
             .from('job_vault')
             .select('id, title, company, description, url, source_url, tech_stack')
@@ -160,12 +180,10 @@ serve(async (req: Request) => {
 
         if (jobError || !job) {
             return new Response(JSON.stringify({ error: 'Job not found in vault.' }), {
-                status: 404,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }
 
-        // ── Load profile ────────────────────────────────────────────────────────
         const { data: profile } = await supabase
             .from('profiles')
             .select('full_name, cv_storage_path')
@@ -174,7 +192,6 @@ serve(async (req: Request) => {
 
         const fullName = profile?.full_name ?? 'Candidate';
 
-        // ── Load best matching automation rule (for base cover letter) ──────────
         const { data: rules } = await supabase
             .from('automation_rules')
             .select('base_cover_letter, keywords')
@@ -183,7 +200,6 @@ serve(async (req: Request) => {
             .order('created_at', { ascending: false })
             .limit(5);
 
-        // Pick the rule whose keywords most overlap with job tech_stack
         const jobStack = job.tech_stack ?? [];
         let bestRule = rules?.[0] ?? null;
         if (rules && rules.length > 1) {
@@ -192,10 +208,7 @@ serve(async (req: Request) => {
                 const overlap = (rule.keywords ?? []).filter((k: string) =>
                     jobStack.some((s: string) => s.toLowerCase().includes(k.toLowerCase()))
                 ).length;
-                if (overlap > bestOverlap) {
-                    bestOverlap = overlap;
-                    bestRule = rule;
-                }
+                if (overlap > bestOverlap) { bestOverlap = overlap; bestRule = rule; }
             }
         }
 
@@ -210,12 +223,13 @@ ${fullName}`;
 
         const keywords = bestRule?.keywords ?? jobStack.slice(0, 5);
 
-        // ── Generate personalised cover letter ──────────────────────────────────
+        // ── Generate personalised cover letter — BYOK → pool → env ──────────
         let coverLetterBody: string;
         let generatedBy = 'template';
 
+        const resolved = await resolveKey(supabase, user.id, 'gemini');
+
         try {
-            const geminiKey = Deno.env.get('GEMINI_API_KEY');
             coverLetterBody = await generateCoverLetter({
                 jobTitle: job.title,
                 company: job.company,
@@ -223,8 +237,12 @@ ${fullName}`;
                 baseCoverLetter,
                 fullName,
                 keywords,
-            });
-            generatedBy = geminiKey ? 'gemini' : 'template';
+            }, resolved?.key ?? null);
+
+            if (resolved) {
+                generatedBy = `gemini:${resolved.source}`;
+                await markKeyUsed(supabase, resolved);
+            }
         } catch (genErr: any) {
             console.error('[auto-apply] Cover letter generation failed, using template:', genErr.message);
             coverLetterBody = baseCoverLetter
@@ -234,7 +252,6 @@ ${fullName}`;
             generatedBy = 'template_fallback';
         }
 
-        // ── Save cover letter to cover_letters table ────────────────────────────
         const { data: savedCL } = await supabase
             .from('cover_letters')
             .insert({
@@ -249,7 +266,6 @@ ${fullName}`;
             .select('id')
             .single();
 
-        // ── Update job_applications status → applied ────────────────────────────
         const { error: updateError } = await supabase
             .from('job_applications')
             .update({
@@ -264,7 +280,6 @@ ${fullName}`;
             throw new Error(`Failed to update application status: ${updateError.message}`);
         }
 
-        // ── Update job_vault status → applied ───────────────────────────────────
         await supabase
             .from('job_vault')
             .update({ status: 'applied' })
@@ -284,13 +299,8 @@ ${fullName}`;
     } catch (err: any) {
         const isTimeout = err?.name === 'TimeoutError';
         return new Response(
-            JSON.stringify({
-                error: isTimeout ? 'Request timed out.' : (err.message ?? 'Unknown error'),
-            }),
-            {
-                status: isTimeout ? 504 : 500,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            },
+            JSON.stringify({ error: isTimeout ? 'Request timed out.' : (err.message ?? 'Unknown error') }),
+            { status: isTimeout ? 504 : 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
     }
 });

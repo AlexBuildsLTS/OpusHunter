@@ -3,6 +3,7 @@
  * OpusHunter — CV & Certifications Vault Hook
  *
  * Handles all document upload logic for both Web and Native (APK/iOS).
+ * 2026-07-01 — FIXED bucket name (see BUCKET constant below).
  * Previously an empty file — this is the full implementation.
  *
  * Responsibilities:
@@ -26,7 +27,7 @@ import type { CVUploadState } from '@/types/app.types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const BUCKET = 'cv_payloads';
+const BUCKET = 'cv_vault'; // FIXED 2026-07-01 — was 'cv_payloads', a bucket that was never created (seed.sql only creates 'cv_vault', which is what profile.tsx's uploader actually targets). Every CV/certification operation through this hook was hitting a nonexistent bucket.
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 const ACCEPTED_MIME_TYPES = [
