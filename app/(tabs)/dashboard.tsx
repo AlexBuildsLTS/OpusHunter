@@ -31,6 +31,7 @@ import { SwipeableJobCard } from '../../components/pipeline/SwipeableJobCard';
 import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import type { Job } from '../../types/app.types';
 import { AppHeader } from '../../components/layout/AppHeader';
+import { ProfileDropdown } from '../../components/ui/ProfileDropdown';
 import { C } from '../../lib/theme';
 
 
@@ -269,268 +270,273 @@ export default function DashboardScreen() {
   const isDesktop = Platform.OS === 'web';
 
   return (
-    <ScrollView
-      style={s.root}
-      contentContainerStyle={[s.scroll, isDesktop && s.scrollDesktop]}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Web ambient background */}
-      {isDesktop && (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          {/* @ts-ignore */}
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 400, background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,212,255,0.05) 0%, transparent 70%)' }} />
-        </View>
-      )}
+    <View className="flex-1 bg-slate-950">
+      {/* Fixed Profile Dropdown - Top Right */}
+      <View className="absolute z-50 pointer-events-auto top-4 right-5">
+        <ProfileDropdown />
+      </View>
 
-      {/* Global Navbar */}
- <AppHeader title="Dashboard" />
-
-      {/* ── Header ── */}
-      <Animated.View entering={FadeInDown.delay(40).springify()} style={s.header}>
-        <View>
-          <Text style={s.greeting}>
-            Hello <Text style={{ color: C.cyan }}>{profile?.full_name?.split(' ')[0] ?? 'Hunter'}</Text>
-          </Text>
-          <Text style={s.headerSub}>Your pipeline is{' '}
-            <Text style={{ color: C.green, fontWeight: '700' }}>active</Text>
-          </Text>
-        </View>
-
-        {/* Scrape CTA */}
-        <TouchableOpacity
-          onPress={() => triggerScrape()}
-          disabled={isScraping || !metrics?.active_rules}
-          style={[s.scrapeBtn, (isScraping || !metrics?.active_rules) && { opacity: 0.5 }]}
-          activeOpacity={0.8}
-        >
-          {isScraping
-            ? <ActivityIndicator size="small" color={C.cyan} />
-            : (
-              <>
-                <RefreshCw size={14} color={C.cyan} />
-                <Text style={s.scrapeBtnText}>REFRESH</Text>
-              </>
-            )
-          }
-        </TouchableOpacity>
-      </Animated.View>
-
-      {/* ── Premium gate ── */}
-      {!isPremium && pendingJobs.length >= 18 && (
-        <PremiumGate onUpgrade={() => router.push('/(settings)/' as any)} />
-      )}
-
-      {/* ── Metrics row ── */}
-      <Animated.View entering={FadeInDown.delay(80).springify()} style={s.metricsRow}>
-        {metricsLoading ? (
-          [0, 1, 2, 3].map((i) => (
-            <View key={i} style={[mS.card, s.skeleton]} />
-          ))
-        ) : (
-          <>
-            <MetricCard label="Scraped" value={metrics?.total_jobs ?? 0} color={C.cyan} icon={Target} />
-            <MetricCard label="Applied" value={metrics?.applied ?? 0} color={C.green} icon={CheckCircle2} />
-            <MetricCard label="Pending" value={metrics?.pending ?? 0} color={C.amber} icon={Clock} />
-            <MetricCard label="Interviews" value={metrics?.interviews ?? 0} color={C.purple} icon={TrendingUp} />
-          </>
-        )}
-      </Animated.View>
-
-      {/* ── Batch Apply Engine ── */}
-      {(queue.running || queue.done > 0 || queue.total > 0) && (
-        <Animated.View entering={FadeInDown.springify()} style={s.batchCard}>
-          <View style={s.batchHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Zap size={16} color={C.cyan} />
-              <Text style={s.batchTitle}>Auto-Apply Engine</Text>
-              {queue.running && <ActivityIndicator size="small" color={C.cyan} />}
-            </View>
-            <Text style={s.batchCount}>
-              {queue.done}/{queue.total} {queue.failed > 0 && <Text style={{ color: C.pink }}>({queue.failed} failed)</Text>}
-            </Text>
-          </View>
-
-          {/* Progress bar */}
-          <View style={s.progressTrack}>
-            <Animated.View
-              style={[
-                s.progressFill,
-                { width: queue.total > 0 ? `${Math.round((queue.done / queue.total) * 100)}%` : '0%' as any }
-              ]}
-            />
-          </View>
-
-          {queue.current && (
-            <Text style={s.batchCurrent} numberOfLines={1}>
-              → Applying to <Text style={{ color: C.cyan }}>{queue.current}</Text>
-            </Text>
-          )}
-
-          {/* Controls */}
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-            {queue.running ? (
-              <TouchableOpacity onPress={pauseQueue} style={[s.queueBtn, { borderColor: `${C.amber}40` }]} activeOpacity={0.8}>
-                <Pause size={13} color={C.amber} />
-                <Text style={[s.queueBtnText, { color: C.amber }]}>Pause</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity onPress={startBatchApply} style={[s.queueBtn, { borderColor: `${C.cyan}40` }]} activeOpacity={0.8}>
-                <Play size={13} color={C.cyan} />
-                <Text style={[s.queueBtnText, { color: C.cyan }]}>
-                  {queue.done > 0 ? 'Resume' : 'Start Engine'}
-                </Text>
-              </TouchableOpacity>
-            )}
-            {!queue.running && queue.total > 0 && (
-              <TouchableOpacity onPress={resetQueue} style={[s.queueBtn, { borderColor: C.border }]} activeOpacity={0.8}>
-                <RefreshCw size={13} color={C.sub} />
-                <Text style={[s.queueBtnText, { color: C.sub }]}>Reset</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </Animated.View>
-      )}
-
-      {/* ── Start Apply Engine CTA (when no queue active) ── */}
-      {queue.total === 0 && (metrics?.pending ?? 0) > 0 && (
-        <Animated.View entering={FadeInDown.delay(160).springify()}>
-          <TouchableOpacity onPress={startBatchApply} style={s.startEngineBtn} activeOpacity={0.85}>
-            <Zap size={18} color="#000" strokeWidth={2.5} />
-            <View>
-              <Text style={s.startEngineBtnTitle}>START AUTO-APPLY ENGINE</Text>
-              <Text style={s.startEngineBtnSub}>
-                {metrics?.pending ?? 0} jobs queued · {CHUNK_SIZE} concurrent · AI cover letters
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-
-      {/* ── Swipe Deck ── */}
-      <Animated.View entering={FadeInDown.delay(200).springify()} style={s.deckSection}>
-        <View style={s.sectionHeader}>
-          <Text style={s.sectionTitle}>Job Pipeline</Text>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/vault' as any)} style={s.sectionLink} activeOpacity={0.8}>
-            <Text style={s.sectionLinkText}>View Vault</Text>
-            <ChevronRight size={14} color={C.cyan} />
-          </TouchableOpacity>
-        </View>
-
-        {jobsLoading ? (
-          <View style={s.center}>
-            <ActivityIndicator color={C.cyan} size="large" />
-            <Text style={s.centerText}>Loading pipeline…</Text>
-          </View>
-        ) : isError ? (
-          <View style={[s.center, s.errorBox]}>
-            <AlertCircle size={28} color={C.pink} />
-            <Text style={[s.centerText, { color: C.pink }]}>Failed to load jobs</Text>
-            <TouchableOpacity onPress={() => qc.invalidateQueries({ queryKey: ['pending_jobs'] })} style={s.retryBtn}>
-              <Text style={{ color: C.cyan, fontSize: 13, fontWeight: '700' }}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : pendingJobs.length === 0 ? (
-          <Animated.View entering={FadeInUp.springify()} style={s.emptyDeck}>
-            <CheckCircle2 size={40} color={C.green} />
-            <Text style={s.emptyTitle}>All Clear!</Text>
-            <Text style={s.emptySub}>
-              No pending jobs. Run the scraper to fetch new listings from your active rules.
-            </Text>
-            <TouchableOpacity
-              onPress={() => triggerScrape()}
-              disabled={isScraping || !metrics?.active_rules}
-              style={[s.emptyBtn, (!metrics?.active_rules) && { opacity: 0.5 }]}
-              activeOpacity={0.8}
-            >
-              <Zap size={14} color={C.cyan} />
-              <Text style={{ color: C.cyan, fontWeight: '800', fontSize: 13, letterSpacing: 0.5 }}>Run Scraper</Text>
-            </TouchableOpacity>
-            {!metrics?.active_rules && (
-              <TouchableOpacity onPress={() => router.push('/(tabs)/configure' as any)} style={{ marginTop: 10 }} activeOpacity={0.8}>
-                <Text style={{ color: C.sub, fontSize: 12 }}>
-                  No active rules —{' '}
-                  <Text style={{ color: C.cyan, fontWeight: '700' }}>add one →</Text>
-                </Text>
-              </TouchableOpacity>
-            )}
-          </Animated.View>
-        ) : (
-          <View style={s.deck}>
-            {/* Top 3 cards stacked — only top one is interactive */}
-            {pendingJobs.slice(0, Math.min(3, pendingJobs.length)).reverse().map((job: any, i: number, arr: any[]) => {
-              const isTop = i === arr.length - 1;
-              return (
-                <View
-                  key={job.id}
-                  style={[
-                    s.cardLayer,
-                    {
-                      zIndex: i,
-                      transform: [
-                        { scale: 1 - (arr.length - 1 - i) * 0.025 },
-                        { translateY: (arr.length - 1 - i) * 10 },
-                      ],
-                    },
-                  ]}
-                >
-                  {isTop ? (
-                    <SwipeableJobCard
-                      job={job}
-                      onSwipeRight={() => approveMutation.mutate(job.id)}
-                      onSwipeLeft={() => rejectMutation.mutate(job.id)}
-                      onPress={() => router.push(`/(tabs)/vault` as any)}
-                    />
-                  ) : (
-                    <View style={[s.bgCard, { backgroundColor: `rgba(8,16,24,${0.6 - (arr.length - 1 - i) * 0.15})` }]} />
-                  )}
-                </View>
-              );
-            })}
-
-            {/* Remaining count */}
-            {pendingJobs.length > 1 && (
-              <Animated.View entering={FadeInDown.delay(300).springify()} style={s.remainingBadge}>
-                <Text style={s.remainingText}>{pendingJobs.length} jobs pending</Text>
-              </Animated.View>
-            )}
+      <ScrollView
+        style={s.root}
+        contentContainerStyle={[s.scroll, isDesktop && s.scrollDesktop]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Web ambient background */}
+        {isDesktop && (
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {/* @ts-ignore */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0,212,255,0.05) 0%, transparent 60%)' }} />
           </View>
         )}
-      </Animated.View>
 
-      {/* ── Quick Nav Cards ── */}
-      <Animated.View entering={FadeInDown.delay(280).springify()} style={s.quickNav}>
-        {[
-          { label: 'Search Rules', sub: `${metrics?.active_rules ?? 0} active`, route: '/(tabs)/configure', color: C.purple, icon: Briefcase },
-          { label: 'Cover Letters', sub: `${metrics?.cover_letters ?? 0} saved`, route: '/(tabs)/vault', color: C.cyan, icon: BarChart2 },
-        ].map(({ label, sub, route, color, icon: Icon }) => (
+        {/* ── Header ── */}
+        <Animated.View entering={FadeInDown.delay(40).springify()} style={s.header}>
+          <View>
+            <Text style={s.greeting}>
+              Hello <Text style={{ color: C.cyan }}>{profile?.full_name?.split(' ')[0] ?? 'Hunter'}</Text>
+            </Text>
+            <Text style={s.headerSub}>Your pipeline is{' '}
+              <Text style={{ color: C.green, fontWeight: '700' }}>active</Text>
+            </Text>
+          </View>
+
+          {/* Scrape CTA */}
           <TouchableOpacity
-            key={route}
-            onPress={() => router.push(route as any)}
-            style={[s.quickCard, { borderColor: `${color}18` }]}
+            onPress={() => triggerScrape()}
+            disabled={isScraping || !metrics?.active_rules}
+            style={[s.scrapeBtn, (isScraping || !metrics?.active_rules) && { opacity: 0.5 }]}
             activeOpacity={0.8}
           >
-            <View style={[s.quickIcon, { backgroundColor: `${color}10`, borderColor: `${color}20` }]}>
-              <Icon size={18} color={color} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[s.quickLabel, { color }]}>{label}</Text>
-              <Text style={s.quickSub}>{sub}</Text>
-            </View>
-            <ChevronRight size={16} color={`${color}60`} />
+            {isScraping
+              ? <ActivityIndicator size="small" color={C.cyan} />
+              : (
+                <>
+                  <RefreshCw size={14} color={C.cyan} />
+                  <Text style={s.scrapeBtnText}>REFRESH</Text>
+                </>
+              )
+            }
           </TouchableOpacity>
-        ))}
-      </Animated.View>
+        </Animated.View>
 
-      <View style={{ height: 60 }} />
-    </ScrollView>
+        {/* ── Premium gate ── */}
+        {!isPremium && pendingJobs.length >= 18 && (
+          <PremiumGate onUpgrade={() => router.push('/(settings)/' as any)} />
+        )}
+
+        {/* ── Metrics row ── */}
+        <Animated.View entering={FadeInDown.delay(80).springify()} style={s.metricsRow}>
+          {metricsLoading ? (
+            [0, 1, 2, 3].map((i) => (
+              <View key={i} style={[mS.card, s.skeleton]} />
+            ))
+          ) : (
+            <>
+              <MetricCard label="Scraped" value={metrics?.total_jobs ?? 0} color={C.cyan} icon={Target} />
+              <MetricCard label="Applied" value={metrics?.applied ?? 0} color={C.green} icon={CheckCircle2} />
+              <MetricCard label="Pending" value={metrics?.pending ?? 0} color={C.amber} icon={Clock} />
+              <MetricCard label="Interviews" value={metrics?.interviews ?? 0} color={C.purple} icon={TrendingUp} />
+            </>
+          )}
+        </Animated.View>
+
+        {/* ── Batch Apply Engine ── */}
+        {(queue.running || queue.done > 0 || queue.total > 0) && (
+          <Animated.View entering={FadeInDown.springify()} style={s.batchCard}>
+            <View style={s.batchHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Zap size={16} color={C.cyan} />
+                <Text style={s.batchTitle}>Auto-Apply Engine</Text>
+                {queue.running && <ActivityIndicator size="small" color={C.cyan} />}
+              </View>
+              <Text style={s.batchCount}>
+                {queue.done}/{queue.total} {queue.failed > 0 && <Text style={{ color: C.pink }}>({queue.failed} failed)</Text>}
+              </Text>
+            </View>
+
+            {/* Progress bar */}
+            <View style={s.progressTrack}>
+              <Animated.View
+                style={[
+                  s.progressFill,
+                  { width: queue.total > 0 ? `${Math.round((queue.done / queue.total) * 100)}%` : '0%' as any }
+                ]}
+              />
+            </View>
+
+            {queue.current && (
+              <Text style={s.batchCurrent} numberOfLines={1}>
+                → Applying to <Text style={{ color: C.cyan }}>{queue.current}</Text>
+              </Text>
+            )}
+
+            {/* Controls */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+              {queue.running ? (
+                <TouchableOpacity onPress={pauseQueue} style={[s.queueBtn, { borderColor: `${C.amber}40` }]} activeOpacity={0.8}>
+                  <Pause size={13} color={C.amber} />
+                  <Text style={[s.queueBtnText, { color: C.amber }]}>Pause</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={startBatchApply} style={[s.queueBtn, { borderColor: `${C.cyan}40` }]} activeOpacity={0.8}>
+                  <Play size={13} color={C.cyan} />
+                  <Text style={[s.queueBtnText, { color: C.cyan }]}>
+                    {queue.done > 0 ? 'Resume' : 'Start Engine'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {!queue.running && queue.total > 0 && (
+                <TouchableOpacity onPress={resetQueue} style={[s.queueBtn, { borderColor: C.border }]} activeOpacity={0.8}>
+                  <RefreshCw size={13} color={C.sub} />
+                  <Text style={[s.queueBtnText, { color: C.sub }]}>Reset</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </Animated.View>
+        )}
+
+        {/* ── Start Apply Engine CTA (when no queue active) ── */}
+        {queue.total === 0 && (metrics?.pending ?? 0) > 0 && (
+          <Animated.View entering={FadeInDown.delay(160).springify()}>
+            <TouchableOpacity onPress={startBatchApply} style={s.startEngineBtn} activeOpacity={0.85}>
+              <Zap size={18} color="#000" strokeWidth={2.5} />
+              <View>
+                <Text style={s.startEngineBtnTitle}>START AUTO-APPLY ENGINE</Text>
+                <Text style={s.startEngineBtnSub}>
+                  {metrics?.pending ?? 0} jobs queued · {CHUNK_SIZE} concurrent · AI cover letters
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
+        {/* ── Swipe Deck ── */}
+        <Animated.View entering={FadeInDown.delay(200).springify()} style={s.deckSection}>
+          <View style={s.sectionHeader}>
+            <Text style={s.sectionTitle}>Job Pipeline</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/vault' as any)} style={s.sectionLink} activeOpacity={0.8}>
+              <Text style={s.sectionLinkText}>View Vault</Text>
+              <ChevronRight size={14} color={C.cyan} />
+            </TouchableOpacity>
+          </View>
+
+          {jobsLoading ? (
+            <View style={s.center}>
+              <ActivityIndicator color={C.cyan} size="large" />
+              <Text style={s.centerText}>Loading pipeline…</Text>
+            </View>
+          ) : isError ? (
+            <View style={[s.center, s.errorBox]}>
+              <AlertCircle size={28} color={C.pink} />
+              <Text style={[s.centerText, { color: C.pink }]}>Failed to load jobs</Text>
+              <TouchableOpacity onPress={() => qc.invalidateQueries({ queryKey: ['pending_jobs'] })} style={s.retryBtn}>
+                <Text style={{ color: C.cyan, fontSize: 13, fontWeight: '700' }}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : pendingJobs.length === 0 ? (
+            <Animated.View entering={FadeInUp.springify()} style={s.emptyDeck}>
+              <CheckCircle2 size={40} color={C.green} />
+              <Text style={s.emptyTitle}>All Clear!</Text>
+              <Text style={s.emptySub}>
+                No pending jobs. Run the scraper to fetch new listings from your active rules.
+              </Text>
+              <TouchableOpacity
+                onPress={() => triggerScrape()}
+                disabled={isScraping || !metrics?.active_rules}
+                style={[s.emptyBtn, (!metrics?.active_rules) && { opacity: 0.5 }]}
+                activeOpacity={0.8}
+              >
+                <Zap size={14} color={C.cyan} />
+                <Text style={{ color: C.cyan, fontWeight: '800', fontSize: 13, letterSpacing: 0.5 }}>Run Scraper</Text>
+              </TouchableOpacity>
+              {!metrics?.active_rules && (
+                <TouchableOpacity onPress={() => router.push('/(tabs)/configure' as any)} style={{ marginTop: 10 }} activeOpacity={0.8}>
+                  <Text style={{ color: C.sub, fontSize: 12 }}>
+                    No active rules —{' '}
+                    <Text style={{ color: C.cyan, fontWeight: '700' }}>add one →</Text>
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </Animated.View>
+          ) : (
+            <View style={s.deck}>
+              {/* Top 3 cards stacked — only top one is interactive */}
+              {pendingJobs.slice(0, Math.min(3, pendingJobs.length)).reverse().map((job: any, i: number, arr: any[]) => {
+                const isTop = i === arr.length - 1;
+                return (
+                  <View
+                    key={job.id}
+                    style={[
+                      s.cardLayer,
+                      {
+                        zIndex: i,
+                        transform: [
+                          { scale: 1 - (arr.length - 1 - i) * 0.025 },
+                          { translateY: (arr.length - 1 - i) * 10 },
+                        ],
+                      },
+                    ]}
+                  >
+                    {isTop ? (
+                      <SwipeableJobCard
+                        job={job}
+                        onSwipeRight={() => approveMutation.mutate(job.id)}
+                        onSwipeLeft={() => rejectMutation.mutate(job.id)}
+                        onPress={() => router.push(`/(tabs)/vault` as any)}
+                      />
+                    ) : (
+                      <View style={[s.bgCard, { backgroundColor: `rgba(8,16,24,${0.6 - (arr.length - 1 - i) * 0.15})` }]} />
+                    )}
+                  </View>
+                );
+              })}
+
+              {/* Remaining count */}
+              {pendingJobs.length > 1 && (
+                <Animated.View entering={FadeInDown.delay(300).springify()} style={s.remainingBadge}>
+                  <Text style={s.remainingText}>{pendingJobs.length} jobs pending</Text>
+                </Animated.View>
+              )}
+            </View>
+          )}
+        </Animated.View>
+
+        {/* ── Quick Nav Cards ── */}
+        <Animated.View entering={FadeInDown.delay(280).springify()} style={s.quickNav}>
+          {[
+            { label: 'Search Rules', sub: `${metrics?.active_rules ?? 0} active`, route: '/(tabs)/configure', color: C.purple, icon: Briefcase },
+            { label: 'Cover Letters', sub: `${metrics?.cover_letters ?? 0} saved`, route: '/(tabs)/vault', color: C.cyan, icon: BarChart2 },
+          ].map(({ label, sub, route, color, icon: Icon }) => (
+            <TouchableOpacity
+              key={route}
+              onPress={() => router.push(route as any)}
+              style={[s.quickCard, { borderColor: `${color}18` }]}
+              activeOpacity={0.8}
+            >
+              <View style={[s.quickIcon, { backgroundColor: `${color}10`, borderColor: `${color}20` }]}>
+                <Icon size={18} color={color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.quickLabel, { color }]}>{label}</Text>
+                <Text style={s.quickSub}>{sub}</Text>
+              </View>
+              <ChevronRight size={16} color={`${color}60`} />
+            </TouchableOpacity>
+          ))}
+        </Animated.View>
+
+        <View style={{ height: 60 }} />
+      </ScrollView>
+    </View>
   );
 }
 
 // ── STYLES ─────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.bg },
   root: { flex: 1, backgroundColor: C.bg },
-  scroll: { flexGrow: 1, paddingHorizontal: 20, paddingTop: Platform.OS === 'ios' ? 56 : Platform.OS === 'web' ? 32 : 20 },
+  scroll: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16 },
   scrollDesktop: { maxWidth: 1100, width: '100%', alignSelf: 'center' as any },
 
   /* Header */

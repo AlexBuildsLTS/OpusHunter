@@ -5,26 +5,62 @@
  * Shows: system stats, quick links to API Key management and user management.
  * Only reachable if profiles.role = 'admin'.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
     View, Text, ScrollView, TouchableOpacity,
-    Platform, StyleSheet,
+    Platform, StyleSheet, useWindowDimensions,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming } from 'react-native-reanimated';
+import { Easing } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { Key, Users, Activity, Database } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { C } from '../../lib/theme';
 import { AppHeader } from '../../components/layout/AppHeader';
 
+
 function AmbientBg() {
     if (Platform.OS !== 'web') return null;
     return (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
             {/* @ts-ignore */}
-            <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 50% 45% at 80% 10%, rgba(232,67,106,0.06) 0%, transparent 65%)' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(232, 67, 106, 0.08) 0%, transparent 60%), radial-gradient(ellipse 80% 40% at 0% 100%, rgba(123, 94, 167, 0.04) 0%, transparent 70%)' }} />
         </View>
+    );
+}
+
+// Animated floating orb for sleek effect
+function FloatingOrb() {
+    if (Platform.OS === 'web') return null;
+    const opacity = useSharedValue(0.3);
+    useEffect(() => {
+        opacity.value = withRepeat(
+            withTiming(0.8, { duration: 3000, easing: Easing.inOut(Easing.sin) }),
+            -1,
+            true
+        );
+    }, []);
+    const animStyle = useAnimatedStyle(() => ({
+        opacity: opacity.value,
+    }));
+    return (
+        <Animated.View
+            style={[StyleSheet.absoluteFill, animStyle, { pointerEvents: 'none' }]}
+        >
+            <View
+                style={{
+                    position: 'absolute',
+                    width: 350,
+                    height: 350,
+                    borderRadius: 175,
+                    backgroundColor: C.pink,
+                    top: -150,
+                    left: -100,
+                    opacity: 0.03,
+                }}
+            />
+        </Animated.View>
     );
 }
 
@@ -77,10 +113,13 @@ export default function AdminIndexScreen() {
     ];
 
     return (
-        <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <View style={{ flex: 1, backgroundColor: C.bg, backgroundImage: Platform.OS === 'web' ? 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(232, 67, 106, 0.05) 0%, transparent 60%)' : undefined }}>
             <AmbientBg />
+            <FloatingOrb />
             <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-                <AppHeader title="Admin Panel" subtitle="System overview and configuration" />
+                <Animated.View entering={FadeInDown.duration(600).springify().damping(20)}>
+
+                </Animated.View>
 
                 {/* Spacer for visual balance */}
                 <Animated.View entering={FadeInDown.delay(40).springify()} style={{ marginBottom: 12 }} />

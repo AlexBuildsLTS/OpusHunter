@@ -31,8 +31,9 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import { C } from '../../lib/theme';
-import { AnimatedPressable } from '../../components/ui/AnimatedPressable';
 import { AppHeader } from '../../components/layout/AppHeader';
+import { AnimatedPressable } from '../../components/ui/AnimatedPressable';
+
 
 
 // ── Engine Config Types ───────────────────────────────────────────────────────
@@ -98,7 +99,7 @@ const DEFAULT_ENGINE: EngineConfig = {
     skipApplied: true,
 };
 
-<AppHeader title="Configure" />
+
 
 
 

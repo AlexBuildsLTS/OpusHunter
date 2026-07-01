@@ -25,11 +25,10 @@ import {
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { usePipelineStore } from '../../store/usePipelineStore';
-
-
+import { AppHeader } from '../../components/layout/AppHeader';
 import { useCVVault } from '../../hooks/useCVVault';
 import { C } from '../../lib/theme';
-import { AppHeader } from '../../components/layout/AppHeader';
+
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

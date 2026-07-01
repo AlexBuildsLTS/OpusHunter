@@ -15,7 +15,7 @@ import {
     Platform, StyleSheet, ActivityIndicator, Modal,
 } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutUp, useSharedValue, useAnimatedStyle, withRepeat, withTiming, interpolateColor } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import {
     Zap, Bell, Shield, Trash2,
@@ -25,6 +25,53 @@ import {
 import { supabase } from '../../lib/supabase';
 import { C } from '../../lib/theme';
 import { AppHeader } from '../../components/layout/AppHeader';
+
+import { Easing } from 'react-native-reanimated';
+
+// Ambient gradient background with animations
+function AmbientBg() {
+    if (Platform.OS !== 'web') return null;
+    return (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            {/* @ts-ignore */}
+            <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.08) 0%, transparent 60%), radial-gradient(ellipse 80% 40% at 100% 100%, rgba(123, 94, 167, 0.04) 0%, transparent 70%)' }} />
+        </View>
+    );
+}
+
+// Animated floating orb for sleek effect
+function FloatingOrb() {
+    if (Platform.OS === 'web') return null;
+    const opacity = useSharedValue(0.3);
+    useEffect(() => {
+        opacity.value = withRepeat(
+            withTiming(0.8, { duration: 3000, easing: Easing.inOut(Easing.sin) }),
+            -1,
+            true
+        );
+    }, []);
+    const animStyle = useAnimatedStyle(() => ({
+        opacity: opacity.value,
+    }));
+    return (
+        <Animated.View
+            style={[StyleSheet.absoluteFill, animStyle, { pointerEvents: 'none' }]}
+        >
+            <View
+                style={{
+                    position: 'absolute',
+                    width: 300,
+                    height: 300,
+                    borderRadius: 150,
+                    backgroundColor: C.cyan,
+                    top: -100,
+                    right: -50,
+                    opacity: 0.04,
+                }}
+            />
+        </Animated.View>
+    );
+}
 
 function SectionLabel({ children }: { children: string }) {
     return <Text style={s.sectionLabel}>{children}</Text>;
@@ -178,7 +225,10 @@ export default function SettingsScreen() {
     });
 
     return (
-        <View style={s.root}>
+        <View style={{ flex: 1, backgroundColor: C.bg, backgroundImage: Platform.OS === 'web' ? 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 60%)' : undefined }}>
+            <AmbientBg />
+            <FloatingOrb />
+
             {banner && (
                 <Animated.View
                     entering={FadeInDown.springify()} exiting={FadeOutUp.duration(200)}
@@ -189,21 +239,24 @@ export default function SettingsScreen() {
                 </Animated.View>
             )}
 
-            <AppHeader title="Settings" />
-
             <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+                <Animated.View entering={FadeInDown.duration(600).springify().damping(20)}>
+
+                </Animated.View>
 
                 {/* ── Account ── */}
-                <SectionLabel>ACCOUNT</SectionLabel>
-                <View style={s.card}>
-                    <SettingRow icon={UserIcon} label="Profile" sub={profile?.full_name ?? profile?.email ?? ''} color={C.cyan} onPress={() => router.push('/(tabs)/profile')} />
-                    <View style={s.divider} />
-                    <SettingRow icon={Lock} label="Security & Password" sub="Change your password" color={C.purple} onPress={() => router.push('/(tabs)/(settings)/security')} />
-                </View>
+                <Animated.View entering={FadeInDown.delay(60).duration(600).springify().damping(20)}>
+                    <SectionLabel>ACCOUNT</SectionLabel>
+                    <View style={s.card}>
+                        <SettingRow icon={UserIcon} label="Profile" sub={profile?.full_name ?? profile?.email ?? ''} color={C.cyan} onPress={() => router.push('/(tabs)/profile')} />
+                        <View style={s.divider} />
+                        <SettingRow icon={Lock} label="Security & Password" sub="Change your password" color={C.purple} onPress={() => router.push('/(settings)/security' as any)} />
+                    </View>
+                </Animated.View>
 
                 {/* ── Admin — ONLY visible to admins ── */}
                 {isAdmin && (
-                    <>
+                    <Animated.View entering={FadeInDown.delay(120).duration(600).springify().damping(20)}>
                         <SectionLabel>ADMINISTRATION</SectionLabel>
                         <View style={s.card}>
                             <SettingRow
@@ -211,40 +264,42 @@ export default function SettingsScreen() {
                                 color={C.pink} onPress={() => router.push('/(admin)/' as any)}
                             />
                         </View>
-                    </>
+                    </Animated.View>
                 )}
 
                 {/* ── Pipeline ── */}
-                <SectionLabel>PIPELINE</SectionLabel>
-                <View style={s.card}>
-                    <SettingRow
-                        icon={Zap} label="Auto-scrape on open" sub="Run scraper automatically when the app launches"
-                        color={C.cyan}
-                        right={
-                            <Switch
-                                value={autoScrape} onValueChange={setAutoScrape}
-                                trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.cyan}50` }}
-                                thumbColor={autoScrape ? C.cyan : 'rgba(255,255,255,0.3)'}
-                            />
-                        }
-                    />
-                    <View style={s.divider} />
-                    <SettingRow
-                        icon={Bell} label="Push Notifications" sub="Get notified on interview replies"
-                        color={C.purple}
-                        right={
-                            <Switch
-                                value={notifs} onValueChange={setNotifs}
-                                trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.purple}50` }}
-                                thumbColor={notifs ? C.purple : 'rgba(255,255,255,0.3)'}
-                            />
-                        }
-                    />
-                </View>
+                <Animated.View entering={FadeInDown.delay(180).duration(600).springify().damping(20)}>
+                    <SectionLabel>PIPELINE</SectionLabel>
+                    <View style={s.card}>
+                        <SettingRow
+                            icon={Zap} label="Auto-scrape on open" sub="Run scraper automatically when the app launches"
+                            color={C.cyan}
+                            right={
+                                <Switch
+                                    value={autoScrape} onValueChange={setAutoScrape}
+                                    trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.cyan}50` }}
+                                    thumbColor={autoScrape ? C.cyan : 'rgba(255,255,255,0.3)'}
+                                />
+                            }
+                        />
+                        <View style={s.divider} />
+                        <SettingRow
+                            icon={Bell} label="Push Notifications" sub="Get notified on interview replies"
+                            color={C.purple}
+                            right={
+                                <Switch
+                                    value={notifs} onValueChange={setNotifs}
+                                    trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.purple}50` }}
+                                    thumbColor={notifs ? C.purple : 'rgba(255,255,255,0.3)'}
+                                />
+                            }
+                        />
+                    </View>
+                </Animated.View>
 
                 {/* ── Premium CTA — hidden for premium/admin ── */}
                 {!isPremium && (
-                    <Animated.View entering={FadeInDown.springify()} style={s.premiumCard}>
+                    <Animated.View entering={FadeInDown.delay(240).duration(600).springify().damping(20)} style={s.premiumCard}>
                         <Crown size={22} color={C.amber} />
                         <View style={{ flex: 1 }}>
                             <Text style={s.premiumTitle}>Upgrade to Premium</Text>
@@ -257,22 +312,24 @@ export default function SettingsScreen() {
                 )}
 
                 {/* ── About ── */}
-                <SectionLabel>ABOUT</SectionLabel>
-                <View style={s.card}>
-                    <SettingRow icon={Info} label="OpusHunter" sub="Version 1.0.0 · AI Job Application Engine" color={C.sub as any} />
-                </View>
+                <Animated.View entering={FadeInDown.delay(300).duration(600).springify().damping(20)}>
+                    <SectionLabel>ABOUT</SectionLabel>
+                    <View style={s.card}>
+                        <SettingRow icon={Info} label="OpusHunter" sub="Version 1.0.0 · AI Job Application Engine" color={C.sub as any} />
+                    </View>
 
-                {/* ── Danger Zone ── */}
-                <SectionLabel>DANGER ZONE</SectionLabel>
-                <View style={s.card}>
-                    <DangerRow icon={RefreshCw} label="Clear Pipeline" sub="Remove all pending jobs from your queue" onPress={() => setConfirm('pipeline')} />
-                    <View style={s.divider} />
-                    <DangerRow icon={Trash2} label="Clear Application History" sub="Delete all submitted applications" onPress={() => setConfirm('history')} />
-                    <View style={s.divider} />
-                    <DangerRow icon={Trash2} label="Delete Account" sub="Permanently remove your account and data" onPress={() => setConfirm('account')} />
-                </View>
+                    {/* ── Danger Zone ── */}
+                    <SectionLabel>DANGER ZONE</SectionLabel>
+                    <View style={s.card}>
+                        <DangerRow icon={RefreshCw} label="Clear Pipeline" sub="Remove all pending jobs from your queue" onPress={() => setConfirm('pipeline')} />
+                        <View style={s.divider} />
+                        <DangerRow icon={Trash2} label="Clear Application History" sub="Delete all submitted applications" onPress={() => setConfirm('history')} />
+                        <View style={s.divider} />
+                        <DangerRow icon={Trash2} label="Delete Account" sub="Permanently remove your account and data" onPress={() => setConfirm('account')} />
+                    </View>
 
-                <View style={{ height: 60 }} />
+                    <View style={{ height: 60 }} />
+                </Animated.View>
             </ScrollView>
 
             <ConfirmModal

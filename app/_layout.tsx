@@ -87,7 +87,8 @@ export default function RootLayout() {
                         screenOptions={{
                             headerShown: false,
                             contentStyle: {
-                                backgroundColor: 'transparent',
+                                backgroundColor: '#020507',
+                                backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 60%)',
                             },
                             animation: Platform.OS === 'web' ? 'none' : 'fade',
                         }}

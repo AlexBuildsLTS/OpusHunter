@@ -124,17 +124,17 @@ export function ProfileDropdown() {
   }, [router, qc]);
 
   return (
-    <View style={{ zIndex: 1000 }}>
+    <View style={{ zIndex: 9999 }}>
       <TouchableOpacity
         onPress={() => setOpen((v) => !v)}
         activeOpacity={0.8}
-        className="items-center justify-center overflow-hidden border-2 rounded-full h-11 w-11"
+        className="items-center justify-center overflow-hidden border-2 rounded-full h-11 w-11 shadow-lg"
         style={{
           borderColor: roleCfg.color,
           backgroundColor: C.core,
           ...(Platform.OS === 'web'
-            ? ({ boxShadow: `0 0 14px ${roleCfg.color}55` } as any)
-            : { shadowColor: roleCfg.color, shadowOpacity: 0.5, shadowRadius: 10 }),
+            ? ({ boxShadow: `0 0 20px ${roleCfg.color}88, inset 0 0 10px ${roleCfg.color}22` } as any)
+            : { shadowColor: roleCfg.color, shadowOpacity: 0.8, shadowRadius: 15, elevation: 20 }),
         }}
       >
         {profile?.avatar_url ? (

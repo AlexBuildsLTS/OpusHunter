@@ -72,7 +72,13 @@ export default function AdminLayout() {
     }
 
     return (
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
+        <Stack screenOptions={{
+            headerShown: false,
+            contentStyle: {
+                backgroundColor: C.bg,
+                backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(232, 67, 106, 0.04) 0%, transparent 60%)',
+            }
+        }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="users" />
             <Stack.Screen name="api-keys" />

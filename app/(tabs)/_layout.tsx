@@ -10,6 +10,7 @@ import { Tabs, useRouter, usePathname } from 'expo-router';
 import {
   LayoutDashboard, Database, Briefcase, Settings, User
 } from 'lucide-react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { C } from '../../lib/theme';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
@@ -29,20 +30,21 @@ function WebSidebar({ active }: { active: string }) {
   const router = useRouter();
 
   return (
-    <View className="absolute left-6 top-8 bottom-8 w-[72px] bg-[#0A121A]/80 border border-brand-cyan/10 rounded-3xl items-center py-6 z-50 shadow-2xl shadow-brand-cyan/5">
-      {/* Absolute gradient behind sidebar for sleek look */}
-      <View className="absolute inset-0 bg-gradient-to-b from-brand-cyan/5 to-transparent pointer-events-none rounded-3xl" />
-      
+    <View className="absolute left-6 top-8 bottom-8 w-[72px] border border-brand-cyan/15 rounded-3xl items-center py-6 z-50 shadow-2xl shadow-brand-cyan/10" style={{ backgroundColor: 'rgba(5, 10, 13, 0.85)' }}>
+      {/* Absolute gradient behind sidebar - matches project aesthetic */}
+      <View className="absolute inset-0 pointer-events-none bg-gradient-to-b rounded-3xl" style={{ backgroundImage: 'linear-gradient(to bottom, rgba(0, 212, 255, 0.08), rgba(123, 94, 167, 0.04))' }} />
+
       {/* Logo */}
-      <TouchableOpacity 
-        className="w-[44px] h-[44px] rounded-2xl bg-brand-cyan/10 border border-brand-cyan/20 items-center justify-center mb-8 shadow-lg shadow-brand-cyan/20"
-        onPress={() => router.push('/(tabs)/dashboard')} 
+      <TouchableOpacity
+        className="w-[44px] h-[44px] rounded-2xl border border-brand-cyan/20 items-center justify-center mb-8 shadow-lg shadow-brand-cyan/20"
+        style={{ backgroundColor: 'rgba(0, 212, 255, 0.08)' }}
+        onPress={() => router.push('/(tabs)/dashboard')}
         activeOpacity={0.8}
       >
         <Image source={require('../../assets/icon.png')} style={{ width: 24, height: 24 }} resizeMode="contain" />
       </TouchableOpacity>
 
-      <View className="flex-1 w-full items-center gap-2">
+      <View className="items-center flex-1 w-full gap-2">
         {NAV_ITEMS.map(({ name, label, Icon }) => {
           const isActive = active?.includes?.(name) ?? false;
           return (
@@ -75,14 +77,12 @@ export default function TabsLayout() {
 
   if (isDesktop) {
     return (
-      <View className="flex-1 bg-[#050A0F]">
+      <View className="flex-1" style={{
+        backgroundColor: C.bg,
+        backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 60%)',
+      }}>
         <WebSidebar active={pathname} />
         <View className="flex-1 pl-[120px]">
-          {/* Top-Right Profile Dropdown for Web */}
-          <View className="absolute top-8 right-8 z-50">
-            <ProfileDropdown />
-          </View>
-
           <Tabs screenOptions={{ headerShown: false, tabBarStyle: { display: 'none' }, sceneStyle: { backgroundColor: 'transparent' } }}>
             <Tabs.Screen name="dashboard" />
             <Tabs.Screen name="vault" />
@@ -97,38 +97,46 @@ export default function TabsLayout() {
 
   // Mobile: Native Bottom Tab Bar
   return (
-    <View style={{ flex: 1, backgroundColor: '#050A0F' }}>
-      {/* ── MOBILE GLOBAL TOP HEADER ── */}
-      {pathname !== '/profile' && (
-        <View 
-          style={{ 
-            position: 'absolute', 
-            top: Platform.OS === 'ios' ? 56 : 48, 
-            left: 20, 
-            right: 20, 
-            flexDirection: 'row', 
-            justifyContent: 'space-between', 
+    <View style={{
+      flex: 1,
+      backgroundColor: C.bg,
+      backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 60%)',
+    }}>
+      {/* ── MOBILE HEADER (Only on non-profile screens) ── */}
+      {!pathname.includes('profile') && !pathname.includes('settings') && Platform.OS !== 'web' && (
+        <Animated.View
+          entering={FadeInDown.duration(500).springify()}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: Platform.OS === 'ios' ? 70 : 60,
+            paddingTop: Platform.OS === 'ios' ? 12 : 8,
+            paddingHorizontal: 16,
+            paddingBottom: 8,
+            flexDirection: 'row',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            zIndex: 1000 
-          }} 
-          pointerEvents="box-none"
+            zIndex: 1000,
+            borderBottomWidth: 1,
+            borderBottomColor: 'rgba(0, 212, 255, 0.1)',
+            backgroundColor: 'rgba(2, 5, 7, 0.4)',
+          }}
         >
-          {/* Top Left Logo */}
-          <Image 
-            source={require('../../assets/icon.png')} 
-            style={{ width: 36, height: 36 }} 
-            resizeMode="contain" 
+          {/* Logo - Single instance */}
+          <Image
+            source={require('../../assets/icon.png')}
+            style={{ width: 32, height: 32 }}
+            resizeMode="contain"
           />
-          
-          {/* Top Right Profile Dropdown */}
-          <ProfileDropdown />
-        </View>
+        </Animated.View>
       )}
 
       <Tabs
         screenOptions={{
           headerShown: false,
-          sceneStyle: { backgroundColor: 'transparent' },
+          sceneStyle: { backgroundColor: 'transparent', paddingTop: Platform.OS === 'ios' ? 70 : 60 },
           tabBarStyle: {
             backgroundColor: 'rgba(10, 18, 26, 0.95)',
             borderTopColor: 'transparent',
@@ -168,17 +176,17 @@ export default function TabsLayout() {
             }}
           />
         ))}
-        <Tabs.Screen 
-          name="(settings)" 
-          options={{ 
+        <Tabs.Screen
+          name="(settings)"
+          options={{
             href: null,
-          }} 
+          }}
         />
-        <Tabs.Screen 
-          name="profile" 
-          options={{ 
+        <Tabs.Screen
+          name="profile"
+          options={{
             href: null,
-          }} 
+          }}
         />
       </Tabs>
     </View>

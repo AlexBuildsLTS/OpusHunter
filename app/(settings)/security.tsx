@@ -29,6 +29,7 @@ import { supabase } from '../../lib/supabase';
 import { C } from '../../lib/theme';
 import { AppHeader } from '../../components/layout/AppHeader';
 
+
 function strengthOf(pw: string) {
     let sc = 0;
     if (pw.length >= 10) sc++;
@@ -104,7 +105,7 @@ export default function SecurityScreen() {
                 </Animated.View>
             )}
 
-            <AppHeader title="Security" subtitle="Change your password" />
+
 
             <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
                 <View style={s.iconWrap}>
