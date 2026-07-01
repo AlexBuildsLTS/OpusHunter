@@ -240,10 +240,6 @@ export default function SettingsScreen() {
             )}
 
             <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-                <Animated.View entering={FadeInDown.duration(600).springify().damping(20)}>
-
-                </Animated.View>
-
                 {/* ── Account ── */}
                 <Animated.View entering={FadeInDown.delay(60).duration(600).springify().damping(20)}>
                     <SectionLabel>ACCOUNT</SectionLabel>
