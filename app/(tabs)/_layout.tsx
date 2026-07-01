@@ -21,9 +21,9 @@ type ProfileRow = DB['public']['Tables']['profiles']['Row'];
 
 
 const NAV_ITEMS = [
-  { name: 'dashboard', label: 'DASH', Icon: LayoutDashboard },
-  { name: 'vault', label: 'Database', Icon: Database },
-  { name: 'configure', label: 'RULES', Icon: Briefcase }
+  { name: 'dashboard', label: '', Icon: LayoutDashboard },
+  { name: 'vault', label: '', Icon: Database },
+  { name: 'configure', label: '', Icon: Briefcase }
 ]
 
 // ── Web Sidebar (Desktop Only) ──────────────────────────────────────────────────
