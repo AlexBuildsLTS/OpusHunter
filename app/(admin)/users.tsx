@@ -34,7 +34,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import type { Database } from '../../types/database.types';
 import { C, ROLE_CFG } from '../../lib/theme';
-import { AppHeader } from '../../components/layout/AppHeader';
+
 
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
@@ -258,7 +258,7 @@ export default function AdminUsersScreen() {
                 </Animated.View>
             )}
 
-            <AppHeader title="User Management" subtitle={`${profiles.length} total accounts`} />
+
 
             {profiles.length > 0 && (
                 <View style={s.statsRow}>

@@ -42,10 +42,10 @@ export function AppHeader({ title, subtitle }: AppHeaderProps) {
 
     return (
         <View
-            className="flex-row items-center justify-between w-full"
+            className="z-50 flex-row items-center justify-between w-full px-5 border-b bg-gradient-to-b from-slate-950/95 to-slate-950/80 border-slate-800/50"
             style={{
-                paddingTop: isDesktop ? 8 : Platform.OS === 'ios' ? 8 : 4,
-                paddingBottom: 16,
+                paddingTop: isDesktop ? 12 : Platform.OS === 'ios' ? 12 : 8,
+                paddingBottom: 14,
             }}
         >
             <View className="flex-row items-center gap-3">

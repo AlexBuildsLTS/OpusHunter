@@ -38,7 +38,6 @@ import {
 import { supabase } from '../../lib/supabase';
 import type { Database } from '../../types/database.types';
 import { C, ROLE_CFG, type RoleName } from '../../lib/theme';
-import { AppHeader } from '../../components/layout/AppHeader';
 import { PageContainer } from '../../components/layout/PageContainer';
 import { GlassCard } from '../../components/ui/GlassCard';
 
@@ -267,8 +266,6 @@ export default function ProfileScreen() {
     return (
         <PageContainer width="panel">
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
-                <AppHeader title="Profile" />
-
                 <Banner banner={banner} />
 
                 {/* ── Avatar + role ── */}

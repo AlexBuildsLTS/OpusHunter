@@ -14,10 +14,10 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { Plus, Trash2, X, Eye, EyeOff, CheckCircle2, AlertCircle, Key } from 'lucide-react-native';
+import { Plus, Trash2, X, Eye, EyeOff, CheckCircle2, AlertCircle, Key, ArrowLeft } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { C } from '../../lib/theme';
-import { AppHeader } from '../../components/layout/AppHeader';
+
 
 type Provider = 'rapidapi' | 'gemini';
 
@@ -116,7 +116,7 @@ export default function ApiKeysScreen() {
     return (
         <View style={{ flex: 1, backgroundColor: C.bg }}>
             <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-                <AppHeader title="API Key Management" subtitle="Manage RapidAPI and Gemini keys" />
+
                 {/* Back */}
                 <View style={s.topRow}>
                     <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
