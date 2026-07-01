@@ -36,9 +36,9 @@ import type { Database } from '../../types/database.types';
 import { C, ROLE_CFG } from '../../lib/theme';
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
-const ROLES = ['member', 'premium', 'admin'] as const;
-type RoleType = typeof ROLES[number];
-const DEFAULT_ROLE = 'member' as const;
+type RoleType = 'member' | 'premium' | 'admin';
+const ROLES: RoleType[] = ['member', 'premium', 'admin'];
+const DEFAULT_ROLE: RoleType = 'member';
 
 function getInitials(name: string | null, email: string): string {
     const str = name || email;

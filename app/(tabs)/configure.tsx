@@ -26,28 +26,30 @@ import Animated, { FadeInDown, FadeOutUp, Layout, FadeIn } from 'react-native-re
 import {
     Plus, Trash2, Edit3, Zap, CheckCircle2, AlertCircle, X,
     Tag, MapPin, Briefcase, FileText, Settings2, Globe,
-    DollarSign, BarChart2, Building2, Check,
+    DollarSign, BarChart2, Building2, Check, Navigation
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import { C } from '../../lib/theme';
+import { AnimatedPressable } from '../../components/ui/AnimatedPressable';
+
 
 // ── Engine Config Types ───────────────────────────────────────────────────────
 
 const LOCATION_PRESETS = [
-    'Remote', 'London', 'New York', 'Berlin', 'Amsterdam',
+    'London', 'New York', 'Berlin', 'Amsterdam',
     'Paris', 'Toronto', 'Sydney', 'Singapore', 'Dubai',
     'San Francisco', 'Austin', 'Dublin', 'Warsaw', 'Barcelona',
 ];
 
 const WORK_TYPE_OPTIONS = ['FULLTIME', 'PARTTIME', 'CONTRACTOR', 'INTERNSHIP', 'TEMPORARY'];
-const WORK_TYPE_LABELS: Record<string, string> = {
+const WORK_TYPE_LABELS: { [key: string]: string } = {
     FULLTIME: 'Full-time', PARTTIME: 'Part-time', CONTRACTOR: 'Contract',
     INTERNSHIP: 'Internship', TEMPORARY: 'Temporary',
 };
 
 const EXPERIENCE_LEVELS = ['Entry', 'Mid', 'Senior', 'Lead', 'Director'];
-const EXPERIENCE_COLORS: Record<string, string> = {
+const EXPERIENCE_COLORS: { [key: string]: string } = {
     Entry: C.green, Mid: C.cyan, Senior: C.purple, Lead: C.amber, Director: C.pink,
 };
 
@@ -148,8 +150,9 @@ const ToggleChip = memo(({
 }: {
     label: string; active: boolean; color?: string; onPress: () => void; small?: boolean;
 }) => (
-    <TouchableOpacity
+    <AnimatedPressable
         onPress={onPress}
+        scaleDownTo={0.92}
         activeOpacity={0.75}
         style={[
             st.chip,
@@ -161,7 +164,7 @@ const ToggleChip = memo(({
     >
         {active && <Check size={small ? 10 : 12} color={color} />}
         <Text style={[st.chipText, small && st.chipTextSmall, { color: active ? color : C.sub }]}>{label}</Text>
-    </TouchableOpacity>
+    </AnimatedPressable>
 ));
 ToggleChip.displayName = 'ToggleChip';
 
@@ -195,7 +198,7 @@ function EngineTab({
     isScraping: boolean;
     activeRulesCount: number;
 }) {
-    const toggle = useCallback(<K extends keyof EngineConfig>(key: K, val: string) => {
+    const toggle = useCallback(<K extends keyof EngineConfig,>(key: K, val: string) => {
         setConfig({
             ...config,
             [key]: (config[key] as string[]).includes(val)
@@ -236,37 +239,28 @@ function EngineTab({
                         </Text>
                     </View>
                 </View>
-                <TouchableOpacity
+                <AnimatedPressable
                     onPress={onScrape}
                     disabled={isScraping || activeRulesCount === 0}
+                    scaleDownTo={0.96}
                     style={[st.scrapeBtn, (isScraping || activeRulesCount === 0) && { opacity: 0.45 }]}
                     activeOpacity={0.8}
                 >
                     {isScraping
                         ? <ActivityIndicator color="#000" size="small" />
                         : <Text style={st.scrapeBtnText}>RUN</Text>}
-                </TouchableOpacity>
+                </AnimatedPressable>
             </Animated.View>
 
             {/* ── Locations ── */}
             <Animated.View entering={FadeInDown.delay(100).springify()} style={st.section}>
-                <SectionHeader icon={MapPin} title="Target Locations" sub="Select all that apply — scraper queries each" />
-                <View style={st.chipGrid}>
-                    {LOCATION_PRESETS.map((loc) => (
-                        <ToggleChip
-                            key={loc}
-                            label={loc}
-                            active={config.locations.includes(loc)}
-                            color={C.cyan}
-                            onPress={() => toggle('locations', loc)}
-                        />
-                    ))}
-                </View>
+                <SectionHeader icon={MapPin} title="Target Locations" sub="Enter cities or countries to target" />
+                
                 {/* Custom location input */}
-                <View style={st.customLocRow}>
+                <View style={[st.customLocRow, { marginBottom: 16 }]}>
                     <TextInput
                         style={st.customLocInput}
-                        placeholder="Add city or country…"
+                        placeholder="e.g. Sweden, London, New York..."
                         placeholderTextColor={C.dim}
                         value={customLoc}
                         onChangeText={setCustomLoc}
@@ -284,19 +278,24 @@ function EngineTab({
                         <Plus size={16} color={customLoc.trim() ? '#000' : C.sub} />
                     </TouchableOpacity>
                 </View>
-                {/* Custom locations added */}
-                {config.locations.filter(l => !LOCATION_PRESETS.includes(l)).length > 0 && (
-                    <View style={[st.chipGrid, { marginTop: 8 }]}>
-                        {config.locations.filter(l => !LOCATION_PRESETS.includes(l)).map((loc) => (
+
+                {/* Selected locations */}
+                {config.locations.length > 0 ? (
+                    <View style={st.chipGrid}>
+                        {config.locations.map((loc) => (
                             <TouchableOpacity
                                 key={loc}
                                 onPress={() => toggle('locations', loc)}
-                                style={[st.chip, { borderColor: `${C.pink}40`, backgroundColor: `${C.pink}0A` }]}
+                                style={[st.chip, { borderColor: `${C.cyan}40`, backgroundColor: `${C.cyan}0A` }]}
                             >
-                                <Text style={[st.chipText, { color: C.pink }]}>{loc}</Text>
-                                <X size={10} color={C.pink} />
+                                <Text style={[st.chipText, { color: C.cyan }]}>{loc}</Text>
+                                <X size={10} color={C.cyan} />
                             </TouchableOpacity>
                         ))}
+                    </View>
+                ) : (
+                    <View style={{ paddingVertical: 12, alignItems: 'center', backgroundColor: '#000', borderRadius: 12, borderWidth: 1, borderColor: '#333' }}>
+                        <Text style={{ color: C.dim, fontSize: 12 }}>No locations added yet.</Text>
                     </View>
                 )}
             </Animated.View>
@@ -340,9 +339,10 @@ function EngineTab({
                     {REMOTE_OPTIONS.map(({ key, label }) => {
                         const active = config.remotePreference === key;
                         return (
-                            <TouchableOpacity
+                            <AnimatedPressable
                                 key={key}
                                 onPress={() => setConfig({ ...config, remotePreference: key })}
+                                scaleDownTo={0.94}
                                 style={[
                                     st.remoteBtn,
                                     active
@@ -355,7 +355,7 @@ function EngineTab({
                                     <View style={st.remoteDot} />
                                 )}
                                 <Text style={[st.remoteBtnText, { color: active ? C.cyan : C.sub }]}>{label}</Text>
-                            </TouchableOpacity>
+                            </AnimatedPressable>
                         );
                     })}
                 </View>
@@ -423,10 +423,10 @@ function EngineTab({
                             <Text style={st.toggleSub}>{sub}</Text>
                         </View>
                         <Switch
-                            value={config[key as keyof EngineConfig] as boolean}
+                            value={(config as any)[key] as boolean}
                             onValueChange={(v) => setConfig({ ...config, [key]: v })}
                             trackColor={{ false: 'rgba(255,255,255,0.08)', true: `${color}50` }}
-                            thumbColor={config[key as keyof EngineConfig] ? color : 'rgba(255,255,255,0.25)'}
+                            thumbColor={(config as any)[key] ? color : 'rgba(255,255,255,0.25)'}
                         />
                     </View>
                 ))}
@@ -813,15 +813,16 @@ export default function ConfigureScreen() {
 
     const TABS: { key: TabKey; label: string; icon: any }[] = [
         { key: 'engine', label: 'Engine', icon: Zap },
-        { key: 'rules', label: `Rules ${rules.length > 0 ? `(${rules.length})` : ''}`, icon: Tag },
+                                { key: 'rules', label: `Rules ${rules.length > 0 ? `(${rules.length})` : ''}`, icon: Tag },
     ];
 
     return (
         <View style={{ flex: 1, backgroundColor: C.bg }}>
-            <AmbientBg />
+            {/* Global Navbar */}
 
-            {/* ── Page header ── */}
-            <Animated.View entering={FadeInDown.delay(30).springify()} style={st.pageHeader}>
+
+            {/* ── Page Header ── */}
+            <Animated.View entering={FadeInDown.delay(40).springify()} style={st.pageHeader}>
                 <View style={{ flex: 1 }}>
                     <Text style={st.pageTitle}>Configure</Text>
                     <Text style={st.pageSub}>Job hunting engine & search rules</Text>

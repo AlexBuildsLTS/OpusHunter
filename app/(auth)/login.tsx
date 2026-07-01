@@ -534,7 +534,7 @@ export default function LoginScreen() {
             const v = Validator.signIn(trimEmail, password);
             if (!v.valid) {
                 setLoading(false);
-                return setMessage({ type: 'error', text: v.error! });
+                return setMessage({ type: 'error', text: v.error || 'Validation failed' });
             }
             const { error } = await supabase.auth.signInWithPassword({ email: trimEmail, password });
             setLoading(false);
@@ -549,7 +549,7 @@ export default function LoginScreen() {
             const v = Validator.signUp(trimEmail, password, confirmPassword, fullName);
             if (!v.valid) {
                 setLoading(false);
-                return setMessage({ type: 'error', text: v.error! });
+                return setMessage({ type: 'error', text: v.error || 'Validation failed' });
             }
             const { error } = await supabase.auth.signUp({
                 email: trimEmail,

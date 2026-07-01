@@ -9,6 +9,8 @@
  * - Splash screen management
  */
 
+import '../global.css';
+
 import { useEffect, useRef, useCallback } from 'react';
 import { Platform, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';

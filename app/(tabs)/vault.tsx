@@ -25,6 +25,8 @@ import {
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { usePipelineStore } from '../../store/usePipelineStore';
+
+
 import { useCVVault } from '../../hooks/useCVVault';
 import { C } from '../../lib/theme';
 
@@ -210,11 +212,12 @@ export default function VaultScreen() {
           />
         }
       >
-        {/* ── Header ── */}
+        {/* Global Navbar */}
+
         <Animated.View entering={FadeInDown.delay(60).springify()} style={styles.header}>
           <Image
             source={require('../../assets/icon.png')}
-            style={styles.logoImg}
+            style={{ width: 24, height: 24, borderRadius: 6 }}
             resizeMode="contain"
           />
           <View style={{ flex: 1 }}>

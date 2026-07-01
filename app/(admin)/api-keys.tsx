@@ -224,7 +224,7 @@ export default function ApiKeysScreen() {
                                 <Text style={s.fieldLabel}>LABEL <Text style={s.fieldOptional}>(optional)</Text></Text>
                                 <TextInput style={s.input} placeholder="e.g. Backup key 1" placeholderTextColor="#3D4A55"
                                     value={newLabel} onChangeText={setNewLabel} autoCorrect={false}
-                                    {...(Platform.OS === ('web' as const) ? { outlineStyle: 'none' as const } as any : {})} />
+                                    {...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {})} />
                             </View>
 
                             {/* API Key */}
@@ -239,7 +239,7 @@ export default function ApiKeysScreen() {
                                         secureTextEntry={!showKey}
                                         autoCapitalize="none"
                                         autoCorrect={false}
-                                        {...(Platform.OS === ('web' as const) ? { outlineStyle: 'none' as const } as any : {})}
+                                        {...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {})}
                                     />
                                     <TouchableOpacity onPress={() => setShowKey(p => !p)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                                         {showKey ? <EyeOff size={16} color={C.sub} /> : <Eye size={16} color={C.sub} />}

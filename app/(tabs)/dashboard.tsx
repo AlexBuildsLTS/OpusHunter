@@ -32,6 +32,7 @@ import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import type { Job } from '../../types/app.types';
 import { C } from '../../lib/theme';
 
+
 // ── METRIC CARD ────────────────────────────────────────────────────────────────
 
 const MetricCard = ({
@@ -279,6 +280,9 @@ export default function DashboardScreen() {
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 400, background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,212,255,0.05) 0%, transparent 70%)' }} />
         </View>
       )}
+
+      {/* Global Navbar */}
+
 
       {/* ── Header ── */}
       <Animated.View entering={FadeInDown.delay(40).springify()} style={s.header}>

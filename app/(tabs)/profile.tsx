@@ -22,14 +22,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import {
     User, Mail, FileText, Upload, CheckCircle2, AlertCircle,
-    Shield, Key, Eye, EyeOff, Sparkles, ChevronRight, Pencil,
+    Shield, Key, Eye, EyeOff, Sparkles, ChevronRight, Pencil, Camera, Edit3, DatabaseZap, UploadCloud
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import type { Database } from '../../types/database.types';
 import { C, ROLE_CFG } from '../../lib/theme';
+import { AnimatedPressable } from '../../components/ui/AnimatedPressable';
+
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
@@ -49,9 +52,9 @@ export default function ProfileScreen() {
     const [rapidInput, setRapidInput] = useState('');
     const [showGemini, setShowGemini] = useState(false);
     const [showRapid, setShowRapid] = useState(false);
-    const renderRoleOption = (p: string) => (null);
-    const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
     const [uploading, setUploading] = useState(false);
+    const [avatarUploading, setAvatarUploading] = useState(false);
+    const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
 
     const flash = (text: string, ok = true) => {
         setBanner({ ok, text });
@@ -161,6 +164,48 @@ export default function ProfileScreen() {
         }
     }, []);
 
+    // ── Avatar upload ────────────────────────────────────────────────────────
+    const handleAvatarUpload = useCallback(async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+            });
+            if (result.canceled || !result.assets?.[0]) return;
+
+            const file = result.assets[0];
+            setAvatarUploading(true);
+
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Not authenticated.');
+
+            const ext = file.uri.split('.').pop() || 'jpg';
+            const path = `${user.id}/avatar-${Date.now()}.${ext}`;
+
+            const response = await fetch(file.uri);
+            const blob = await response.blob();
+
+            const { error: uploadError } = await supabase.storage
+                .from('avatars')
+                .upload(path, blob, { upsert: true, contentType: file.mimeType ?? 'image/jpeg' });
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+
+            const { error: dbError } = await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id);
+            if (dbError) throw dbError;
+
+            qc.invalidateQueries({ queryKey: ['my_profile_full'] });
+            flash('Profile picture updated successfully.');
+        } catch (e: any) {
+            flash(e.message ?? 'Upload failed.', false);
+        } finally {
+            setAvatarUploading(false);
+        }
+    }, []);
+
     if (isLoading) {
         return (
             <View style={[s.root, { alignItems: 'center', justifyContent: 'center' }]}>
@@ -175,6 +220,8 @@ export default function ProfileScreen() {
             contentContainerStyle={[s.scroll, isDesktop && s.scrollDesktop]}
             showsVerticalScrollIndicator={false}
         >
+
+
             {/* Banner */}
             {banner && (
                 <Animated.View
@@ -189,15 +236,25 @@ export default function ProfileScreen() {
 
             {/* ── Avatar + role ── */}
             <Animated.View entering={FadeInDown.delay(40).springify()} style={s.headerCard}>
-                <View style={s.avatarWrap}>
+                <AnimatedPressable onPress={handleAvatarUpload} disabled={avatarUploading} activeOpacity={0.8} style={s.avatarWrap} scaleDownTo={0.92}>
                     {profile?.avatar_url ? (
                         <Image source={{ uri: profile.avatar_url }} style={s.avatarImg} contentFit="cover" />
                     ) : (
-                        <View style={[s.avatarFallback, { borderColor: `${roleCfg.color}50` }]}>
+                        <View style={[s.avatarFallback, { backgroundColor: `${roleCfg.color}15`, borderColor: `${roleCfg.color}50`, borderWidth: 1 }]}>
                             <Text style={[s.avatarText, { color: roleCfg.color }]}>{initials}</Text>
                         </View>
                     )}
-                </View>
+                    {avatarUploading && (
+                        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 99, alignItems: 'center', justifyContent: 'center' }}>
+                            <ActivityIndicator color={C.cyan} />
+                        </View>
+                    )}
+                    {!avatarUploading && (
+                        <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: C.bg, padding: 6, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+                            <Camera size={14} color={C.cyan} />
+                        </View>
+                    )}
+                </AnimatedPressable>
 
                 {editingName ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 }}>
@@ -216,10 +273,10 @@ export default function ProfileScreen() {
                         </TouchableOpacity>
                     </View>
                 ) : (
-                    <TouchableOpacity onPress={() => setEditingName(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 }} activeOpacity={0.7}>
-                        <Text style={s.profileName}>{profile?.full_name || 'Add your name'}</Text>
-                        <Pencil size={13} color={C.sub} />
-                    </TouchableOpacity>
+                    <AnimatedPressable onPress={() => setEditingName(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 }} activeOpacity={0.7} scaleDownTo={0.96}>
+                        <Text style={s.profileName}>{profile?.full_name || 'Set your name'}</Text>
+                        <Edit3 size={16} color={C.cyan} />
+                    </AnimatedPressable>
                 )}
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
@@ -236,16 +293,16 @@ export default function ProfileScreen() {
             {/* ── Admin shortcut ── */}
             {role === 'admin' && (
                 <Animated.View entering={FadeInDown.delay(80).springify()}>
-                    <TouchableOpacity onPress={() => router.push('/(admin)/' as any)} style={s.adminCard} activeOpacity={0.85}>
+                    <AnimatedPressable onPress={() => router.push('/(admin)/' as any)} style={s.adminCard} activeOpacity={0.85} scaleDownTo={0.98}>
                         <View style={[s.adminIconBox]}>
-                            <Shield size={18} color={C.pink} />
+                            <DatabaseZap size={20} color={C.pink} />
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={s.adminCardTitle}>Admin Core</Text>
-                            <Text style={s.adminCardSub}>Manage users, roles, and system API keys</Text>
+                            <Text style={s.adminCardSub}>System overrides & user management</Text>
                         </View>
-                        <ChevronRight size={18} color={C.pink} />
-                    </TouchableOpacity>
+                        <ChevronRight size={18} color={C.pink} style={{ opacity: 0.5 }} />
+                    </AnimatedPressable>
                 </Animated.View>
             )}
 
@@ -266,11 +323,11 @@ export default function ProfileScreen() {
                                 : 'Upload a PDF or Word doc to improve match scoring.'}
                         </Text>
                     </View>
-                    <TouchableOpacity onPress={handleCvUpload} disabled={uploading} style={s.cvBtn} activeOpacity={0.8}>
+                    <AnimatedPressable onPress={handleCvUpload} disabled={uploading} style={s.cvBtn} activeOpacity={0.8} scaleDownTo={0.96}>
                         {uploading
                             ? <ActivityIndicator size="small" color={C.cyan} />
-                            : <Upload size={15} color={C.cyan} />}
-                    </TouchableOpacity>
+                            : <UploadCloud size={15} color={C.cyan} />}
+                    </AnimatedPressable>
                 </View>
             </Animated.View>
 
