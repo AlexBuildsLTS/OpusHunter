@@ -355,8 +355,7 @@ function EngineTab({
                                     <View style={st.remoteDot} />
                                 )}
                                 <Text style={[st.remoteBtnText, { color: active ? C.cyan : C.sub }]}>{label}</Text>
-                            </AnimatedPressable>
-                        );
+                        </AnimatedPressable>);
                     })}
                 </View>
             </Animated.View>
