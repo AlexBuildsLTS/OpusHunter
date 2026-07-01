@@ -83,20 +83,11 @@ export default function TabsLayout() {
       }}>
         <WebSidebar active={pathname} />
         <View className="flex-1 pl-[120px] relative">
-          {/* Fixed Overlay: Project Icon (Top Left) + Profile Dropdown (Top Right) */}
-          <View style={{ position: 'absolute', top: 0, left: 120, right: 0, height: 70, zIndex: 1000, pointerEvents: 'box-none', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 24, paddingTop: 16 }}>
-            {/* Project Icon - Top Left (after sidebar) */}
-            <Image
-              source={require('../../assets/icon.png')}
-              style={{ width: 36, height: 36 }}
-              resizeMode="contain"
-            />
-            {/* Profile Dropdown - Top Right */}
-            <View style={{ pointerEvents: 'auto' }}>
-              <ProfileDropdown />
-            </View>
+          {/* Profile Dropdown - Top Right */}
+          <View style={{ position: 'absolute', top: 16, right: 24, zIndex: 1000, pointerEvents: 'auto' }}>
+            <ProfileDropdown />
           </View>
-          <Tabs screenOptions={{ headerShown: false, tabBarStyle: { display: 'none' }, sceneStyle: { backgroundColor: 'transparent', paddingTop: 70 } }}>
+          <Tabs screenOptions={{ headerShown: false, tabBarStyle: { display: 'none' }, sceneStyle: { backgroundColor: 'transparent' } }}>
             <Tabs.Screen name="dashboard" />
             <Tabs.Screen name="vault" />
             <Tabs.Screen name="configure" />
@@ -115,18 +106,16 @@ export default function TabsLayout() {
       backgroundColor: C.bg,
       backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 60%)',
     }}>
-      {/* Fixed Overlay: Project Icon (Top Left) + Profile Dropdown (Top Right) */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 70, zIndex: 1000, pointerEvents: 'box-none', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 12 }}>
-        {/* Project Icon - Top Left */}
-        <Image
-          source={require('../../assets/icon.png')}
-          style={{ width: 40, height: 40 }}
-          resizeMode="contain"
-        />
-        {/* Profile Dropdown - Top Right */}
-        <View style={{ pointerEvents: 'auto' }}>
-          <ProfileDropdown />
-        </View>
+      {/* Project Icon - Top Left */}
+      <Image
+        source={require('../../assets/icon.png')}
+        style={{ position: 'absolute', top: 12, left: 20, width: 40, height: 40, zIndex: 1000 }}
+        resizeMode="contain"
+      />
+
+      {/* Profile Dropdown - Top Right */}
+      <View style={{ position: 'absolute', top: 12, right: 20, zIndex: 1000 }}>
+        <ProfileDropdown />
       </View>
 
       <Tabs

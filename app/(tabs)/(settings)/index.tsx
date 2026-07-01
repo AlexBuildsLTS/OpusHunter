@@ -250,7 +250,7 @@ export default function SettingsScreen() {
                     <View style={s.card}>
                         <SettingRow icon={UserIcon} label="Profile" sub={profile?.full_name ?? profile?.email ?? ''} color={C.cyan} onPress={() => router.push('/(tabs)/profile')} />
                         <View style={s.divider} />
-                        <SettingRow icon={Lock} label="Security & Password" sub="Change your password" color={C.purple} onPress={() => router.push('/(settings)/security' as any)} />
+                        <SettingRow icon={Lock} label="Security & Password" sub="Change your password, PIN, biometrics, and API keys" color={C.cyan} onPress={() => router.push('/(tabs)/(settings)/security' as any)} />
                     </View>
                 </Animated.View>
 

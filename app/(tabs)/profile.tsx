@@ -86,10 +86,6 @@ export default function ProfileScreen() {
 
     const [editingName, setEditingName] = useState(false);
     const [nameInput, setNameInput] = useState('');
-    const [geminiInput, setGeminiInput] = useState('');
-    const [rapidInput, setRapidInput] = useState('');
-    const [showGemini, setShowGemini] = useState(false);
-    const [showRapid, setShowRapid] = useState(false);
     const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
     const [uploadingCv, setUploadingCv] = useState(false);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -114,8 +110,6 @@ export default function ProfileScreen() {
     useEffect(() => {
         if (profile) {
             setNameInput(profile.full_name ?? '');
-            setGeminiInput('');
-            setRapidInput('');
         }
     }, [profile?.id]);
 
@@ -142,26 +136,7 @@ export default function ProfileScreen() {
         onError: (e: Error) => flash(e.message, false),
     });
 
-    // ── Save BYOK keys ───────────────────────────────────────────────────────
-    const saveKeysMutation = useMutation({
-        mutationFn: async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Not authenticated.');
-            const payload: Record<string, string> = {};
-            if (geminiInput.trim()) payload.gemini_key = geminiInput.trim();
-            if (rapidInput.trim()) payload.rapidapi_key = rapidInput.trim();
-            if (Object.keys(payload).length === 0) return;
-            const { error } = await supabase.from('profiles').update(payload).eq('id', user.id);
-            if (error) throw new Error(error.message);
-        },
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['my_profile_full'] });
-            setGeminiInput('');
-            setRapidInput('');
-            flash('API keys saved.');
-        },
-        onError: (e: Error) => flash(e.message, false),
-    });
+
 
     // ── Avatar upload — new: previously there was no bucket to upload to ────
     const handleAvatarUpload = useCallback(async () => {
@@ -377,79 +352,7 @@ export default function ProfileScreen() {
                     </GlassCard>
                 </Animated.View>
 
-                {/* ── BYOK: Bring Your Own Key ── */}
-                <Animated.View entering={FadeInDown.delay(160).springify()}>
-                    <GlassCard tint="amber" padding="md">
-                        <View className="flex-row items-center gap-2 mb-3">
-                            <SectionTitle>BRING YOUR OWN KEY (BYOK)</SectionTitle>
-                            <Sparkles size={13} color={C.amber} />
-                        </View>
-                        <Text className="text-xs leading-[18px]" style={{ color: C.sub }}>
-                            Add your own Gemini or RapidAPI key for unlimited scraping and AI cover letters.
-                            Leave blank to use the shared system fallback (rate-limited).
-                        </Text>
 
-                        {/* Gemini key */}
-                        <View className="mt-3.5">
-                            <View className="mb-1.5 flex-row items-center gap-1.5">
-                                <Key size={12} color={C.purple} />
-                                <Text className="text-[10px] font-bold tracking-widest" style={{ color: C.sub }}>GEMINI API KEY</Text>
-                            </View>
-                            <View className="flex-row items-center gap-2.5 rounded-xl border px-3.5 py-3" style={{ backgroundColor: 'rgba(4,12,20,0.7)', borderColor: C.border }}>
-                                <TextInput
-                                    className="flex-1 text-[13px]"
-                                    style={{ color: C.text, ...webNoOutline }}
-                                    value={geminiInput}
-                                    onChangeText={setGeminiInput}
-                                    placeholder={profile?.gemini_key ? maskKey(profile.gemini_key) : 'AIzaSy...'}
-                                    placeholderTextColor={C.dim}
-                                    secureTextEntry={!showGemini}
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                />
-                                <TouchableOpacity onPress={() => setShowGemini((v) => !v)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                                    {showGemini ? <EyeOff size={14} color={C.sub} /> : <Eye size={14} color={C.sub} />}
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-
-                        {/* RapidAPI key */}
-                        <View className="mt-3.5">
-                            <View className="mb-1.5 flex-row items-center gap-1.5">
-                                <Key size={12} color={C.cyan} />
-                                <Text className="text-[10px] font-bold tracking-widest" style={{ color: C.sub }}>RAPIDAPI KEY (JSearch)</Text>
-                            </View>
-                            <View className="flex-row items-center gap-2.5 rounded-xl border px-3.5 py-3" style={{ backgroundColor: 'rgba(4,12,20,0.7)', borderColor: C.border }}>
-                                <TextInput
-                                    className="flex-1 text-[13px]"
-                                    style={{ color: C.text, ...webNoOutline }}
-                                    value={rapidInput}
-                                    onChangeText={setRapidInput}
-                                    placeholder={profile?.rapidapi_key ? maskKey(profile.rapidapi_key) : 'Your RapidAPI key...'}
-                                    placeholderTextColor={C.dim}
-                                    secureTextEntry={!showRapid}
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                />
-                                <TouchableOpacity onPress={() => setShowRapid((v) => !v)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                                    {showRapid ? <EyeOff size={14} color={C.sub} /> : <Eye size={14} color={C.sub} />}
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-
-                        <TouchableOpacity
-                            onPress={() => saveKeysMutation.mutate()}
-                            disabled={saveKeysMutation.isPending || (!geminiInput.trim() && !rapidInput.trim())}
-                            activeOpacity={0.85}
-                            className="mt-4 h-[46px] items-center justify-center rounded-2xl"
-                            style={{ backgroundColor: C.cyan, opacity: (!geminiInput.trim() && !rapidInput.trim()) ? 0.5 : 1 }}
-                        >
-                            {saveKeysMutation.isPending
-                                ? <ActivityIndicator color="#000" size="small" />
-                                : <Text className="text-xs font-black tracking-widest text-black">SAVE KEYS</Text>}
-                        </TouchableOpacity>
-                    </GlassCard>
-                </Animated.View>
             </ScrollView>
         </PageContainer>
     );
