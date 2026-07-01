@@ -29,6 +29,7 @@ import { usePipelineStore } from '../../store/usePipelineStore';
 
 import { useCVVault } from '../../hooks/useCVVault';
 import { C } from '../../lib/theme';
+import { AppHeader } from '../../components/layout/AppHeader';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,9 @@ function AmbientBg() {
     </View>
   );
 }
+
+<AppHeader title="Vault" />
+
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 

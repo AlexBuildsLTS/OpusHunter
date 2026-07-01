@@ -13,9 +13,10 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { Key, Users, ArrowLeft, Activity, Database } from 'lucide-react-native';
+import { Key, Users, Activity, Database } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { C } from '../../lib/theme';
+import { AppHeader } from '../../components/layout/AppHeader';
 
 function AmbientBg() {
     if (Platform.OS !== 'web') return null;
@@ -79,25 +80,13 @@ export default function AdminIndexScreen() {
         <View style={{ flex: 1, backgroundColor: C.bg }}>
             <AmbientBg />
             <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-                {/* Back */}
-                <Animated.View entering={FadeInDown.delay(40).springify()} style={s.topRow}>
-                    <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
-                        <ArrowLeft size={16} color={C.cyan} />
-                        <Text style={s.backText}>Dashboard</Text>
-                    </TouchableOpacity>
-                    <View style={s.adminBadge}>
-                        <Text style={s.adminBadgeText}>ADMIN</Text>
-                    </View>
-                </Animated.View>
+                <AppHeader title="Admin Panel" subtitle="System overview and configuration" />
 
-                {/* Title */}
-                <Animated.View entering={FadeInDown.delay(80).springify()} style={{ marginBottom: 28 }}>
-                    <Text style={s.title}>Admin Panel</Text>
-                    <Text style={s.sub}>System overview and configuration</Text>
-                </Animated.View>
+                {/* Spacer for visual balance */}
+                <Animated.View entering={FadeInDown.delay(40).springify()} style={{ marginBottom: 12 }} />
 
                 {/* Stats */}
-                <Animated.View entering={FadeInDown.delay(140).springify()} style={s.statsGrid}>
+                <Animated.View entering={FadeInDown.delay(80).springify()} style={s.statsGrid}>
                     <StatBox label="Users" value={stats?.users ?? '—'} color={C.cyan} icon={Users} />
                     <StatBox label="Applications" value={stats?.apps ?? '—'} color={C.purple} icon={Activity} />
                     <StatBox label="Jobs Scraped" value={stats?.jobs ?? '—'} color={C.green} icon={Database} />
@@ -105,7 +94,7 @@ export default function AdminIndexScreen() {
                 </Animated.View>
 
                 {/* Navigation cards */}
-                <Animated.View entering={FadeInDown.delay(200).springify()} style={{ gap: 12, marginTop: 8 }}>
+                <Animated.View entering={FadeInDown.delay(120).springify()} style={{ gap: 12, marginTop: 8 }}>
                     {MENU.map((item) => (
                         <TouchableOpacity
                             key={item.route}
@@ -131,13 +120,6 @@ export default function AdminIndexScreen() {
 
 const s = StyleSheet.create({
     scroll: { flexGrow: 1, paddingTop: Platform.OS === 'web' ? 40 : 56, paddingHorizontal: 20, paddingBottom: 100, maxWidth: 680, width: '100%', alignSelf: 'center' },
-    topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
-    backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    backText: { fontSize: 13, color: C.cyan, fontWeight: '600' },
-    adminBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: `${C.pink}40`, backgroundColor: `${C.pink}10` },
-    adminBadgeText: { fontSize: 9, fontWeight: '900', color: C.pink, letterSpacing: 2 },
-    title: { fontSize: 26, fontWeight: '800', color: C.text, letterSpacing: -0.3 },
-    sub: { fontSize: 13, color: C.sub, marginTop: 4 },
     statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
     statBox: { width: '47%', alignItems: 'center', gap: 6, paddingVertical: 18, borderRadius: 16, borderWidth: 1 },
     statVal: { fontSize: 26, fontWeight: '800', letterSpacing: -0.5 },

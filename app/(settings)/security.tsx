@@ -22,11 +22,12 @@ import { useMutation } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import {
-    ArrowLeft, Lock, Eye, EyeOff, CheckCircle2,
+    Lock, Eye, EyeOff, CheckCircle2,
     AlertCircle, ShieldCheck, KeyRound,
 } from 'lucide-react-native';
-import { supabase } from '../../../lib/supabase';
-import { C } from '../../../lib/theme';
+import { supabase } from '../../lib/supabase';
+import { C } from '../../lib/theme';
+import { AppHeader } from '../../components/layout/AppHeader';
 
 function strengthOf(pw: string) {
     let sc = 0;
@@ -103,12 +104,7 @@ export default function SecurityScreen() {
                 </Animated.View>
             )}
 
-            <View style={s.header}>
-                <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-                    <ArrowLeft size={20} color={C.cyan} />
-                </TouchableOpacity>
-                <Text style={s.headerTitle}>Security</Text>
-            </View>
+            <AppHeader title="Security" subtitle="Change your password" />
 
             <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
                 <View style={s.iconWrap}>

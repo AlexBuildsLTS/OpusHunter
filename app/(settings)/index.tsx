@@ -18,12 +18,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import {
-    ArrowLeft, Zap, Bell, Shield, Trash2,
+    Zap, Bell, Shield, Trash2,
     RefreshCw, CheckCircle2, AlertTriangle, Crown,
     ChevronRight, Lock, User as UserIcon, Info,
 } from 'lucide-react-native';
-import { supabase } from '../../../lib/supabase';
-import { C } from '../../../lib/theme';
+import { supabase } from '../../lib/supabase';
+import { C } from '../../lib/theme';
+import { AppHeader } from '../../components/layout/AppHeader';
 
 function SectionLabel({ children }: { children: string }) {
     return <Text style={s.sectionLabel}>{children}</Text>;
@@ -188,12 +189,7 @@ export default function SettingsScreen() {
                 </Animated.View>
             )}
 
-            <View style={s.header}>
-                <TouchableOpacity onPress={() => router.replace('/(tabs)/profile')} style={s.backBtn}>
-                    <ArrowLeft size={20} color={C.cyan} />
-                </TouchableOpacity>
-                <Text style={s.headerTitle}>Settings</Text>
-            </View>
+            <AppHeader title="Settings" />
 
             <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 

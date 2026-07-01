@@ -32,6 +32,7 @@ import { supabase } from '../../lib/supabase';
 import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import { C } from '../../lib/theme';
 import { AnimatedPressable } from '../../components/ui/AnimatedPressable';
+import { AppHeader } from '../../components/layout/AppHeader';
 
 
 // ── Engine Config Types ───────────────────────────────────────────────────────
@@ -96,6 +97,10 @@ const DEFAULT_ENGINE: EngineConfig = {
     autoApply: false,
     skipApplied: true,
 };
+
+<AppHeader title="Configure" />
+
+
 
 // ── Rule Types ────────────────────────────────────────────────────────────────
 
@@ -255,7 +260,7 @@ function EngineTab({
             {/* ── Locations ── */}
             <Animated.View entering={FadeInDown.delay(100).springify()} style={st.section}>
                 <SectionHeader icon={MapPin} title="Target Locations" sub="Enter cities or countries to target" />
-                
+
                 {/* Custom location input */}
                 <View style={[st.customLocRow, { marginBottom: 16 }]}>
                     <TextInput
@@ -355,7 +360,7 @@ function EngineTab({
                                     <View style={st.remoteDot} />
                                 )}
                                 <Text style={[st.remoteBtnText, { color: active ? C.cyan : C.sub }]}>{label}</Text>
-                        </AnimatedPressable>);
+                            </AnimatedPressable>);
                     })}
                 </View>
             </Animated.View>
@@ -812,7 +817,7 @@ export default function ConfigureScreen() {
 
     const TABS: { key: TabKey; label: string; icon: any }[] = [
         { key: 'engine', label: 'Engine', icon: Zap },
-                                { key: 'rules', label: `Rules ${rules.length > 0 ? `(${rules.length})` : ''}`, icon: Tag },
+        { key: 'rules', label: `Rules ${rules.length > 0 ? `(${rules.length})` : ''}`, icon: Tag },
     ];
 
     return (

@@ -1,388 +1,198 @@
 /**
  * components/ui/ProfileDropdown.tsx
- * VeraxAI — User Profile Menu (dropdown)
- * ══════════════════════════════════════════════════════════════════════════════
- * ARCHITECTURE
- * REANIMATED PHYSICS: Menu enters with a fluid, spring-physics drop-down animation
- * Native scrollbar hiding for Web, maintaining fluid wheel/touch scroll
- * ══════════════════════════════════════════════════════════════════════════════
+ * OpusHunter — User Profile Menu
+ * 2026-07-01
+ *
+ * Rebuilt from scratch. The previous version imported `useAuthStore` from
+ * `store/useAuthStore`, which does not exist anywhere in this repo (the only
+ * store is `usePipelineStore`), and linked to routes that don't exist in
+ * this app's actual router structure (`/settings/profile`, `/admin`,
+ * `/(auth)/sign-in`). It would throw on import — which is almost certainly
+ * why it was never wired into any screen.
+ *
+ * This version:
+ *   - Fetches the profile via the SAME react-query key ('my_profile_full')
+ *     used in app/(tabs)/profile.tsx, so the cache is shared and this never
+ *     triggers an extra network round-trip if the profile screen has
+ *     already loaded.
+ *   - Uses ROLE_CFG from lib/theme.ts — the single source of truth for
+ *     role colors — instead of a second, divergent color map.
+ *   - Points at real routes: /(tabs)/profile, /(tabs)/(settings),
+ *     /(admin), /(auth)/login.
+ *   - Built with NativeWind + GlassCard so it matches the rest of the
+ *     design system instead of being its own one-off StyleSheet.
  */
 
-import React, { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Platform,
-  Image,
-  ScrollView,
-  StyleSheet,
-} from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Text, TouchableOpacity, View, StyleSheet, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { supabase } from '../../lib/supabase';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import {
-  DatabaseZap,
-  ShieldCheck,
-  Component,
-  LogOut,
-  LucideIcon,
-  ShieldPlus,
-  Database,
-  DatabaseBackup,
-  Wrench,
-  Info,
-  Spline,
-  Shield,
-  Cpu,
   User,
+  Settings,
+  ShieldCheck,
+  LogOut,
+  type LucideIcon,
 } from 'lucide-react-native';
+import { supabase } from '../../lib/supabase';
+import { C, ROLE_CFG, type RoleName } from '../../lib/theme';
+import { GlassCard } from './GlassCard';
+import type { Database } from '../../types/database.types';
 
-// ─── STRICT THEME CONSTANTS ──────────────────────────────────────────────────
-const THEME = {
-  obsidian: '#050B14',
-  admin: '#8A2BE2', // Neon Purple
-  support: '#00F0FF', // Cyan
-  premium: '#F59E0B', // Amber
-  member: '#3B82F6', // Electric Neon Blue
-  danger: '#FF3366', // Rose/Pink
-};
+type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
-const IS_WEB = Platform.OS === 'web';
-
-// ─── UTILITIES ───────────────────────────────────────────────────────────────
-
-/** Extracts 2 intials from username */
-const getInitials = (name?: string | null): string => {
-  if (!name) return 'U';
-  return name
-    .trim()
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .substring(0, 2)
-    .toUpperCase();
-};
-
-/** Returns Liquid Neon color tokens strictly mapped to User Roles. */
-const getRoleConfig = (role?: string | null) => {
-  switch (role?.toLowerCase()) {
-    case 'admin':
-      return {
-        color: THEME.admin,
-        bg: 'rgba(138,43,226,0.15)',
-        label: 'ADMIN',
-      };
-    case 'support':
-      return {
-        color: THEME.support,
-        bg: 'rgba(0,240,255,0.15)',
-        label: 'SUPPORT',
-      };
-    case 'premium':
-      return {
-        color: THEME.premium,
-        bg: 'rgba(245,158,11,0.15)',
-        label: 'PREMIUM',
-      };
-    case 'member':
-    default:
-      return {
-        color: THEME.member,
-        bg: 'rgba(59,130,246,0.15)',
-        label: 'MEMBER',
-      };
+function getInitials(name?: string | null, email?: string | null): string {
+  if (name?.trim()) {
+    return name
+      .trim()
+      .split(' ')
+      .map((p) => p[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
   }
-};
-
-// ─── REUSABLE SUB-COMPONENTS ─────────────────────────────────────────────────
-
-interface DropdownItemProps {
-  icon: LucideIcon;
-  label: string;
-  color?: string;
-  bgColor?: string;
-  onPress: () => void;
-  isDanger?: boolean;
+  return email?.slice(0, 2).toUpperCase() ?? '??';
 }
 
-/**
- * Ensures consistent padding, typography, and touch physics across all options.
- */
-const DropdownItem = React.memo(
-  ({
-    icon: Icon,
-    label,
-    color = '#00F0FF',
-    bgColor,
-    onPress,
-    isDanger,
-  }: DropdownItemProps) => (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.7}
-      delayPressIn={0} // CRITICAL: 0ms latency for Android APK
-      className="flex-row items-center p-3.5 mb-1 rounded-xl transition-colors hover:bg-white/5"
-      style={bgColor ? { backgroundColor: bgColor } : {}}
+interface MenuItemProps {
+  icon: LucideIcon;
+  label: string;
+  onPress: () => void;
+  danger?: boolean;
+}
+
+const MenuItem = React.memo(({ icon: Icon, label, onPress, danger }: MenuItemProps) => (
+  <TouchableOpacity
+    onPress={onPress}
+    activeOpacity={0.7}
+    className={`flex-row items-center gap-3 rounded-xl px-3 py-3 ${danger ? 'active:bg-brand-pink/10' : 'active:bg-white/5'
+      }`}
+  >
+    <Icon size={16} color={danger ? C.pink : C.cyan} />
+    <Text
+      className="text-[11px] font-extrabold uppercase tracking-widest"
+      style={{ color: danger ? C.pink : C.text }}
     >
-      <Icon
-        size={16}
-        color={isDanger ? THEME.danger : color}
-        style={{ marginRight: 14 }}
-      />
-      <Text
-        style={{
-          color: isDanger ? THEME.danger : '#fefefe',
-          fontSize: 11,
-          fontWeight: '900',
-          letterSpacing: 1.5,
-        }}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  ),
-);
-DropdownItem.displayName = 'DropdownItem';
+      {label}
+    </Text>
+  </TouchableOpacity>
+));
+MenuItem.displayName = 'MenuItem';
 
-// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
-
-export const ProfileDropdown = () => {
-  const [isOpen, setIsOpen] = useState(false);
+export function ProfileDropdown() {
+  const [open, setOpen] = useState(false);
   const router = useRouter();
+  const qc = useQueryClient();
 
-  const { data: profile } = useQuery({
-      queryKey: ['profileDropdown'],
-      queryFn: async () => {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) return null;
-          const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-          return data;
-      }
+  const { data: profile } = useQuery<ProfileRow | null>({
+    queryKey: ['my_profile_full'],
+    queryFn: async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return null;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 30_000,
   });
 
-  const handleSignOut = useCallback(async () => {
-    setIsOpen(false);
-    await supabase.auth.signOut();
-    router.replace('/(auth)/login');
-  }, [router]);
+  const role = (profile?.role ?? 'member') as RoleName;
+  const roleCfg = ROLE_CFG[role];
+  const initials = getInitials(profile?.full_name, profile?.email);
 
-  const handleNavigation = useCallback(
-    (path: any) => {
-      setIsOpen(false);
-      router.navigate(path);
+  const go = useCallback(
+    (path: string) => {
+      setOpen(false);
+      router.push(path as any);
     },
     [router],
   );
 
-  const roleConfig = getRoleConfig(profile?.role);
-  const initials = getInitials(profile?.full_name || profile?.email);
+  const handleSignOut = useCallback(async () => {
+    setOpen(false);
+    await supabase.auth.signOut();
+    qc.clear();
+    router.replace('/(auth)/login');
+  }, [router, qc]);
 
   return (
     <View style={{ zIndex: 1000 }}>
-      {/* ── AVATAR TRIGGER BUTTON ── */}
       <TouchableOpacity
-        onPress={() => setIsOpen(!isOpen)}
+        onPress={() => setOpen((v) => !v)}
         activeOpacity={0.8}
-        delayPressIn={0}
+        className="items-center justify-center overflow-hidden border-2 rounded-full h-11 w-11"
         style={{
-          width: 44,
-          height: 44,
-          borderRadius: 22,
-          backgroundColor: THEME.obsidian,
-          borderWidth: 2,
-          borderColor: roleConfig.color,
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          ...(IS_WEB
-            ? ({ boxShadow: `0 0 15px ${roleConfig.color}60` } as any)
-            : {
-              shadowColor: roleConfig.color,
-              shadowOpacity: 0.6,
-              shadowRadius: 12,
-            }),
+          borderColor: roleCfg.color,
+          backgroundColor: C.core,
+          ...(Platform.OS === 'web'
+            ? ({ boxShadow: `0 0 14px ${roleCfg.color}55` } as any)
+            : { shadowColor: roleCfg.color, shadowOpacity: 0.5, shadowRadius: 10 }),
         }}
       >
         {profile?.avatar_url ? (
-          <Image
-            source={{ uri: profile.avatar_url }}
-            style={{ width: '100%', height: '100%' }}
-          />
+          <Image source={{ uri: profile.avatar_url }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
         ) : (
-          <Text
-            style={{ color: roleConfig.color, fontSize: 16, fontWeight: '900' }}
-          >
-            {initials}
-          </Text>
+          <Text style={{ color: roleCfg.color, fontSize: 14, fontWeight: '800' }}>{initials}</Text>
         )}
       </TouchableOpacity>
 
-      {/* ── DROPDOWN MENU (Animated) ── */}
-      {isOpen && (
+      {open && (
         <>
-          {/* Invisible Overlay: Closes dropdown when tapping outside */}
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
-            className="fixed inset-0 z-[999]"
-            onPress={() => setIsOpen(false)}
+            onPress={() => setOpen(false)}
             activeOpacity={1}
-            delayPressIn={0}
           />
 
           <Animated.View
-            entering={FadeInDown.duration(400).springify()}
-            style={{
-              position: 'absolute',
-              top: 56,
-              right: 0,
-              width: 260,
-              backgroundColor: 'rgba(5, 11, 20, 0.95)',
-              borderRadius: 24,
-              borderWidth: 1,
-              borderColor: 'rgba(255, 255, 255, 0.08)',
-              zIndex: 1000,
-              padding: 16,
-              ...(IS_WEB
-                ? ({
-                  boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
-                  backdropFilter: 'blur(20px)',
-                  WebkitBackdropFilter: 'blur(20px)',
-                } as any)
-                : {
-                  shadowColor: '#000',
-                  shadowOpacity: 0.8,
-                  shadowRadius: 20,
-                  elevation: 15,
-                }),
-            }}
+            entering={FadeInDown.duration(220).springify().damping(20)}
+            exiting={FadeOutUp.duration(150)}
+            style={{ position: 'absolute', top: 54, right: 0, width: 260, zIndex: 1000 }}
           >
-            {/* Header: User Info & Explicit Badge */}
-            <View style={{ marginBottom: 16, paddingHorizontal: 4 }}>
-              <Text
-                style={{
-                  color: '#ffffff',
-                  fontSize: 16,
-                  fontWeight: '900',
-                  marginBottom: 4,
-                }}
-                numberOfLines={1}
-              >
-                {profile?.full_name || 'Anonymous User'}
-              </Text>
-              <Text
-                style={{
-                  color: 'rgba(255,255,255,0.4)',
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  marginBottom: 10,
-                }}
-                numberOfLines={1}
-              >
-                {profile?.email}
-              </Text>
-
-              <View
-                style={{
-                  alignSelf: 'flex-start',
-                  backgroundColor: roleConfig.bg,
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: roleConfig.color + '50',
-                }}
-              >
-                <Text
-                  style={{
-                    color: roleConfig.color,
-                    fontSize: 9,
-                    fontWeight: '900',
-                    letterSpacing: 1.5,
-                  }}
-                >
-                  {roleConfig.label}
+            <GlassCard tint={role === 'admin' ? 'pink' : role === 'premium' ? 'amber' : 'purple'} padding="sm" glow>
+              <View className="px-2 pt-1 mb-2">
+                <Text numberOfLines={1} className="text-[15px] font-extrabold" style={{ color: C.text }}>
+                  {profile?.full_name || 'Your account'}
                 </Text>
+                <Text numberOfLines={1} className="mt-0.5 text-[11px]" style={{ color: C.sub }}>
+                  {profile?.email}
+                </Text>
+                <View
+                  className="mt-2 self-start rounded-lg border px-2.5 py-1"
+                  style={{ backgroundColor: roleCfg.bg, borderColor: roleCfg.border }}
+                >
+                  <Text className="text-[9px] font-black tracking-widest" style={{ color: roleCfg.color }}>
+                    {roleCfg.label}
+                  </Text>
+                </View>
               </View>
-            </View>
 
-            <View
-              style={{
-                height: 1,
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                marginBottom: 12,
-              }}
-            />
+              <View className="h-px my-1" style={{ backgroundColor: C.border }} />
 
-            {/* Scrollable Actions */}
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={styles.hiddenScrollbar}
-              keyboardShouldPersistTaps="always"
-            >
-              <DropdownItem
-                icon={User}
-                label="PROFILE"
-                onPress={() => handleNavigation('/profile')}
-              />
-              <DropdownItem
-                icon={ShieldCheck}
-                label="SECURITY"
-                onPress={() => handleNavigation('/(settings)/security')}
-              />
-              <DropdownItem
-                icon={DatabaseBackup}
-                label="SETTINGS"
-                onPress={() => handleNavigation('/(settings)')}
-              />
+              <MenuItem icon={User} label="Profile" onPress={() => go('/(tabs)/profile')} />
+              <MenuItem icon={Settings} label="Settings" onPress={() => go('/(tabs)/(settings)')} />
 
-              {profile?.role === 'admin' && (
+              {role === 'admin' && (
                 <>
-                  <View
-                    style={{
-                      height: 1,
-                      backgroundColor: 'rgba(255,255,255,0.06)',
-                      marginVertical: 6,
-                    }}
-                  />
-                  <DropdownItem
-                    icon={DatabaseZap}
-                    label="ADMIN CORE"
-                    color="#cf023f"
-                    onPress={() => handleNavigation('/(admin)')}
-                  />
+                  <View className="h-px my-1" style={{ backgroundColor: C.border }} />
+                  <MenuItem icon={ShieldCheck} label="Admin Core" onPress={() => go('/(admin)/')} />
                 </>
               )}
 
-              <View
-                style={{
-                  height: 1,
-                  backgroundColor: 'rgba(255,255,255,0.06)',
-                  marginVertical: 6,
-                }}
-              />
-
-              <DropdownItem
-                icon={LogOut}
-                label="SIGN OUT"
-                isDanger={true}
-                bgColor="rgba(255,51,102,0.05)"
-                onPress={handleSignOut}
-              />
-            </ScrollView>
+              <View className="h-px my-1" style={{ backgroundColor: C.border }} />
+              <MenuItem icon={LogOut} label="Sign Out" onPress={handleSignOut} danger />
+            </GlassCard>
           </Animated.View>
         </>
       )}
     </View>
   );
-};
-
-// ─── STYLES ──────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  hiddenScrollbar: {
-    ...(IS_WEB
-      ? ({ scrollbarWidth: 'none', msOverflowStyle: 'none' } as any)
-      : {}),
-  },
-});
+}

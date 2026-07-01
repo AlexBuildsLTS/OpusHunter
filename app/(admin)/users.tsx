@@ -28,12 +28,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import {
-    ArrowLeft, Search, Shield, Trash2, User,
+    Search, Shield, Trash2, User,
     CheckCircle2, AlertCircle, Mail, X,
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import type { Database } from '../../types/database.types';
 import { C, ROLE_CFG } from '../../lib/theme';
+import { AppHeader } from '../../components/layout/AppHeader';
+
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 type RoleType = 'member' | 'premium' | 'admin';
@@ -256,19 +258,7 @@ export default function AdminUsersScreen() {
                 </Animated.View>
             )}
 
-            <View style={s.header}>
-                <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-                    <ArrowLeft size={20} color={C.cyan} />
-                </TouchableOpacity>
-                <View style={{ flex: 1 }}>
-                    <Text style={s.headerTitle}>Users</Text>
-                    <Text style={s.headerSub}>{profiles.length} total accounts</Text>
-                </View>
-                <View style={[s.headerBadge, { borderColor: `${C.pink}40`, backgroundColor: `${C.pink}10` }]}>
-                    <Shield size={12} color={C.pink} />
-                    <Text style={[s.headerBadgeText, { color: C.pink }]}>ADMIN</Text>
-                </View>
-            </View>
+            <AppHeader title="User Management" subtitle={`${profiles.length} total accounts`} />
 
             {profiles.length > 0 && (
                 <View style={s.statsRow}>

@@ -30,6 +30,7 @@ import { supabase } from '../../lib/supabase';
 import { SwipeableJobCard } from '../../components/pipeline/SwipeableJobCard';
 import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import type { Job } from '../../types/app.types';
+import { AppHeader } from '../../components/layout/AppHeader';
 import { C } from '../../lib/theme';
 
 
@@ -282,7 +283,7 @@ export default function DashboardScreen() {
       )}
 
       {/* Global Navbar */}
-
+ <AppHeader title="Dashboard" />
 
       {/* ── Header ── */}
       <Animated.View entering={FadeInDown.delay(40).springify()} style={s.header}>
