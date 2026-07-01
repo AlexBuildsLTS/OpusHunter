@@ -23,6 +23,13 @@
     "supabase:gen-types": "npx supabase gen types typescript --linked > types/database.types.ts",
     "functions:deploy": "npx supabase functions deploy"
   },
+  "allowScripts": {
+    "expo-location": true,
+    "expo-modules-core": true,
+    "expo": true,
+    "nativewind": true,
+    "react-native": true
+  },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.42.0",
@@ -37,6 +44,7 @@
     "expo-font": "^56.0.7",
     "expo-image": "^56.0.11",
     "expo-image-picker": "~56.0.18",
+    "expo-location": "~56.0.18",
     "expo-router": "~56.2.11",
     "expo-secure-store": "~56.0.4",
     "expo-sharing": "~56.0.18",
