@@ -30,8 +30,6 @@ import { supabase } from '../../lib/supabase';
 import { SwipeableJobCard } from '../../components/pipeline/SwipeableJobCard';
 import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import type { Job } from '../../types/app.types';
-import { AppHeader } from '../../components/layout/AppHeader';
-import { ProfileDropdown } from '../../components/ui/ProfileDropdown';
 import { C } from '../../lib/theme';
 
 
@@ -271,11 +269,6 @@ export default function DashboardScreen() {
 
   return (
     <View className="flex-1 bg-slate-950">
-      {/* Fixed Profile Dropdown - Top Right */}
-      <View className="absolute z-50 pointer-events-auto top-4 right-5">
-        <ProfileDropdown />
-      </View>
-
       <ScrollView
         style={s.root}
         contentContainerStyle={[s.scroll, isDesktop && s.scrollDesktop]}

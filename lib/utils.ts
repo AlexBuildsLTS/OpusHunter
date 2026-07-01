@@ -18,18 +18,18 @@
 type ClassValue = string | number | null | undefined | false | ClassValue[];
 
 function flatten(inputs: ClassValue[]): string[] {
-    const out: string[] = [];
-    for (const input of inputs) {
-        if (!input) continue;
-        if (Array.isArray(input)) {
-            out.push(...flatten(input));
-        } else {
-            out.push(String(input));
-        }
+  const out: string[] = [];
+  for (const input of inputs) {
+    if (!input) continue;
+    if (Array.isArray(input)) {
+      out.push(...flatten(input));
+    } else {
+      out.push(String(input));
     }
-    return out;
+  }
+  return out;
 }
 
 export function cn(...inputs: ClassValue[]): string {
-    return flatten(inputs).join(' ').trim();
+  return flatten(inputs).join(' ').trim();
 }

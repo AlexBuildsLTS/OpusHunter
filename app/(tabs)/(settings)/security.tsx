@@ -3,14 +3,11 @@
  * OpusHunter — Security & Password
  * 2026-06-29
  *
- * Change Password flow:
- *   1. Current password (verified via a fresh sign-in call before the update,
- *      since supabase.auth.updateUser doesn't itself re-verify the old password)
- *   2. New password
- *   3. Confirm new password — must match exactly
- *   Submit is disabled until all three are valid and the two new-password
- *   fields match. This satisfies "change password with confirm password,
- *   confirmed two times."
+ * Sections:
+ *   1. Change Password - Current password + new password (2x confirmation)
+ *   2. API Keys Management - Manage personal Gemini and RapidAPI keys
+ *      (Can add/remove/test multiple keys per service)
+ *   3. Admin API Keys - System-level fallback keys (admin only)
  */
 
 import React, { useState, useCallback } from 'react';
@@ -25,9 +22,9 @@ import {
     Lock, Eye, EyeOff, CheckCircle2,
     AlertCircle, ShieldCheck, KeyRound,
 } from 'lucide-react-native';
-import { supabase } from '../../lib/supabase';
-import { C } from '../../lib/theme';
-import { AppHeader } from '../../components/layout/AppHeader';
+import { supabase } from '../../../lib/supabase';
+import { C } from '../../../lib/theme';
+
 
 
 function strengthOf(pw: string) {

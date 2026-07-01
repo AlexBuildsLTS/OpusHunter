@@ -823,21 +823,7 @@ export default function ConfigureScreen() {
 
     return (
         <View style={{ flex: 1, backgroundColor: C.bg }}>
-            {/* Global Navbar */}
 
-
-            {/* ── Page Header ── */}
-            <Animated.View entering={FadeInDown.delay(40).springify()} style={st.pageHeader}>
-                <View style={{ flex: 1 }}>
-                    <Text style={st.pageTitle}>Configure</Text>
-                    <Text style={st.pageSub}>Job hunting engine & search rules</Text>
-                </View>
-                {activeTab === 'rules' && (
-                    <TouchableOpacity onPress={openCreate} style={st.addBtn} activeOpacity={0.8}>
-                        <Plus size={18} color="#000" />
-                    </TouchableOpacity>
-                )}
-            </Animated.View>
 
             {/* ── Banner ── */}
             {banner && (
@@ -942,19 +928,6 @@ export default function ConfigureScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const st = StyleSheet.create({
-    // Page
-    pageHeader: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingTop: Platform.OS === 'web' ? 32 : 56,
-        paddingHorizontal: 20, paddingBottom: 12,
-    },
-    pageTitle: { fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.3 },
-    pageSub: { fontSize: 12, color: C.sub, marginTop: 2 },
-    addBtn: {
-        width: 38, height: 38, borderRadius: 11,
-        backgroundColor: C.cyan, alignItems: 'center', justifyContent: 'center',
-    },
-
     // Banner
     banner: {
         flexDirection: 'row', alignItems: 'center', gap: 8,

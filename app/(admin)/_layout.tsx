@@ -13,7 +13,7 @@
  * (tabs)/_layout.tsx's UserMenu and profile.tsx. Both must hold for the
  * panel to be truly admin-only.
  */
-
+import { AdaptiveLayout } from '../../components/layout/AdaptiveLayout';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
@@ -71,18 +71,20 @@ export default function AdminLayout() {
         );
     }
 
-    return (
-        <Stack screenOptions={{
-            headerShown: false,
-            contentStyle: {
-                backgroundColor: C.bg,
-                backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(232, 67, 106, 0.04) 0%, transparent 60%)',
-            }
-        }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="users" />
-            <Stack.Screen name="api-keys" />
-        </Stack>
+  return (
+        <AdaptiveLayout>
+            <Stack screenOptions={{
+                headerShown: false,
+                contentStyle: {
+                    backgroundColor: C.bg,
+                    backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(232, 67, 106, 0.04) 0%, transparent 60%)',
+                }
+            }}>
+          <Stack.Screen name="index" />
+                <Stack.Screen name="users" />
+                <Stack.Screen name="api-keys" />
+            </Stack>
+        </AdaptiveLayout>
     );
 }
 

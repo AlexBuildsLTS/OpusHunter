@@ -4,7 +4,7 @@
  * 2026-06-29
  */
 import { Stack } from 'expo-router';
-import { C } from '../../lib/theme';
+import { C } from '../../../lib/theme';
 
 export default function SettingsLayout() {
     return (

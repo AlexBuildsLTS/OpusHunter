@@ -1,274 +1,105 @@
 /**
  * components/layout/AdaptiveLayout.tsx
- * The Master Framework - Optimized for 2026-05-13 Production
- * ----------------------------------------------------------------------------
- * 1. UNIFIED ICON ENGINE: Cpu, Database, and Settings2 icons across all viewports.
- * 2. ROUTE-AWARE MOBILE HEADERS: Mobile logo and profile dropdown strictly unmount 
- * on nested routes to prevent Z-index overlap with local screen headers.
- * 3. PRODUCTION OPTIMIZED: Native-level Web performance via injected CSS.
- * 4. STRICT PHYSICS: Pointer events securely locked inside animation style arrays.
- * ----------------------------------------------------------------------------
+ * OpusHunter — Shared Desktop Sidebar Shell
+ * 2026-07-01
+ *
+ * Replaces the old orphaned copy of this file, which was still VeraxAI's
+ * unmodified component: wrong routes (/history, /settings/models,
+ * /settings/chat), wrong nav items (ENGINE/VAULT/LLM), and raw hex colors
+ * (#00F0FF, #8A2BE2) that don't exist anywhere in lib/theme.ts. It was never
+ * imported anywhere, so none of that ever rendered — but it sat in the repo
+ * as a landmine for whoever wired it in next expecting it to work.
+ *
+ * This is the real thing: app/(tabs)/_layout.tsx's WebSidebar function,
+ * lifted out so (admin) and (settings) can share it instead of having no
+ * sidebar at all on desktop (their current state).
+ *
+ * Desktop web (>=768px): renders the left nav rail + offsets children.
+ * Mobile / native: passthrough, no wrapper — those get AppHeader per-screen
+ * and, in (tabs) only, the native bottom Tabs bar.
+ *
+ * Usage:
+ *   <AdaptiveLayout>{...whatever the layout renders...}</AdaptiveLayout>
  */
 
 import React from 'react';
-import {
-  View,
-  Text,
-  useWindowDimensions,
-  TouchableOpacity,
-  Image,
-  Platform,
-  StyleSheet,
-} from 'react-native';
+import { View, Text, TouchableOpacity, Image, Platform, useWindowDimensions } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
+import { LayoutDashboard, Database, Briefcase } from 'lucide-react-native';
+import { C } from '../../lib/theme';
 
-import { ProfileDropdown } from '../ui/ProfileDropdown';
-const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withSequence,
-} from 'react-native-reanimated';
+const NAV_ITEMS = [
+  { name: 'dashboard', label: 'DASH', Icon: LayoutDashboard },
+  { name: 'vault', label: 'VAULT', Icon: Database },
+  { name: 'configure', label: 'RULES', Icon: Briefcase },
+] as const;
 
-// IMPORTING THE COMPONENTS FOR THE ICONS
-import {
-  Settings2,
-  Cpu,
-  Component,
-  GalleryVerticalEnd,
-  MemoryStick,
-} from 'lucide-react-native';
-
-const NeuralGlow = ({ top, right, left, bottom, color }: any) => {
-  const opacity = useSharedValue(0.03);
-
-  React.useEffect(() => {
-    opacity.value = withRepeat(
-      withSequence(
-        withTiming(0.08, { duration: 4000 }),
-        withTiming(0.03, { duration: 4000 }),
-      ),
-      -1,
-      true,
-    );
-  }, [opacity]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        animatedStyle,
-        {
-          pointerEvents: 'none',
-          position: 'absolute',
-          top,
-          right,
-          left,
-          bottom,
-          width: 500,
-          height: 500,
-          backgroundColor: color,
-          borderRadius: 250,
-          ...(Platform.OS === 'web' ? { filter: 'blur(100px)' } : {}),
-        },
-      ]}
-    />
-  );
-};
-
-export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
-  const { width } = useWindowDimensions();
+function Sidebar({ active }: { active: string }) {
   const router = useRouter();
-  const pathname = usePathname();
-
-  const isDesktop = width >= 1024;
-  const isTablet = width >= 768 && width < 1024;
-  const isMobile = !isDesktop && !isTablet;
-
-  // STRICT UX RULE: Only show mobile floating headers on the root page
-  const isRootPath = pathname === '/' || pathname === '/(dashboard)';
-
-  // STRICT UX RULE: Hide bottom navigation on deep screens like Chat to maximize keyboard space
-  const isChatScreen = pathname.includes('/settings/chat');
-  const showMobileNav = isMobile && !isChatScreen;
-
-  const navItems = [
-    { Icon: Component, path: '/', id: 'engine', title: 'ENGINE' },
-    { Icon: GalleryVerticalEnd, path: '/history', id: 'vault', title: 'VAULT' },
-    { Icon: MemoryStick, path: '/settings/models', id: 'MemoryStick', title: 'LLM' },
-    { Icon: Settings2, path: '/settings', id: 'params', title: 'SETTINGS' },
-  ];
 
   return (
     <View
-      className="flex-1 bg-[#010b1f71] relative overflow-hidden"
-      style={{ flex: 1 }}
+      className="absolute left-6 top-8 bottom-8 w-[72px] border border-brand-cyan/15 rounded-3xl items-center py-6 z-50 shadow-2xl shadow-brand-cyan/10"
+      style={{ backgroundColor: 'rgba(5, 10, 13, 0.85)' }}
     >
-      {/* Removes scrollbars for native app feel on browsers */}
-      {Platform.OS === 'web' && (
-        <style
-          dangerouslySetInnerHTML={{
-            __html: `
-                  * {
-                    -ms-overflow-style: none !important;
-                    scrollbar-width: none !important;
-                  }
-                  *::-webkit-scrollbar {
-                    display: none !important;
-                  }
-                  html, body {
-                    overflow: hidden;
-                    height: 100%;
-                    width: 100%;
-                    margin: 0;
-                    padding: 0;
-                  }
-                `,
-          }}
-        />
-      )}
+      <View
+        className="absolute inset-0 pointer-events-none bg-gradient-to-b rounded-3xl"
+        style={{ backgroundImage: 'linear-gradient(to bottom, rgba(0, 212, 255, 0.08), rgba(123, 94, 167, 0.04))' }}
+      />
 
-      {/* 1. AMBIENT BACKGROUND */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <NeuralGlow color="#00F0FF" top="-10%" left="-10%" />
-        <NeuralGlow color="#8A2BE2" bottom="-15%" right="-5%" />
-      </View>
+      <TouchableOpacity
+        className="w-[44px] h-[44px] rounded-2xl border border-brand-cyan/20 items-center justify-center mb-8 shadow-lg shadow-brand-cyan/20"
+        style={{ backgroundColor: 'rgba(0, 212, 255, 0.08)' }}
+        onPress={() => router.push('/(tabs)/dashboard')}
+        activeOpacity={0.8}
+      >
+        <Image source={require('../../assets/icon.png')} style={{ width: 24, height: 24 }} resizeMode="contain" />
+      </TouchableOpacity>
 
-      {/* 2. MOBILE LOGO - Strictly anchored to the top left (Root Screen Only) */}
-      {isMobile && isRootPath && (
-        <View className="absolute top-12 left-6 z-[1000]" pointerEvents="none">
-          <Image
-            source={require('../../assets/icon.png')}
-            style={{ width: 36, height: 36 }}
-            resizeMode="contain"
-          />
-        </View>
-      )}
-
-      {/* 3. PROFILE DROPDOWN - Top Right (Always on Desktop/Tablet, Root Screen Only on Mobile) */}
-      {(!isMobile || isRootPath) && (
-        <View
-          className="absolute top-12 right-6 z-[1000]"
-          pointerEvents="box-none"
-        >
-          <ProfileDropdown />
-        </View>
-      )}
-
-      <View className="flex-row flex-1">
-        {/* 4. SIDEBAR (Desktop / Tablet) */}
-        {(isDesktop || isTablet) && (
-          <View
-            className={cn(
-              'bg-[#050508]/10 border-r border-blue/10 pt-12 items-center z-50',
-              isDesktop ? 'w-24' : 'w-20',
-            )}
-          >
+      <View className="items-center flex-1 w-full gap-2">
+        {NAV_ITEMS.map(({ name, label, Icon }) => {
+          const isActive = active?.includes?.(name) ?? false;
+          return (
             <TouchableOpacity
-              onPress={() => router.navigate('/')}
-              className="mb-16"
+              key={name}
+              onPress={() => router.push(`/(tabs)/${name}` as any)}
+              activeOpacity={0.8}
+              className={`w-[56px] h-[56px] rounded-2xl items-center justify-center gap-1 relative ${isActive ? 'bg-brand-cyan/10' : ''}`}
             >
-              <Image
-                source={require('../../assets/icon.png')}
-                style={{ width: 40, height: 40 }}
-                resizeMode="contain"
-              />
+              {isActive && (
+                <View className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-md bg-brand-cyan shadow-[0_0_8px_rgba(0,212,255,0.8)]" />
+              )}
+              <Icon size={22} color={isActive ? C.cyan : C.sub} strokeWidth={isActive ? 2.5 : 2} />
+              <Text className="text-[9px] font-bold tracking-wider uppercase" style={{ color: isActive ? C.cyan : C.sub }}>
+                {label}
+              </Text>
             </TouchableOpacity>
-
-            <View className="flex-1 mt-4 gap-y-12">
-              {navItems.map((item) => {
-                const isActive =
-                  pathname === item.path ||
-                  (pathname.startsWith(item.path) && item.path !== '/');
-
-                // Active Color is Cyan, Inactive is 20% white
-                const iconColor = isActive
-                  ? '#00F0FF'
-                  : 'rgba(255,255,255,0.9)';
-
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    onPress={() => router.navigate(item.path as any)}
-                    className="items-center"
-                  >
-                    <View
-                      className={cn(
-                        'w-12 h-12 rounded-2xl items-center justify-center transition-all',
-                        isActive
-                          ? 'bg-[#00F0FF]/10 border border-[#1200b8]/40 shadow-[0_0_15px_rgba(0,240,255,0.5)]'
-                          : 'bg-transparent border-transparent',
-                      )}
-                    >
-                      {/* RENDERING THE ICON COMPONENT */}
-                      <item.Icon
-                        size={24}
-                        color={iconColor}
-                        strokeWidth={isActive ? 2.5 : 1.5}
-                      />
-                    </View>
-                    <Text
-                      className={cn(
-                        'mt-2 text-[8px] font-black tracking-[3px] uppercase',
-                        isActive ? 'text-[#00F0FF]' : 'text-white/50',
-                      )}
-                    >
-                      {item.title}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {/* 5. MAIN VIEWPORT */}
-        <View className="flex-1 h-full overflow-hidden">{children}</View>
+          );
+        })}
       </View>
-
-      {/* 6. MOBILE BOTTOM NAVIGATION */}
-      {showMobileNav && (
-        <View
-          className="absolute bottom-4 left-6 right-6 h-20 z-[100]"
-          pointerEvents="box-none"
-        >
-          <View
-            style={{ backgroundColor: 'rgba(5, 5, 8, 0.95)' }}
-            className="flex-row items-center justify-around h-full rounded-[30px] border border-white/5 overflow-hidden shadow-2xl"
-          >
-            {navItems.map((item) => {
-              const isActive =
-                pathname === item.path ||
-                (pathname.startsWith(item.path) && item.path !== '/');
-
-              const iconColor = isActive ? '#00F0FF' : 'rgba(255,255,255,0.8)';
-
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  onPress={() => router.navigate(item.path as any)}
-                  className="items-center justify-center w-20 h-full"
-                >
-                  {/* RENDERING THE SAME ICON COMPONENT ON MOBILE */}
-                  <item.Icon
-                    size={24}
-                    color={iconColor}
-                    strokeWidth={isActive ? 2.5 : 1.5}
-                  />
-                  {isActive && (
-                    <View className="absolute bottom-4 w-1.5 h-1.5 rounded-full bg-[#00ffd5] shadow-[0_0_10px_#00F0FF]" />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-      )}
     </View>
   );
-};
+}
+
+export function AdaptiveLayout({ children }: { children: React.ReactNode }) {
+  const { width } = useWindowDimensions();
+  const pathname = usePathname();
+  const isDesktop = Platform.OS === 'web' && width >= 768;
+
+  if (!isDesktop) {
+    return <>{children}</>;
+  }
+
+  return (
+    <View
+      className="flex-1"
+      style={{
+        backgroundColor: C.bg,
+        backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 60%)',
+      }}
+    >
+      <Sidebar active={pathname} />
+      <View className="flex-1 pl-[120px]">{children}</View>
+    </View>
+  );
+}

@@ -22,9 +22,9 @@ import {
     RefreshCw, CheckCircle2, AlertTriangle, Crown,
     ChevronRight, Lock, User as UserIcon, Info,
 } from 'lucide-react-native';
-import { supabase } from '../../lib/supabase';
-import { C } from '../../lib/theme';
-import { AppHeader } from '../../components/layout/AppHeader';
+import { supabase } from '../../../lib/supabase';
+import { C } from '../../../lib/theme';
+
 
 import { Easing } from 'react-native-reanimated';
 

@@ -25,7 +25,7 @@ import {
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { usePipelineStore } from '../../store/usePipelineStore';
-import { AppHeader } from '../../components/layout/AppHeader';
+
 import { useCVVault } from '../../hooks/useCVVault';
 import { C } from '../../lib/theme';
 
@@ -63,9 +63,6 @@ function AmbientBg() {
     </View>
   );
 }
-
-<AppHeader title="Vault" />
-
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -215,23 +212,6 @@ export default function VaultScreen() {
           />
         }
       >
-        {/* Global Navbar */}
-
-        <Animated.View entering={FadeInDown.delay(60).springify()} style={styles.header}>
-          <Image
-            source={require('../../assets/icon.png')}
-            style={{ width: 24, height: 24, borderRadius: 6 }}
-            resizeMode="contain"
-          />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.pageTitle}>Secure Vault</Text>
-            <Text style={styles.pageSub}>Your CV and documents are encrypted at rest.</Text>
-          </View>
-          <View style={styles.shieldBadge}>
-            <Shield size={14} color={C.green} />
-          </View>
-        </Animated.View>
-
         {/* ── Status banner ── */}
         {showBanner && (
           <StatusBanner

@@ -87,8 +87,7 @@ export default function RootLayout() {
                         screenOptions={{
                             headerShown: false,
                             contentStyle: {
-                                backgroundColor: '#020507',
-                                backgroundImage: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 60%)',
+                                backgroundColor: 'transparent',
                             },
                             animation: Platform.OS === 'web' ? 'none' : 'fade',
                         }}
@@ -96,7 +95,6 @@ export default function RootLayout() {
                         <Stack.Screen name="(auth)" options={{ animation: 'none' }} />
                         <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
                         <Stack.Screen name="(admin)" options={{ animation: 'slide_from_right' }} />
-                        <Stack.Screen name="(settings)" options={{ animation: 'slide_from_right' }} />
                         <Stack.Screen name="+not-found" />
                     </Stack>
                 </QueryClientProvider>
