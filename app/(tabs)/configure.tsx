@@ -1,32 +1,28 @@
 /**
  * app/(tabs)/configure.tsx
  * OpusHunter — Search Rules + Scraper Control
- * 2026-07-01 — Rebuilt: removed the fake "Engine" tab
+ * 2026-07-02 — Friendlier setup pass
  *
- * WHAT CHANGED AND WHY:
- *   The previous version had two tabs: "Engine" and "Rules". Engine had
- *   location chips, job-board toggles (LinkedIn/Indeed/Glassdoor/RemoteOK/
- *   WeWorkRemotely), experience levels, salary range, and autoApply/
- *   skipApplied switches — a lot of real-looking UI. NONE of it was wired
- *   to anything: `engineConfig` was local `useState` with no table to
- *   persist to and nothing on the backend ever read it. The scraper only
- *   ever calls JSearch (RapidAPI) — there is no LinkedIn/Indeed/Glassdoor
- *   integration anywhere in this codebase, so those toggles were actively
- *   misleading about where jobs come from. That's real mock content, so
- *   it's removed rather than restyled.
- *
- *   What's left is the one thing that's actually real: automation_rules
- *   (keywords / location / work_types / base_cover_letter), which
- *   `scrape-jobs` genuinely reads. Restyled onto the new "Obsidian Violet"
- *   palette via GlassCard, plus a live "Run Scraper" panel that surfaces
- *   the real per-rule result (jobs fetched, jobs new, which key tier was
- *   used) instead of a black box — directly useful for diagnosing key
- *   issues instead of guessing.
+ * WHAT CHANGED:
+ *   - Keywords: free-text "comma-separated" field replaced with
+ *     KeywordTagInput (tap-to-add chips + custom entry). Same string[]
+ *     shape the DB (automation_rules.keywords) and scrape-jobs already
+ *     expect — zero backend change.
+ *   - Location: plain text field replaced with LocationInput — worldwide
+ *     city autocomplete (OpenStreetMap, free, no key) plus a "Use mine"
+ *     button (expo-location) for one-tap accuracy on any platform
+ *     (web/iOS/Android). Still just writes a string to
+ *     automation_rules.location, same as before.
+ *   - "Run Scraper" renamed to "Launch Search" / button "RUN" → "SEARCH" —
+ *     product-facing language, not internal engineering language.
+ *   - Only real, wired fields are here: automation_rules
+ *     (keywords / location / work_types / base_cover_letter) is what
+ *     scrape-jobs genuinely reads. No mock toggles.
  */
 
-import React, { useState, useCallback, useEffect, memo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
-    View, Text, TextInput, TouchableOpacity, ScrollView,
+    View, Text, TouchableOpacity, ScrollView,
     Platform, StyleSheet, ActivityIndicator, Modal, Switch,
     KeyboardAvoidingView,
 } from 'react-native';
@@ -41,6 +37,8 @@ import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import { C } from '../../lib/theme';
 import { AppHeader } from '../../components/layout/AppHeader';
 import { GlassCard } from '../../components/ui/GlassCard';
+import { KeywordTagInput } from '../../components/ui/KeywordTagInput';
+import { LocationInput } from '../../components/ui/LocationInput';
 
 // ── Rule Types ────────────────────────────────────────────────────────────────
 
@@ -55,7 +53,7 @@ interface AutomationRule {
 }
 
 interface RuleFormState {
-    keywords: string;
+    keywords: string[];
     location: string;
     work_types: string[];
     base_cover_letter: string;
@@ -63,7 +61,7 @@ interface RuleFormState {
 }
 
 const DEFAULT_FORM: RuleFormState = {
-    keywords: '',
+    keywords: [],
     location: 'Remote',
     work_types: ['FULLTIME'],
     base_cover_letter: '',
@@ -75,10 +73,6 @@ const WORK_TYPE_LABELS: { [key: string]: string } = {
     FULLTIME: 'Full-time', PARTTIME: 'Part-time', CONTRACTOR: 'Contract',
     INTERNSHIP: 'Internship', TEMPORARY: 'Temporary',
 };
-
-function parseKeywords(raw: string): string[] {
-    return raw.split(',').map((k) => k.trim()).filter(Boolean);
-}
 
 // ── Key-source badge — shows exactly which credential tier served the scrape ──
 
@@ -190,7 +184,7 @@ function RuleFormModal({
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%', maxWidth: 560, alignSelf: 'center' }}>
                     <View style={st.modalCard}>
                         <View style={st.modalHeader}>
-                            <Text style={st.modalTitle}>{initial.keywords ? 'Edit Rule' : 'New Search Rule'}</Text>
+                            <Text style={st.modalTitle}>{initial.keywords.length > 0 ? 'Edit Rule' : 'New Search Rule'}</Text>
                             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                                 <X size={20} color={C.sub} />
                             </TouchableOpacity>
@@ -198,32 +192,21 @@ function RuleFormModal({
 
                         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 18 }} keyboardShouldPersistTaps="handled">
                             <View>
-                                <Text style={st.fieldLabel}>KEYWORDS <Text style={{ color: C.sub, fontWeight: '500' }}>(comma-separated)</Text></Text>
-                                <TextInput
-                                    style={st.textInput}
-                                    placeholder="React Native, TypeScript, Expo..."
-                                    placeholderTextColor={C.dim}
+                                <Text style={st.fieldLabel}>KEYWORDS</Text>
+                                <KeywordTagInput
                                     value={form.keywords}
-                                    onChangeText={(v) => setForm((f) => ({ ...f, keywords: v }))}
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                    {...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {})}
+                                    onChange={(tags) => setForm((f) => ({ ...f, keywords: tags }))}
                                 />
                             </View>
 
                             <View>
                                 <Text style={st.fieldLabel}>LOCATION</Text>
-                                <TextInput
-                                    style={st.textInput}
-                                    placeholder="Remote, Stockholm, Berlin, London..."
-                                    placeholderTextColor={C.dim}
+                                <LocationInput
                                     value={form.location}
-                                    onChangeText={(v) => setForm((f) => ({ ...f, location: v }))}
-                                    autoCorrect={false}
-                                    {...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {})}
+                                    onChange={(v) => setForm((f) => ({ ...f, location: v }))}
                                 />
                                 <Text style={{ fontSize: 10, color: C.dim, marginTop: 6 }}>
-                                    Any city or country works — the scraper searches globally, not just US listings.
+                                    Any city or country works, worldwide — the scraper searches globally, not just US listings.
                                 </Text>
                             </View>
 
@@ -248,18 +231,7 @@ function RuleFormModal({
 
                             <View>
                                 <Text style={st.fieldLabel}>BASE COVER LETTER <Text style={{ color: C.sub, fontWeight: '500' }}>(AI personalises per job)</Text></Text>
-                                <TextInput
-                                    style={[st.textInput, { minHeight: 130, paddingTop: 14 }]}
-                                    placeholder={`Dear Hiring Team,\n\nI am excited to apply for this role...`}
-                                    placeholderTextColor={C.dim}
-                                    value={form.base_cover_letter}
-                                    onChangeText={(v) => setForm((f) => ({ ...f, base_cover_letter: v }))}
-                                    multiline
-                                    numberOfLines={6}
-                                    textAlignVertical="top"
-                                    autoCorrect={false}
-                                    {...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {})}
-                                />
+                                <TextInputBaseCoverLetter form={form} setForm={setForm} />
                                 <Text style={{ fontSize: 10, color: C.dim, marginTop: 6, lineHeight: 15 }}>
                                     Use [COMPANY], [ROLE], [NAME] — Gemini replaces them automatically.
                                 </Text>
@@ -282,8 +254,8 @@ function RuleFormModal({
                         <View style={st.modalFooter}>
                             <TouchableOpacity
                                 onPress={() => onSave(form)}
-                                disabled={saving || !form.keywords.trim() || !form.location.trim()}
-                                style={[st.saveBtn, (!form.keywords.trim() || !form.location.trim()) && { opacity: 0.45 }]}
+                                disabled={saving || form.keywords.length === 0 || !form.location.trim()}
+                                style={[st.saveBtn, (form.keywords.length === 0 || !form.location.trim()) && { opacity: 0.45 }]}
                                 activeOpacity={0.8}
                             >
                                 {saving ? <ActivityIndicator color="#000" /> : <Text style={st.saveBtnText}>Save Rule</Text>}
@@ -293,6 +265,26 @@ function RuleFormModal({
                 </KeyboardAvoidingView>
             </View>
         </Modal>
+    );
+}
+
+// Small local wrapper only so the big modal function above stays readable —
+// identical TextInput behavior to before, just isolated.
+import { TextInput } from 'react-native';
+function TextInputBaseCoverLetter({ form, setForm }: { form: RuleFormState; setForm: React.Dispatch<React.SetStateAction<RuleFormState>> }) {
+    return (
+        <TextInput
+            style={[st.textInput, { minHeight: 130, paddingTop: 14 }]}
+            placeholder={`Dear Hiring Team,\n\nI am excited to apply for this role...`}
+            placeholderTextColor={C.dim}
+            value={form.base_cover_letter}
+            onChangeText={(v) => setForm((f) => ({ ...f, base_cover_letter: v }))}
+            multiline
+            numberOfLines={6}
+            textAlignVertical="top"
+            autoCorrect={false}
+            {...(Platform.OS === "web" ? ({ outlineStyle: 'none' } as any) : {})}
+        />
     );
 }
 
@@ -315,7 +307,7 @@ export default function ConfigureScreen() {
     }, [banner]);
 
     useEffect(() => {
-        if (scrapeSuccess) setBanner({ type: 'success', text: (lastResult as any)?.message ?? 'Scrape complete — pipeline updated.' });
+        if (scrapeSuccess) setBanner({ type: 'success', text: (lastResult as any)?.message ?? 'Search complete — pipeline updated.' });
         if (scrapeError) setBanner({ type: 'error', text: scrapeError });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [scrapeSuccess, scrapeError]);
@@ -335,7 +327,7 @@ export default function ConfigureScreen() {
             if (!user) throw new Error('Not authenticated.');
             const payload = {
                 user_id: user.id,
-                keywords: parseKeywords(form.keywords),
+                keywords: form.keywords,
                 location: form.location.trim(),
                 work_types: form.work_types,
                 base_cover_letter: form.base_cover_letter.trim(),
@@ -384,7 +376,7 @@ export default function ConfigureScreen() {
 
     const formInitial: RuleFormState = editingRule
         ? {
-            keywords: editingRule.keywords.join(', '),
+            keywords: editingRule.keywords,
             location: editingRule.location,
             work_types: editingRule.work_types,
             base_cover_letter: editingRule.base_cover_letter,
@@ -396,9 +388,14 @@ export default function ConfigureScreen() {
     const summary: Array<{ rule: string; fetched: number; new: number; key_source?: string }> = (lastResult as any)?.summary ?? [];
 
     return (
-        <View style={{ flex: 1, backgroundColor: C.bg }}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 120 }}>
-                <AppHeader title="Configure" subtitle="Search rules that drive the scraper" showIdentity={false} />
+        <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={[
+                    { padding: 20, paddingBottom: 120 },
+                    Platform.OS === 'web' && { maxWidth: 1100, width: '100%', alignSelf: 'center' as any },
+                ]}
+            >
 
 
                 {banner && (
@@ -412,7 +409,7 @@ export default function ConfigureScreen() {
                     </Animated.View>
                 )}
 
-                {/* ── Run Scraper hero ── */}
+                {/* ── Launch Search hero ── */}
                 <Animated.View entering={FadeInDown.delay(40).springify()} style={{ marginBottom: 20 }}>
                     <GlassCard tint="cyan" glow padding="md">
                         <View className="flex-row items-center gap-3.5">
@@ -420,10 +417,10 @@ export default function ConfigureScreen() {
                                 {isScraping ? <ActivityIndicator color={C.cyan} /> : <Zap size={20} color={C.cyan} />}
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={st.scraperTitle}>Run Scraper Now</Text>
+                                <Text style={st.scraperTitle}>Launch Search</Text>
                                 <Text style={st.scraperSub}>
                                     {activeRulesCount > 0
-                                        ? `${activeRulesCount} active rule${activeRulesCount === 1 ? '' : 's'} will be searched`
+                                        ? `Searching with ${activeRulesCount} active rule${activeRulesCount === 1 ? '' : 's'}`
                                         : 'No active rules — add one below first'}
                                 </Text>
                             </View>
@@ -433,11 +430,10 @@ export default function ConfigureScreen() {
                                 style={[st.scrapeBtn, (isScraping || activeRulesCount === 0) && { opacity: 0.4 }]}
                                 activeOpacity={0.85}
                             >
-                                {isScraping ? <RefreshCw size={13} color="#000" /> : <Text style={st.scrapeBtnText}>RUN</Text>}
+                                {isScraping ? <RefreshCw size={13} color="#000" /> : <Text style={st.scrapeBtnText}>SEARCH</Text>}
                             </TouchableOpacity>
                         </View>
 
-                        {/* Live per-rule result — surfaces exactly what happened, not a black box */}
                         {summary.length > 0 && (
                             <View style={{ marginTop: 16, gap: 8 }}>
                                 <View style={{ height: 1, backgroundColor: C.border, marginBottom: 4 }} />
@@ -481,7 +477,7 @@ export default function ConfigureScreen() {
                             </View>
                             <Text style={st.emptyTitle}>No Rules Yet</Text>
                             <Text style={st.emptyBody}>
-                                Rules power the scraper — each one defines keywords, location, and work types for automated job hunting. Add your first one to get started.
+                                Rules power the search — each one defines keywords, location, and work types for automated job hunting, worldwide. Add your first one to get started.
                             </Text>
                             <TouchableOpacity onPress={openCreate} style={st.emptyAddBtn} activeOpacity={0.85}>
                                 <Plus size={14} color={C.cyan} />
@@ -575,7 +571,7 @@ const st = StyleSheet.create({
     emptyAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 22, paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: `${C.cyan}40`, backgroundColor: `${C.cyan}0D` },
     emptyAddText: { color: C.cyan, fontSize: 13, fontWeight: '700' },
 
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(4,6,8,0.75)', justifyContent: 'flex-end' },
     modalCard: { backgroundColor: C.core, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, borderColor: C.borderCyan, maxHeight: '92%', overflow: 'hidden' },
     modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
     modalTitle: { fontSize: 16, fontWeight: '800', color: C.text },

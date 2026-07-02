@@ -306,7 +306,7 @@ export default function ProfileScreen() {
                 {/* ── Admin shortcut ── */}
                 {role === 'admin' && (
                     <Animated.View entering={FadeInDown.delay(80).springify()}>
-                        <TouchableOpacity onPress={() => router.push('/(admin)/' as any)} activeOpacity={0.85}>
+                        <TouchableOpacity onPress={() => router.push('/admin' as any)} activeOpacity={0.85}>
                             <GlassCard tint="pink" padding="sm" className="mb-4 flex-row items-center gap-3.5">
                                 <View className="items-center justify-center border h-11 w-11 rounded-xl" style={{ backgroundColor: `${C.pink}14`, borderColor: `${C.pink}30` }}>
                                     <Shield size={18} color={C.pink} />

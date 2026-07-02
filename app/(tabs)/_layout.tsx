@@ -2,11 +2,37 @@
  * app/(tabs)/_layout.tsx
  * OpusHunter — Unified Tabs Layout
  * 2026-07-02 — Sidebar de-duplicated, palette drift fixed
+ * 2026-07-02 — FIX (stacking/cluttering bug): desktop no longer renders a
+ *   `<Tabs>` navigator at all.
+ *
+ *   ROOT CAUSE: on desktop we already hide the tab bar UI
+ *   (`tabBarStyle: { display: 'none' }`) and drive navigation entirely
+ *   through the custom `Sidebar`. But we were still mounting the screens
+ *   *through* a `<Tabs>` navigator underneath. React Navigation's web tab
+ *   navigator keeps every visited screen mounted and toggles them with an
+ *   inline `display` style per scene so switching tabs is instant — that's
+ *   correct behavior for an actual tab bar. The problem is every scene here
+ *   has `sceneStyle: { backgroundColor: 'transparent' }` (needed so the
+ *   global AmbientBackground shows through) and each screen's own content
+ *   is a set of GlassCard panels that don't fill the viewport height, not
+ *   one opaque full-bleed background. With nothing opaque behind the active
+ *   screen, the previous screen's still-mounted (not unmounted, just
+ *   `display:none`'d in theory) DOM could bleed through wherever heights
+ *   didn't line up — which is exactly the "Configure's search rules
+ *   floating on top of Vault" bug from the screenshot.
+ *
+ *   FIX: swap `<Tabs>` for `<Slot />` on desktop. `Slot` renders ONLY the
+ *   currently matched child route — nothing else is ever mounted, so there
+ *   is nothing left to bleed through. The Sidebar already provides all the
+ *   navigation UI and active-state highlighting a tab bar would; `Tabs` was
+ *   only ever wired in for the underlying route registration, which `Slot`
+ *   also provides. Mobile is untouched — it genuinely needs `<Tabs>` for
+ *   the physical bottom tab bar and its gestures/animations.
  */
 
 import React from 'react';
 import { View, StyleSheet, Platform, useWindowDimensions, Image } from 'react-native';
-import { Tabs, usePathname } from 'expo-router';
+import { Tabs, Slot, usePathname } from 'expo-router';
 import { LayoutDashboard, Database, Briefcase, LucideIcon } from 'lucide-react-native';
 import { C, LAYOUT } from '../../lib/theme';
 import { Sidebar } from '../../components/layout/AdaptiveLayout';
@@ -58,19 +84,10 @@ export default function TabsLayout() {
       <View className="flex-1" style={sharedStyle}>
         <Sidebar active={pathname} />
         <View className="flex-1 relative" style={{ paddingLeft: LAYOUT.sidebarOffset }}>
-          <Tabs
-            screenOptions={{
-              headerShown: false,
-              tabBarStyle: { display: 'none' },
-              sceneStyle: { backgroundColor: 'transparent' },
-            }}
-          >
-            <Tabs.Screen name="dashboard" />
-            <Tabs.Screen name="vault" />
-            <Tabs.Screen name="configure" />
-            <Tabs.Screen name="profile" />
-            <Tabs.Screen name="(settings)" />
-          </Tabs>
+          {/* Slot renders exactly one screen — the one matching the current
+              route — and unmounts everything else. This is what makes
+              switching Sidebar items swap content instead of stacking it. */}
+          <Slot />
         </View>
       </View>
     );
@@ -121,7 +138,7 @@ export default function TabsLayout() {
             }}
           />
         ))}
-        <Tabs.Screen name="(settings)" options={{ href: null }} />
+        <Tabs.Screen name="settings" options={{ href: null }} />
         <Tabs.Screen name="profile" options={{ href: null }} />
       </Tabs>
     </View>

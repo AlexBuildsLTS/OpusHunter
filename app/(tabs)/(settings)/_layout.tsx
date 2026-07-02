@@ -1,5 +1,5 @@
 /**
- * app/(settings)/_layout.tsx
+ * app/(tabs)/settings/_layout.tsx
  * OpusHunter — Settings Stack Layout
  * 2026-06-29
  */

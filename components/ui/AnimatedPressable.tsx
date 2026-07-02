@@ -11,15 +11,22 @@ interface AnimatedPressableProps extends Omit<PressableProps, 'style'> {
     style?: StyleProp<ViewStyle>;
     scaleDownTo?: number;
     activeOpacity?: number;
+    springConfig?: any;
 }
 
 const AnimatedPress = Animated.createAnimatedComponent(Pressable);
+
+const DEFAULT_SPRING_CONFIG = {
+    mass: 0.5,
+    overshootClamping: true,
+};
 
 export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
     children,
     style,
     scaleDownTo = 0.95,
     activeOpacity = 0.8,
+    springConfig = DEFAULT_SPRING_CONFIG,
     onPressIn,
     onPressOut,
     ...props
@@ -34,26 +41,16 @@ export const AnimatedPressable: React.FC<AnimatedPressableProps> = ({
 
     const handlePressIn = (e: any) => {
         'worklet';
-        scale.value = withSpring(scaleDownTo, {
-            mass: 0.5,
-            damping: 12,
-            stiffness: 150,
-            overshootClamping: true,
-        });
+        scale.value = withSpring(scaleDownTo, { ...DEFAULT_SPRING_CONFIG, ...springConfig });
         opacity.value = withTiming(activeOpacity, { duration: 100 });
-        if (onPressIn) onPressIn(e);
+        onPressIn?.(e);
     };
 
     const handlePressOut = (e: any) => {
         'worklet';
-        scale.value = withSpring(1, {
-            mass: 0.5,
-            damping: 12,
-            stiffness: 150,
-            overshootClamping: true,
-        });
+        scale.value = withSpring(1, { ...DEFAULT_SPRING_CONFIG, ...springConfig });
         opacity.value = withTiming(1, { duration: 150 });
-        if (onPressOut) onPressOut(e);
+        onPressOut?.(e);
     };
 
     return (

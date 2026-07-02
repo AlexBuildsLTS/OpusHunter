@@ -2,21 +2,8 @@
  * app/_layout.tsx
  * OpusHunter — Root Layout
  * 2026-07-02 — Mounted AmbientBackground (was previously nothing behind
- * the Stack — that's why there was no motion at all).
+ * the Stack
  * 2026-07-02 — FIX (routing collision): `(admin)` renamed to `admin`.
- *   Route groups are invisible in the URL, so `app/(admin)/index.tsx` and
- *   `app/(tabs)/(settings)/index.tsx` were BOTH resolving to the literal
- *   URL "/" — the same URL as this file's sibling `app/index.tsx`. Three
- *   different screens fighting over "/" is why Settings (and Admin, on
- *   direct/deep navigation) 404'd. `admin` is now a real path segment
- *   (see app/admin/*), and `(settings)` was renamed to `settings` under
- *   app/(tabs)/ for the same reason. Do not reintroduce a bare `(group)`
- *   whose entire path resolves to "/" or to another existing route.
- * 2026-07-02 — ADDED: on SIGNED_IN, hands provider_token/provider_refresh_token
- *   off to link-gmail-account (web OAuth redirect path only — the native
- *   path links directly in login.tsx after setSession, since Supabase's
- *   web redirect flow re-enters here without ever calling handleGoogle's
- *   native branch).
  */
 
 import '../global.css';

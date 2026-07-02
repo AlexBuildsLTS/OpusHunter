@@ -1,9 +1,14 @@
 /**
  * app/(tabs)/vault.tsx
  * OpusHunter — Secure Document Vault
- * P3-06: Full rebuild using useCVVault hook
+ * 2026-07-02 — Fixed: no desktop max-width/center wrapper (`scrollDesktop`
+ * pattern dashboard.tsx has) — that's why this rendered flush top-left
+ * instead of centered on wide screens. Also removed the local `AmbientBg()`
+ * (hardcoded rgba, pre-repalette) — the app-wide GradientBackground mounted
+ * in app/_layout.tsx already covers every screen; this was a second,
+ * redundant, out-of-sync layer.
  *
- * Features:
+ * Features (unchanged):
  *   - CV upload card (shows current CV path if already uploaded)
  *   - Replace/update CV
  *   - Certifications section: list from DB, upload more, delete
@@ -14,7 +19,7 @@
 
 import React, { useCallback } from 'react';
 import {
-  View, Text, Image, Pressable, Platform, ScrollView,
+  View, Text, Pressable, Platform, ScrollView,
   StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,10 +30,8 @@ import {
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { usePipelineStore } from '../../store/usePipelineStore';
-
 import { useCVVault } from '../../hooks/useCVVault';
 import { C } from '../../lib/theme';
-
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -50,18 +53,6 @@ function fileTypeLabel(mimeType: string): string {
   if (mimeType.includes('pdf')) return 'PDF';
   if (mimeType.includes('wordprocessingml') || mimeType.includes('msword')) return 'DOCX';
   return mimeType.split('/')[1]?.toUpperCase() ?? 'FILE';
-}
-
-function AmbientBg() {
-  if (Platform.OS !== 'web') return null;
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* @ts-ignore */}
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 50% 45% at 100% 100%, rgba(0,180,210,0.07) 0%, transparent 65%)' }} />
-      {/* @ts-ignore */}
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 40% 35% at 0% 0%, rgba(90,40,160,0.06) 0%, transparent 60%)' }} />
-    </View>
-  );
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -138,14 +129,14 @@ function CertificationRow({
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function VaultScreen() {
-  const { currentCV, hasCVUploaded } = usePipelineStore();
+  const { currentCV } = usePipelineStore();
   const queryClient = useQueryClient();
   const { uploadState, uploadCV, uploadCertification, deleteCertification, reset } = useCVVault();
 
   const isWorking = uploadState.status === 'picking' || uploadState.status === 'uploading';
   const showBanner = uploadState.status === 'success' || uploadState.status === 'error';
+  const isDesktop = Platform.OS === 'web';
 
-  // ── Load certifications ───────────────────────────────────────────────────
   const { data: certs = [], isLoading: certsLoading, refetch: refetchCerts } = useQuery({
     queryKey: ['certifications'],
     queryFn: async () => {
@@ -161,7 +152,6 @@ export default function VaultScreen() {
     },
   });
 
-  // Load profile for CV path
   const { data: profile, refetch: refetchProfile } = useQuery({
     queryKey: ['profile_cv'],
     queryFn: async () => {
@@ -197,11 +187,10 @@ export default function VaultScreen() {
   const cvFileName = cvPath ? cvPath.split('/').pop() ?? 'CV Document' : null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
-      <AmbientBg />
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, isDesktop && styles.scrollDesktop]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -212,7 +201,6 @@ export default function VaultScreen() {
           />
         }
       >
-        {/* ── Status banner ── */}
         {showBanner && (
           <StatusBanner
             message={uploadState.message}
@@ -220,7 +208,6 @@ export default function VaultScreen() {
           />
         )}
 
-        {/* ── CV Section ── */}
         <Animated.View entering={FadeInDown.delay(120).springify()}>
           <SectionHeader
             title="Base CV"
@@ -228,7 +215,6 @@ export default function VaultScreen() {
           />
 
           {cvFileName ? (
-            /* ── CV uploaded — show card ── */
             <View style={styles.cvCard}>
               <View style={styles.cvIconBox}>
                 <FileText size={26} color={C.cyan} />
@@ -256,7 +242,6 @@ export default function VaultScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            /* ── No CV yet — upload zone ── */
             <Pressable
               onPress={handleUploadCV}
               disabled={isWorking}
@@ -287,7 +272,6 @@ export default function VaultScreen() {
           )}
         </Animated.View>
 
-        {/* ── Certifications Section ── */}
         <Animated.View entering={FadeInDown.delay(200).springify()} style={{ marginTop: 32 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <View>
@@ -319,7 +303,7 @@ export default function VaultScreen() {
             </View>
           ) : (
             <View style={{ gap: 10 }}>
-              {certs.map((cert: any, i: number) => (
+              {certs.map((cert: any) => (
                 <CertificationRow
                   key={cert.id}
                   cert={cert}
@@ -331,7 +315,6 @@ export default function VaultScreen() {
           )}
         </Animated.View>
 
-        {/* ── Vault info footer ── */}
         <Animated.View entering={FadeIn.delay(400)} style={styles.vaultFooter}>
           <Shield size={12} color={`${C.green}80`} />
           <Text style={styles.vaultFooterText}>
@@ -352,21 +335,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 120,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    marginBottom: 28,
-  },
-  logoImg: { width: 36, height: 36, borderRadius: 9 },
-  pageTitle: { fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.3 },
-  pageSub: { fontSize: 12, color: C.sub, marginTop: 2 },
-  shieldBadge: {
-    width: 36, height: 36, borderRadius: 10,
-    borderWidth: 1, borderColor: `${C.green}30`,
-    backgroundColor: `${C.green}0A`,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  scrollDesktop: { maxWidth: 1100, width: '100%', alignSelf: 'center' as any },
 
   banner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -377,7 +346,6 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '800', color: C.text },
   sectionSub: { fontSize: 12, color: C.sub, marginTop: 3 },
 
-  // ── CV uploaded card ──
   cvCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     padding: 16, borderRadius: 18, borderWidth: 1,
@@ -398,7 +366,6 @@ const styles = StyleSheet.create({
   },
   replaceBtnText: { fontSize: 12, color: C.purple, fontWeight: '700' },
 
-  // ── Upload zone ──
   uploadZone: {
     borderRadius: 22, borderWidth: 1.5,
     borderStyle: 'dashed', borderColor: `${C.purple}45`,
@@ -420,7 +387,6 @@ const styles = StyleSheet.create({
   uploadBtnText: { color: C.cyan, fontWeight: '700', fontSize: 12, letterSpacing: 1.5, textTransform: 'uppercase' },
   uploadingText: { color: C.cyan, fontWeight: '600', fontSize: 13 },
 
-  // ── Add certification ──
   addCertBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
@@ -428,7 +394,6 @@ const styles = StyleSheet.create({
   },
   addCertText: { color: C.cyan, fontSize: 13, fontWeight: '700' },
 
-  // ── Certification row ──
   certRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     padding: 14, borderRadius: 14, borderWidth: 1,
@@ -449,7 +414,6 @@ const styles = StyleSheet.create({
   certTypeText: { fontSize: 9, fontWeight: '900', color: C.purple, letterSpacing: 1, textTransform: 'uppercase' },
   certMetaText: { fontSize: 11, color: C.sub },
 
-  // ── Empty certs ──
   emptyCerts: {
     alignItems: 'center', paddingVertical: 36,
     gap: 8,
@@ -457,7 +421,6 @@ const styles = StyleSheet.create({
   emptyCertsText: { fontSize: 14, fontWeight: '700', color: C.sub },
   emptyCertsSub: { fontSize: 12, color: `${C.sub}80`, textAlign: 'center', paddingHorizontal: 32, lineHeight: 18 },
 
-  // ── Footer ──
   vaultFooter: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 6,
     marginTop: 36, paddingTop: 20,

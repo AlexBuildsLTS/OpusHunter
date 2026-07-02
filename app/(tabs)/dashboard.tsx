@@ -1,20 +1,10 @@
 /**
  * app/(tabs)/dashboard.tsx
  * OpusHunter — Main Job Hunt Dashboard
- * 2026-07-02 — Ported onto GlassCard/lib/theme.ts, two real bugs fixed:
- *
- * 1. Root wrapper was `className="flex-1 bg-slate-950"` — a hardcoded
- *    default Tailwind color completely outside the design system, not
- *    `C.bg`. That's why this screen never matched the rest of the app no
- *    matter what theme.ts/tailwind.config.js said — it was never reading them.
- * 2. The "web ambient background" was a raw `<div>` with `rgba(0,212,255,…)`
- *    hardcoded — the pre-repalette cyan, and a second, duplicate ambient
- *    layer now that GradientBackground is mounted globally in app/_layout.tsx.
- *    Removed; the app-wide one already covers this screen.
- *
- * Stat cards moved from flat `StyleSheet` color washes to `GlassCard` frost
- * tint with a small colored icon accent — "Applied" in particular no longer
- * renders as a solid green block.
+ * 2026-07-02 — JobDetailModal wired in (was dead code — 0 imports anywhere
+ * in the repo, confirmed by import-graph scan). Tapping a job card now
+ * opens the real Gemini cover-letter preview/edit flow instead of routing
+ * to /(tabs)/vault, which had nothing to do with the job that was tapped.
  */
 
 import React, { useState, useCallback, useRef } from 'react';
@@ -31,7 +21,8 @@ import {
   ChevronRight, Lock, Target,
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
-import { SwipeableJobCard } from '../../components/pipeline/SwipeableJobCard';
+import { SwipeableJobCard, type JobData } from '../../components/pipeline/SwipeableJobCard';
+import { JobDetailModal } from '../../components/pipeline/JobDetailModal';
 import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import type { Job } from '../../types/app.types';
 import { C } from '../../lib/theme';
@@ -60,7 +51,6 @@ const mS = StyleSheet.create({
 });
 
 // ── BATCH APPLY QUEUE ──────────────────────────────────────────────────────────
-// Processes CHUNK_SIZE applications at a time to prevent OOM and Vercel timeout
 
 const CHUNK_SIZE = 5;
 
@@ -109,6 +99,9 @@ export default function DashboardScreen() {
   const [queue, setQueue] = useState<QueueState>(INITIAL_QUEUE);
   const queueRef = useRef(queue);
   queueRef.current = queue;
+
+  // ── Job detail / cover-letter modal ─────────────────────────────────────────
+  const [detailJob, setDetailJob] = useState<JobData | null>(null);
 
   const { data: profile } = useQuery({
     queryKey: ['my_profile'],
@@ -184,6 +177,31 @@ export default function DashboardScreen() {
     },
   });
 
+  // Fired by JobDetailModal's "Confirm & Apply" — persists the edited/reviewed
+  // cover letter alongside the same approve path swiping right already used.
+  const confirmApplyWithLetter = useCallback(async (job: JobData, editedCoverLetter: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await supabase.from('job_vault').update({ status: 'approved' }).eq('id', job.id).eq('user_id', user.id);
+    const { data: inserted, error } = await supabase
+      .from('job_applications')
+      .insert({ user_id: user.id, job_id: job.id, status: 'pending_auto_apply' })
+      .select('id')
+      .single();
+
+    if (!error && inserted?.id && editedCoverLetter) {
+      await supabase.from('cover_letters').insert({
+        user_id: user.id,
+        job_application_id: inserted.id,
+        content: editedCoverLetter,
+      });
+    }
+
+    qc.invalidateQueries({ queryKey: ['pending_jobs'] });
+    qc.invalidateQueries({ queryKey: ['pipeline_metrics'] });
+  }, [qc]);
+
   const startBatchApply = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -253,7 +271,6 @@ export default function DashboardScreen() {
         contentContainerStyle={[s.scroll, isDesktop && s.scrollDesktop]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ── */}
         <Animated.View entering={FadeInDown.delay(40).springify()} style={s.header}>
           <View>
             <Text style={s.greeting}>
@@ -282,12 +299,10 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* ── Premium gate ── */}
         {!isPremium && pendingJobs.length >= 18 && (
-          <PremiumGate onUpgrade={() => router.push('/(tabs)/(settings)' as any)} />
+          <PremiumGate onUpgrade={() => router.push('/settings' as any)} />
         )}
 
-        {/* ── Metrics row ── */}
         <Animated.View entering={FadeInDown.delay(80).springify()} style={s.metricsRow}>
           {metricsLoading ? (
             [0, 1, 2, 3].map((i) => (
@@ -303,7 +318,6 @@ export default function DashboardScreen() {
           )}
         </Animated.View>
 
-        {/* ── Batch Apply Engine ── */}
         {(queue.running || queue.done > 0 || queue.total > 0) && (
           <Animated.View entering={FadeInDown.springify()} style={{ marginBottom: 20 }}>
             <GlassCard tint="cyan" padding="md">
@@ -358,7 +372,6 @@ export default function DashboardScreen() {
           </Animated.View>
         )}
 
-        {/* ── Start Apply Engine CTA (when no queue active) ── */}
         {queue.total === 0 && (metrics?.pending ?? 0) > 0 && (
           <Animated.View entering={FadeInDown.delay(160).springify()}>
             <TouchableOpacity onPress={startBatchApply} style={s.startEngineBtn} activeOpacity={0.85}>
@@ -373,7 +386,6 @@ export default function DashboardScreen() {
           </Animated.View>
         )}
 
-        {/* ── Swipe Deck ── */}
         <Animated.View entering={FadeInDown.delay(200).springify()} style={s.deckSection}>
           <View style={s.sectionHeader}>
             <Text style={s.sectionTitle}>Job Pipeline</Text>
@@ -446,7 +458,7 @@ export default function DashboardScreen() {
                         job={job}
                         onSwipeRight={() => approveMutation.mutate(job.id)}
                         onSwipeLeft={() => rejectMutation.mutate(job.id)}
-                        onPress={() => router.push(`/(tabs)/vault` as any)}
+                        onPress={() => setDetailJob(job as unknown as JobData)}
                       />
                     ) : (
                       <View style={[s.bgCard, { backgroundColor: `rgba(8,16,24,${0.6 - (arr.length - 1 - i) * 0.15})` }]} />
@@ -464,7 +476,6 @@ export default function DashboardScreen() {
           )}
         </Animated.View>
 
-        {/* ── Quick Nav Cards ── */}
         <Animated.View entering={FadeInDown.delay(280).springify()} style={{ gap: 10 }}>
           {[
             { label: 'Search Rules', sub: `${metrics?.active_rules ?? 0} active`, route: '/(tabs)/configure', color: C.purple, icon: Briefcase },
@@ -487,6 +498,15 @@ export default function DashboardScreen() {
 
         <View style={{ height: 60 }} />
       </ScrollView>
+
+      {/* ── Job Detail + Cover Letter Preview — real, wired ── */}
+      <JobDetailModal
+        visible={!!detailJob}
+        job={detailJob}
+        onClose={() => setDetailJob(null)}
+        onConfirmApply={(job, letter) => confirmApplyWithLetter(job, letter)}
+        onConfirmPass={(job) => rejectMutation.mutate(job.id)}
+      />
     </View>
   );
 }

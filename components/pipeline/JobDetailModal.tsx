@@ -1,14 +1,16 @@
 /**
  * components/pipeline/JobDetailModal.tsx
  * OpusHunter — Job Detail & Cover Letter Preview Modal
+ * 2026-07-02 — Retheme only: swapped the dead local `C` constant
+ * (#00D4FF/#7B5EA7, disconnected from the rest of the app) for the real
+ * lib/theme.ts tokens. All logic, all behavior, unchanged — this is the
+ * actual pre-apply Gemini letter preview, now wired to the real palette.
  *
- * Shown when user taps the card (not swipes).
- * Lets them:
+ * Shown when the user taps a job card (not swipes):
  *   - Read the full job description
  *   - See / edit the AI-generated cover letter before applying
- *   - Confirm apply → triggers swipe right action
- *   - Pass → triggers swipe left
- *
+ *   - Confirm apply → triggers swipe-right action
+ *   - Pass → triggers swipe-left action
  * Works on web, iOS, Android.
  */
 
@@ -18,29 +20,15 @@ import {
     TextInput, ActivityIndicator, Platform, StyleSheet,
     KeyboardAvoidingView, Pressable,
 } from 'react-native';
-import Animated, { FadeIn, FadeInDown, FadeOutDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import {
     X, Briefcase, MapPin, DollarSign, Zap,
     FileText, Edit3, CheckCircle2, AlertCircle,
     ExternalLink, ThumbsDown, Send,
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
+import { C } from '../../lib/theme';
 import type { JobData } from './SwipeableJobCard';
-
-// ── Theme ─────────────────────────────────────────────────────────────────────
-
-const C = {
-    cyan: '#00D4FF',
-    purple: '#7B5EA7',
-    pink: '#E8436A',
-    green: '#00C67D',
-    amber: '#F59E0B',
-    bg: '#050C12',
-    card: '#0B1822',
-    border: 'rgba(120,200,240,0.09)',
-    text: '#D8E4EC',
-    sub: 'rgba(216,228,236,0.45)',
-};
 
 // ── Score colour ──────────────────────────────────────────────────────────────
 
@@ -56,8 +44,6 @@ interface JobDetailModalProps {
     onConfirmApply: (job: JobData, editedCoverLetter: string) => void;
     onConfirmPass: (job: JobData) => void;
 }
-
-// ── Tab type ──────────────────────────────────────────────────────────────────
 
 type ModalTab = 'details' | 'cover_letter';
 
@@ -77,7 +63,6 @@ export const JobDetailModal = memo(({
     const [genError, setGenError] = useState<string | null>(null);
     const [isApplying, setIsApplying] = useState(false);
 
-    // Reset state when modal opens with a new job
     useEffect(() => {
         if (visible && job) {
             setTab('details');
@@ -88,11 +73,11 @@ export const JobDetailModal = memo(({
         }
     }, [visible, job?.id]);
 
-    // Auto-generate cover letter when tab switches to cover_letter
     useEffect(() => {
         if (tab === 'cover_letter' && job && !coverLetter && !isGenerating) {
             generateCoverLetter();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tab, job?.id]);
 
     const generateCoverLetter = useCallback(async () => {
@@ -110,7 +95,6 @@ export const JobDetailModal = memo(({
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Failed to generate cover letter.';
             setGenError(msg);
-            // Set a placeholder so user can still edit
             setCoverLetter(
                 `Dear Hiring Team at ${job.company},\n\nI am excited to apply for the ${job.title} position.\n\n[Edit this cover letter to personalise it]\n\nBest regards`
             );
@@ -122,7 +106,6 @@ export const JobDetailModal = memo(({
     const handleApply = useCallback(async () => {
         if (!job) return;
         setIsApplying(true);
-        // Small delay so user sees the confirming state
         await new Promise((r) => setTimeout(r, 300));
         onConfirmApply(job, coverLetter);
         onClose();
@@ -167,10 +150,8 @@ export const JobDetailModal = memo(({
                     exiting={FadeOutDown.duration(200)}
                     style={styles.sheet}
                 >
-                    {/* ── Handle bar ── */}
                     <View style={styles.handle} />
 
-                    {/* ── Header ── */}
                     <View style={styles.header}>
                         <View style={{ flex: 1, marginRight: 12 }}>
                             <Text style={styles.jobTitle} numberOfLines={2}>{job.title}</Text>
@@ -189,7 +170,6 @@ export const JobDetailModal = memo(({
                         </TouchableOpacity>
                     </View>
 
-                    {/* ── Meta row ── */}
                     <View style={styles.metaRow}>
                         {job.location ? (
                             <View style={styles.metaItem}>
@@ -211,7 +191,6 @@ export const JobDetailModal = memo(({
                         ) : null}
                     </View>
 
-                    {/* ── Tabs ── */}
                     <View style={styles.tabs}>
                         {(['details', 'cover_letter'] as ModalTab[]).map((t) => (
                             <TouchableOpacity
@@ -230,7 +209,6 @@ export const JobDetailModal = memo(({
                         ))}
                     </View>
 
-                    {/* ── Content ── */}
                     <View style={{ flex: 1 }}>
                         {tab === 'details' ? (
                             <ScrollView
@@ -238,7 +216,6 @@ export const JobDetailModal = memo(({
                                 contentContainerStyle={styles.scrollContent}
                                 showsVerticalScrollIndicator={false}
                             >
-                                {/* Tech stack */}
                                 {stack.length > 0 && (
                                     <View style={{ marginBottom: 18 }}>
                                         <Text style={styles.sectionLabel}>TECH STACK</Text>
@@ -252,7 +229,6 @@ export const JobDetailModal = memo(({
                                     </View>
                                 )}
 
-                                {/* Description */}
                                 <Text style={styles.sectionLabel}>DESCRIPTION</Text>
                                 <Text style={styles.description}>
                                     {job.description ?? 'No description available.'}
@@ -260,7 +236,6 @@ export const JobDetailModal = memo(({
                             </ScrollView>
                         ) : (
                             <View style={{ flex: 1 }}>
-                                {/* Generation state */}
                                 {isGenerating ? (
                                     <View style={styles.generatingState}>
                                         <ActivityIndicator color={C.purple} size="large" />
@@ -271,7 +246,6 @@ export const JobDetailModal = memo(({
                                     </View>
                                 ) : (
                                     <>
-                                        {/* Toolbar */}
                                         <View style={styles.clToolbar}>
                                             <View style={styles.clStatusRow}>
                                                 {genError
@@ -300,7 +274,6 @@ export const JobDetailModal = memo(({
                                             </View>
                                         </View>
 
-                                        {/* Letter body */}
                                         <ScrollView
                                             style={{ flex: 1 }}
                                             contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
@@ -329,7 +302,6 @@ export const JobDetailModal = memo(({
                         )}
                     </View>
 
-                    {/* ── Action buttons ── */}
                     <View style={styles.actions}>
                         <TouchableOpacity
                             onPress={handlePass}
@@ -379,19 +351,19 @@ JobDetailModal.displayName = 'JobDetailModal';
 const styles = StyleSheet.create({
     backdrop: {
         ...StyleSheet.absoluteFill,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        backgroundColor: 'rgba(4,6,8,0.72)',
     },
     container: {
         flex: 1,
         justifyContent: 'flex-end',
     },
     sheet: {
-        backgroundColor: C.bg,
+        backgroundColor: C.core,
         borderTopLeftRadius: 28,
         borderTopRightRadius: 28,
         borderWidth: 1,
         borderBottomWidth: 0,
-        borderColor: 'rgba(120,200,240,0.1)',
+        borderColor: C.borderCyan,
         maxHeight: '92%',
         minHeight: '60%',
         overflow: 'hidden',
@@ -405,7 +377,6 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
 
-    // ── Header ──
     header: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -422,11 +393,8 @@ const styles = StyleSheet.create({
     },
     scoreNum: { fontSize: 15, fontWeight: '900', lineHeight: 17 },
     scoreSub: { fontSize: 7, fontWeight: '700', letterSpacing: 0.8, opacity: 0.8 },
-    closeBtn: {
-        padding: 4, flexShrink: 0,
-    },
+    closeBtn: { padding: 4, flexShrink: 0 },
 
-    // ── Meta ──
     metaRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -437,13 +405,12 @@ const styles = StyleSheet.create({
     metaItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     metaText: { fontSize: 12, color: C.sub, fontWeight: '500' },
 
-    // ── Tabs ──
     tabs: {
         flexDirection: 'row',
         borderTopWidth: 1,
-        borderTopColor: 'rgba(120,200,240,0.07)',
+        borderTopColor: C.border,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(120,200,240,0.07)',
+        borderBottomColor: C.border,
     },
     tab: {
         flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -454,7 +421,6 @@ const styles = StyleSheet.create({
     tabText: { fontSize: 13, fontWeight: '600', color: C.sub },
     tabTextActive: { color: C.cyan, fontWeight: '700' },
 
-    // ── Detail content ──
     scrollContent: { padding: 20, paddingBottom: 8 },
     sectionLabel: {
         fontSize: 9, fontWeight: '900', color: C.cyan,
@@ -468,21 +434,20 @@ const styles = StyleSheet.create({
     chipText: { fontSize: 10, color: C.purple, fontWeight: '700', letterSpacing: 0.5 },
     description: { fontSize: 14, lineHeight: 22, color: C.sub },
 
-    // ── Cover letter ──
     generatingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14, padding: 32 },
     generatingText: { fontSize: 14, fontWeight: '700', color: C.text },
     generatingSub: { fontSize: 12, color: C.sub },
     clToolbar: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
         paddingHorizontal: 16, paddingVertical: 10,
-        borderBottomWidth: 1, borderBottomColor: 'rgba(120,200,240,0.07)',
+        borderBottomWidth: 1, borderBottomColor: C.border,
     },
     clStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     clStatus: { fontSize: 11, fontWeight: '600' },
     clToolBtn: {
         flexDirection: 'row', alignItems: 'center', gap: 5,
         paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
-        borderWidth: 1, borderColor: 'rgba(120,200,240,0.12)',
+        borderWidth: 1, borderColor: C.border,
     },
     clToolBtnText: { fontSize: 11, fontWeight: '700' },
     clBody: { fontSize: 14, lineHeight: 22, color: C.text },
@@ -490,15 +455,14 @@ const styles = StyleSheet.create({
         fontSize: 14, lineHeight: 22, color: C.text,
         minHeight: 300,
         backgroundColor: 'rgba(255,255,255,0.03)',
-        borderWidth: 1, borderColor: `${C.cyan}25`,
+        borderWidth: 1, borderColor: C.borderCyan,
         borderRadius: 12, padding: 14,
     },
 
-    // ── Actions ──
     actions: {
         flexDirection: 'row', gap: 12,
         padding: 16,
-        borderTopWidth: 1, borderTopColor: 'rgba(120,200,240,0.07)',
+        borderTopWidth: 1, borderTopColor: C.border,
         paddingBottom: Platform.OS === 'ios' ? 32 : 16,
     },
     passBtn: {
