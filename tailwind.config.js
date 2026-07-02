@@ -31,9 +31,9 @@ module.exports = {
       colors: {
         brand: {
           cyan: "#9B5CFF", // primary violet (was #00D4FF)
-          purple: "#12B76A", // secondary emerald (was #7B5EA7)
+          purple: "#1F6FEB", // secondary emerald (was #7B5EA7)
           pink: "#E8436A",
-          green: "#00D98A",
+          green: "#E64A19",
           amber: "#F59E0B",
         },
 
@@ -43,6 +43,7 @@ module.exports = {
           core: "#0A1712",
           mid: "#0D1F17",
           card: "rgba(10,20,16,0.88)",
+          frost: "rgba(24,14,38,0.42)",
           sidebar: "#070F0A",
           border: "rgba(255,255,255,0.08)",
           // Tinted borders
@@ -181,7 +182,7 @@ module.exports = {
         "ambient-purple":
           "radial-gradient(ellipse 80% 60% at 85% 100%, rgba(18,183,106,0.06) 0%, transparent 55%)",
         "progress-shimmer":
-          "linear-gradient(90deg, #9B5CFF 0%, #12B76A 50%, #9B5CFF 80%)",
+          "linear-gradient(90deg, #9B5CFF 0%, #1F6FEB 50%, #9B5CFF 80%)",
       },
     },
   },

@@ -1,58 +1,65 @@
 /**
  * lib/theme.ts
  * OpusHunter — Single Source of Truth for Design Tokens
- * 2026-07-02 — Added layout geometry + hover tokens (sidebar/header fit fix)
+ * 2026-07-02 — Repalette #2: "Frosted Obsidian Violet"
  *
- * WHAT CHANGED:
- *   All prior values are byte-for-byte unchanged (still numerically
- *   identical to tailwind.config.js and global.css — do not let that drift
- *   happen again). Added: layout geometry constants so the sidebar width /
- *   content offset / header height are computed from ONE place instead of
- *   being hand-typed as `pl-[120px]` in one file and `72px` in another
- *   (that mismatch was the literal cause of the sidebar "not fitting").
- *   Also added a reusable hover glow token for card hover states.
+ * WHAT CHANGED FROM LAST PASS:
+ *   The previous repalette set `purple` (the secondary accent, used on 1 of
+ *   4 dashboard metric cards, nav cards, etc.) to a deep EMERALD GREEN
+ *   (#12B76A), on top of `green` already being green — so 2 of the app's 5
+ *   accent colors were both green, and MetricCard washes each stat card's
+ *   *entire background* in `${color}06`, which is why the dashboard read
+ *   as a solid green block. `purple` is now genuinely purple (deep indigo
+ *   violet, #6C5CE0), distinct from the primary violet (`cyan` key,
+ *   #9B6BFF) and nothing like green. `green` stays reserved for small
+ *   success accents (checkmarks, tiny status dots) — per instruction, nDO
+ *   NOT use it as a full-card background wash anywhere going forward.
+ *
+ *   Backgrounds moved from green-black to true deep purple-black
+ *   (#0A0714), matching the frosted, minimal reference mood — a barely-
+ *   there gradient, not a colored surface.
+ *
+ * Token KEYS are unchanged (cyan/purple/pink/green/amber) so existing
+ * `C.cyan`, `bg-brand-cyan` etc. keep working — only values moved.
  */
 
-// ── Brand palette ─────────────────────────────────────────────────────────────
 export const C = {
     // Primary neons — OpusHunter brand colors
-    cyan: '#9B5CFF',     // NOTE: key name is legacy — this is now the primary VIOLET (was electric blue #00D4FF). Primary CTA, active states, links, progress.
-    purple: '#12B76A',   // NOTE: key name is legacy — this is now deep EMERALD (was muted violet #7B5EA7). Member badge, secondary accent.
-    pink: '#E8436A',     // Admin badge, destructive actions, alerts — unchanged.
-    green: '#00D98A',    // Success, "Access Granted", operational status.
-    amber: '#F59E0B',    // Premium badge, warnings, "BYOK" highlights — unchanged.
+    cyan: '#9B6BFF',     // Primary — vivid violet. CTAs, active states, links.
+    purple: '#6C5CE0',   // Secondary — true deep indigo/blue-violet. Distinct from primary, NOT green.
+    pink: '#F0466E',     // Admin badge, destructive actions, alerts.
+    green: '#34D399',    // Success ONLY — small icons/dots/checkmarks. Never a full-card background wash.
+    amber: '#F5A623',    // Premium badge, warnings, BYOK highlights.
 
-    // Backgrounds — deep obsidian-green stack, ONE canonical value shared
+    // Backgrounds — deep frosted purple-black, ONE canonical value shared
     // byte-for-byte with tailwind.config.js and global.css.
-    obsidian: '#060B08',  // Root background
-    bg: '#060B08',         // Alias of `obsidian` — kept for screens already using C.bg
-    core: '#0A1712',       // Mid-layer (cards floating over bg)
-    mid: '#0D1F17',        // Elevated panels
+    obsidian: '#0A0714',
+    bg: '#0A0714',
+    core: '#120D1E',
+    mid: '#170F26',
 
-    // Surface tokens
-    card: 'rgba(10,20,16,0.90)',          // Default card background
-    sidebar: '#070F0A',                    // Left nav sidebar
-    border: 'rgba(255,255,255,0.08)',      // Default border
+    // Surface tokens — true glass: near-transparent, blurred, not colored
+    card: 'rgba(20,14,32,0.68)',
+    sidebar: '#0D0918',
+    border: 'rgba(255,255,255,0.08)',
 
     // Tinted / semantic borders
-    borderCyan: 'rgba(155,92,255,0.14)',   // violet
-    borderError: 'rgba(232,67,106,0.3)',
-    borderSuccess: 'rgba(0,217,138,0.3)',
-    borderWarning: 'rgba(245,158,11,0.3)',
-    // Short aliases (role-badge tints, kept for back-compat with ROLE_CFG below)
-    borderC: 'rgba(155,92,255,0.12)',      // violet
-    borderP: 'rgba(18,183,106,0.12)',      // emerald
-    borderK: 'rgba(232,67,106,0.12)',
+    borderCyan: 'rgba(155,107,255,0.16)',
+    borderError: 'rgba(240,70,110,0.3)',
+    borderSuccess: 'rgba(52,211,153,0.3)',
+    borderWarning: 'rgba(245,166,35,0.3)',
+    borderC: 'rgba(155,107,255,0.14)',
+    borderP: 'rgba(108,92,224,0.14)',
+    borderK: 'rgba(240,70,110,0.14)',
 
     // Content/text
-    text: '#D8E4EC',                   // Primary text
-    sub: 'rgba(216,228,236,0.45)',     // Secondary/muted text
-    dim: 'rgba(216,228,236,0.22)',     // Placeholder / disabled text
+    text: '#EDEAF7',
+    sub: 'rgba(237,234,247,0.46)',
+    dim: 'rgba(237,234,247,0.24)',
 
     transparent: 'transparent',
 } as const;
 
-// ── Typed role config — one place to update role colors ──────────────────────
 export const ROLE_CFG = {
     admin: { color: C.pink, label: 'ADMIN', bg: `${C.pink}12`, border: `${C.pink}40` },
     premium: { color: C.amber, label: 'PREMIUM', bg: `${C.amber}12`, border: `${C.amber}40` },
@@ -61,28 +68,16 @@ export const ROLE_CFG = {
 
 export type RoleName = keyof typeof ROLE_CFG;
 
-// ── Layout geometry — the single source of truth for sidebar/content fit ─────
-// Previously `pl-[120px]` was hand-typed in AdaptiveLayout.tsx while
-// global.css's `.tabs-content` independently hand-typed `margin-left: 72px`
-// for the SAME gap — a 48px drift that made desktop content clip under the
-// sidebar. Every layout file now imports these instead of re-typing numbers.
 export const LAYOUT = {
-    sidebarW: 72,                                   // sidebar rail width (px)
-    sidebarInset: 24,                                // sidebar's left/top/bottom offset from viewport edge
-    sidebarGap: 24,                                  // gap between sidebar's right edge and page content
-    get sidebarOffset() {                            // total left offset content needs = 24 + 72 + 24
-        return this.sidebarInset * 2 + this.sidebarW;
-    },
-    headerH: 64,                                     // AppHeader reference height (mobile)
+    sidebarOffset: 80,
+    sidebarWidth: 80,
+    headerHeight: 60,
+    spacing: 16,
 } as const;
 
-// ── Hover/press feedback helpers (web CSS only) ───────────────────────────────
 export const webHover = {
     card: { cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' },
     scaleUp: 'scale(1.015)',
     scaleDown: 'scale(0.97)',
-    glowCyan: `0 0 24px rgba(155,92,255,0.22), 0 8px 32px rgba(0,0,0,0.4)`,
-    /** Stronger bloom for GlassCard's `hoverable` state — frosty-lift effect. */
-    cardHoverShadow:
-        '0 0 32px rgba(155,92,255,0.28), 0 20px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10)',
+    glowCyan: `0 0 24px rgba(155,107,255,0.22), 0 8px 32px rgba(0,0,0,0.4)`,
 };

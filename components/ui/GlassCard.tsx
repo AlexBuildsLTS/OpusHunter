@@ -10,10 +10,11 @@ import React from 'react';
 import { View, Platform, ViewProps } from 'react-native';
 import { cn } from '../../lib/utils';
 
-export type GlassTint = 'default' | 'cyan' | 'purple' | 'pink' | 'green' | 'amber';
+export type GlassTint = 'default' | 'frost' | 'cyan' | 'purple' | 'pink' | 'green' | 'amber';
 
 const TINT_BORDER: Record<GlassTint, string> = {
   default: 'border-surface-border',
+  frost: 'border-brand-cyan/16',
   cyan: 'border-brand-cyan/20',
   purple: 'border-brand-purple/20',
   pink: 'border-brand-pink/20',
@@ -23,6 +24,7 @@ const TINT_BORDER: Record<GlassTint, string> = {
 
 const TINT_BG: Record<GlassTint, string> = {
   default: 'bg-surface-card',
+  frost: 'bg-surface-frost',
   cyan: 'bg-brand-cyan/5',
   purple: 'bg-brand-purple/5',
   pink: 'bg-brand-pink/5',
@@ -37,12 +39,14 @@ const TINT_GLOW_SHADOW: Record<GlassTint, string> = {
   pink: 'shadow-glow-pink',
   green: 'shadow-glass',
   amber: 'shadow-glass',
+  frost: ''
 };
 
 // Static strings (required for NativeWind's JIT class extraction — dynamic
 // template interpolation would not be picked up at build time).
 const TINT_HOVER: Record<GlassTint, string> = {
   default: 'hover:border-white/20 hover:shadow-glass-lg',
+  frost: 'hover:border-brand-cyan/30 hover:shadow-glow-cyan',
   cyan: 'hover:border-brand-cyan/40 hover:shadow-glow-cyan',
   purple: 'hover:border-brand-purple/40 hover:shadow-glow-purple',
   pink: 'hover:border-brand-pink/40 hover:shadow-glow-pink',

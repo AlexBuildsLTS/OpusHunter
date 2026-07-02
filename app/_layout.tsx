@@ -1,12 +1,22 @@
 /**
  * app/_layout.tsx
  * OpusHunter — Root Layout
- * 2026-06-29
- *
- * - Auth guard: listens to onAuthStateChange, redirects accordingly
- * - Profile/role fetch on mount after auth
- * - Provides QueryClient, safe area, reanimated
- * - Splash screen management
+ * 2026-07-02 — Mounted AmbientBackground (was previously nothing behind
+ * the Stack — that's why there was no motion at all).
+ * 2026-07-02 — FIX (routing collision): `(admin)` renamed to `admin`.
+ *   Route groups are invisible in the URL, so `app/(admin)/index.tsx` and
+ *   `app/(tabs)/(settings)/index.tsx` were BOTH resolving to the literal
+ *   URL "/" — the same URL as this file's sibling `app/index.tsx`. Three
+ *   different screens fighting over "/" is why Settings (and Admin, on
+ *   direct/deep navigation) 404'd. `admin` is now a real path segment
+ *   (see app/admin/*), and `(settings)` was renamed to `settings` under
+ *   app/(tabs)/ for the same reason. Do not reintroduce a bare `(group)`
+ *   whose entire path resolves to "/" or to another existing route.
+ * 2026-07-02 — ADDED: on SIGNED_IN, hands provider_token/provider_refresh_token
+ *   off to link-gmail-account (web OAuth redirect path only — the native
+ *   path links directly in login.tsx after setSession, since Supabase's
+ *   web redirect flow re-enters here without ever calling handleGoogle's
+ *   native branch).
  */
 
 import '../global.css';
@@ -20,6 +30,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import * as SplashScreen from 'expo-splash-screen';
 import { supabase } from '../lib/supabase';
 import { queryClient } from '../lib/queryClient';
+import { AmbientBackground } from '../components/ui/AmbientBackground';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,29 +43,16 @@ export default function RootLayout() {
         if (!mounted.current) return;
 
         const inAuth = segments[0] === '(auth)';
-        const inAdmin = segments[0] === '(admin)';
-        const inTabs = segments[0] === '(tabs)';
 
         if (!session) {
-            // Not logged in → send to auth
             if (!inAuth) router.replace('/(auth)/login');
             return;
         }
 
-        // Has session — fetch profile for role guard
         try {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', session.user.id)
-                .single();
-
-            if (inAuth) {
-                // Was on auth screen, redirect to dashboard
-                router.replace('/(tabs)/dashboard');
-            }
+            await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+            if (inAuth) router.replace('/(tabs)/dashboard');
         } catch {
-            // Profile not ready yet, still let them in — trigger will create it
             if (inAuth) router.replace('/(tabs)/dashboard');
         }
     }, [segments]);
@@ -62,15 +60,33 @@ export default function RootLayout() {
     useEffect(() => {
         mounted.current = true;
 
-        // Initial session check
         supabase.auth.getSession().then(({ data: { session } }) => {
             navigate(session);
             SplashScreen.hideAsync().catch(() => { });
         });
 
-        // Auth state listener
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             navigate(session);
+
+            // Web OAuth redirect completes here (not in login.tsx's native
+            // branch). If Google returned offline-access tokens, hand them
+            // to the edge function so auto-apply can send from this address
+            // later. Native/mobile links inside login.tsx's handleGoogle
+            // instead, since that flow never round-trips through this event
+            // with the tokens attached in the same shape.
+            if (event === 'SIGNED_IN' && Platform.OS === 'web') {
+                const s = session as any;
+                if (s?.provider_refresh_token) {
+                    supabase.functions
+                        .invoke('link-gmail-account', {
+                            body: {
+                                provider_token: s.provider_token ?? null,
+                                provider_refresh_token: s.provider_refresh_token,
+                            },
+                        })
+                        .catch(() => { /* non-fatal — Settings can retry the link */ });
+                }
+            }
         });
 
         return () => {
@@ -83,20 +99,21 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider>
                 <QueryClientProvider client={queryClient}>
-                    <Stack
-                        screenOptions={{
-                            headerShown: false,
-                            contentStyle: {
-                                backgroundColor: 'transparent',
-                            },
-                            animation: Platform.OS === 'web' ? 'none' : 'fade',
-                        }}
-                    >
-                        <Stack.Screen name="(auth)" options={{ animation: 'none' }} />
-                        <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
-                        <Stack.Screen name="(admin)" options={{ animation: 'slide_from_right' }} />
-                        <Stack.Screen name="+not-found" />
-                    </Stack>
+                    <View style={{ flex: 1 }}>
+                        <AmbientBackground />
+                        <Stack
+                            screenOptions={{
+                                headerShown: false,
+                                contentStyle: { backgroundColor: 'transparent' },
+                                animation: Platform.OS === 'web' ? 'none' : 'fade',
+                            }}
+                        >
+                            <Stack.Screen name="(auth)" options={{ animation: 'none' }} />
+                            <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+                            <Stack.Screen name="admin" options={{ animation: 'slide_from_right' }} />
+                            <Stack.Screen name="+not-found" />
+                        </Stack>
+                    </View>
                 </QueryClientProvider>
             </SafeAreaProvider>
         </GestureHandlerRootView>

@@ -311,7 +311,7 @@ export default function SettingsScreen() {
                 <Animated.View entering={FadeInDown.delay(300).duration(600).springify().damping(20)}>
                     <SectionLabel>ABOUT</SectionLabel>
                     <View style={s.card}>
-                        <SettingRow icon={Info} label="OpusHunter" sub="Version 1.0.0 · AI Job Application Engine" color={C.sub as any} />
+                        <SettingRow icon={Info} label="OpusHunter" sub="Version 1.0.0 — AI Job Application Engine" color={C.amber} />
                     </View>
 
                     {/* ── Danger Zone ── */}

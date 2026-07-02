@@ -18,6 +18,7 @@ import { Text, TouchableOpacity, View, StyleSheet, Platform } from 'react-native
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useWindowDimensions } from 'react-native';
 import Animated, { FadeIn, FadeOut, FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import {
   User,
@@ -62,10 +63,12 @@ const MenuItem = React.memo(({ icon: Icon, label, onPress, danger }: MenuItemPro
 MenuItem.displayName = 'MenuItem';
 
 export function ProfileDropdown() {
-  const [open, setOpen] = useState(false);
   const router = useRouter();
   const qc = useQueryClient();
-
+  const [open, setOpen] = useState(false);
+  const { width: screenW } = useWindowDimensions();
+  const dropdownW = 260;
+  const rightInset = screenW < dropdownW + 40 ? 8 : 0; // clamps on very narrow phones instead of clipping offscreen
   const { data: profile } = useQuery<ProfileRow | null>({
     queryKey: ['my_profile_full'],
     queryFn: async () => {
@@ -125,7 +128,8 @@ export function ProfileDropdown() {
           <Animated.View
             entering={FadeInDown.duration(220).springify().damping(20)}
             exiting={FadeOutUp.duration(150)}
-            style={{ position: 'absolute', top: 54, right: 0, width: 260, zIndex: 1000 }}
+            style={{ position: 'absolute', top: 54, right: rightInset, width: Math.min(dropdownW, screenW - 16), zIndex: 1000 }}
+
           >
             <GlassCard tint={role === 'admin' ? 'pink' : role === 'premium' ? 'amber' : 'purple'} padding="sm" glow hoverable={false}>
               <View className="px-2 pt-1 mb-2">
@@ -156,7 +160,12 @@ export function ProfileDropdown() {
             </GlassCard>
           </Animated.View>
         </>
-      )}
-    </View>
+      )
+      }
+    </View >
   );
+}
+
+function setOpen(arg0: boolean) {
+  throw new Error('Function not implemented.');
 }
