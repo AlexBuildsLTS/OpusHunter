@@ -72,7 +72,7 @@ export default function AdminLayout() {
     }
 
   return (
-        <AdaptiveLayout>
+       <AdaptiveLayout mobileTitle="Admin Core">
             <Stack screenOptions={{
                 headerShown: false,
                 contentStyle: {

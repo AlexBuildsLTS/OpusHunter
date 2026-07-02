@@ -31,8 +31,8 @@ export interface ScrapePayload {
 export interface ScrapeResult {
     message: string;
     count: number;
-    keywords: string[];
-    location: string;
+    summary?: Array<{ rule: string; fetched: number; new: number; key_source?: string }>;
+    rules_processed?: number;
 }
 
 export interface UseEdgeScraperReturn {

@@ -1,21 +1,9 @@
 /**
  * components/ui/GlassCard.tsx
  * OpusHunter — Shared Glass / Bento Card Primitive
- * 2026-07-01
- *
- * This is the ONE card surface every screen should use. Previously this
- * component existed but was never imported anywhere — every screen instead
- * declared its own local `StyleSheet` card with slightly different hex
- * values (border colors, radii, padding). That's why the app feels like
- * five different apps stitched together.
- *
- * Usage:
- *   <GlassCard>...</GlassCard>                          // default surface
- *   <GlassCard tint="cyan" glow>...</GlassCard>          // tinted + glow
- *   <GlassCard padding="lg" bento>...</GlassCard>        // bento grid tile
- *
- * All colors/radii/blur come from tailwind.config.js (surface.*, brand.*,
- * boxShadow.glass*) — change a token there and every card updates.
+ * 2026-07-02 — Added web hover: frosty blur lift + glow + subtle scale.
+ * `hoverable` defaults true (no-op on native/touch — hover: only fires on
+ * real mouse hover on web, so this is purely additive, zero regression).
  */
 
 import React from 'react';
@@ -51,6 +39,17 @@ const TINT_GLOW_SHADOW: Record<GlassTint, string> = {
   amber: 'shadow-glass',
 };
 
+// Static strings (required for NativeWind's JIT class extraction — dynamic
+// template interpolation would not be picked up at build time).
+const TINT_HOVER: Record<GlassTint, string> = {
+  default: 'hover:border-white/20 hover:shadow-glass-lg',
+  cyan: 'hover:border-brand-cyan/40 hover:shadow-glow-cyan',
+  purple: 'hover:border-brand-purple/40 hover:shadow-glow-purple',
+  pink: 'hover:border-brand-pink/40 hover:shadow-glow-pink',
+  green: 'hover:border-brand-green/40 hover:shadow-glow-purple',
+  amber: 'hover:border-brand-amber/40 hover:shadow-glass-lg',
+};
+
 const PADDING: Record<'none' | 'sm' | 'md' | 'lg', string> = {
   none: 'p-0',
   sm: 'p-3',
@@ -68,6 +67,8 @@ interface GlassCardProps extends ViewProps {
   padding?: 'none' | 'sm' | 'md' | 'lg';
   /** Slightly tighter radius + designed to sit inside a bento grid gap-4. */
   bento?: boolean;
+  /** Web hover: frosty blur lift + glow + scale. Default true, no-op on native. */
+  hoverable?: boolean;
   className?: string;
   /** Escape hatch for one-off inline overrides — used sparingly. */
   style?: any;
@@ -79,6 +80,7 @@ export function GlassCard({
   glow = false,
   padding = 'md',
   bento = false,
+  hoverable = true,
   className,
   style,
   ...props
@@ -93,6 +95,13 @@ export function GlassCard({
         'backdrop-blur-2xl',
         glow ? TINT_GLOW_SHADOW[tint] : 'shadow-card',
         PADDING[padding],
+        Platform.OS === 'web' &&
+        hoverable &&
+        cn(
+          'transition-all duration-300 ease-out',
+          'hover:-translate-y-0.5 hover:scale-[1.012] hover:backdrop-blur-3xl',
+          TINT_HOVER[tint],
+        ),
         className,
       )}
       style={[
@@ -108,11 +117,6 @@ export function GlassCard({
   );
 }
 
-/**
- * BentoGrid — simple responsive wrapper for laying GlassCards out as a
- * bento board. Wraps on mobile (single column), 2–3 columns on wider
- * viewports via flex-wrap + basis, no extra dependency needed.
- */
 export function BentoGrid({
   children,
   className,

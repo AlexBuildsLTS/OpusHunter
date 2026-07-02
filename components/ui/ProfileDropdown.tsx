@@ -1,26 +1,16 @@
 /**
  * components/ui/ProfileDropdown.tsx
  * OpusHunter — User Profile Menu
- * 2026-07-01
+ * 2026-07-02 — Dim backdrop + simplified avatar glow
  *
- * Rebuilt from scratch. The previous version imported `useAuthStore` from
- * `store/useAuthStore`, which does not exist anywhere in this repo (the only
- * store is `usePipelineStore`), and linked to routes that don't exist in
- * this app's actual router structure (`/settings/profile`, `/admin`,
- * `/(auth)/sign-in`). It would throw on import — which is almost certainly
- * why it was never wired into any screen.
- *
- * This version:
- *   - Fetches the profile via the SAME react-query key ('my_profile_full')
- *     used in app/(tabs)/profile.tsx, so the cache is shared and this never
- *     triggers an extra network round-trip if the profile screen has
- *     already loaded.
- *   - Uses ROLE_CFG from lib/theme.ts — the single source of truth for
- *     role colors — instead of a second, divergent color map.
- *   - Points at real routes: /(tabs)/profile, /(tabs)/(settings),
- *     /(admin), /(auth)/login.
- *   - Built with NativeWind + GlassCard so it matches the rest of the
- *     design system instead of being its own one-off StyleSheet.
+ * FIXED: the close-tap backdrop was fully transparent, so opening the menu
+ * on profile/dashboard let underlying page content (e.g. the avatar upload
+ * card) show directly through at full opacity, making the dropdown look
+ * broken/overlapping. Now dims the page like every other modal in the app.
+ * FIXED: avatar button combined an outer glow AND an inset glow in one
+ * boxShadow string — on RN Web this occasionally paints as a visible soft
+ * rectangle behind the circle instead of hugging the border-radius. Now a
+ * single outer glow only.
  */
 
 import React, { useCallback, useState } from 'react';
@@ -28,7 +18,7 @@ import { Text, TouchableOpacity, View, StyleSheet, Platform } from 'react-native
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import {
   User,
   Settings,
@@ -45,13 +35,7 @@ type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
 function getInitials(name?: string | null, email?: string | null): string {
   if (name?.trim()) {
-    return name
-      .trim()
-      .split(' ')
-      .map((p) => p[0])
-      .slice(0, 2)
-      .join('')
-      .toUpperCase();
+    return name.trim().split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase();
   }
   return email?.slice(0, 2).toUpperCase() ?? '??';
 }
@@ -67,14 +51,10 @@ const MenuItem = React.memo(({ icon: Icon, label, onPress, danger }: MenuItemPro
   <TouchableOpacity
     onPress={onPress}
     activeOpacity={0.7}
-    className={`flex-row items-center gap-3 rounded-xl px-3 py-3 ${danger ? 'active:bg-brand-pink/10' : 'active:bg-white/5'
-      }`}
+    className={`flex-row items-center gap-3 rounded-xl px-3 py-3 ${danger ? 'active:bg-brand-pink/10' : 'active:bg-white/5'}`}
   >
     <Icon size={16} color={danger ? C.pink : C.cyan} />
-    <Text
-      className="text-[11px] font-extrabold uppercase tracking-widest"
-      style={{ color: danger ? C.pink : C.text }}
-    >
+    <Text className="text-[11px] font-extrabold uppercase tracking-widest" style={{ color: danger ? C.pink : C.text }}>
       {label}
     </Text>
   </TouchableOpacity>
@@ -89,15 +69,9 @@ export function ProfileDropdown() {
   const { data: profile } = useQuery<ProfileRow | null>({
     queryKey: ['my_profile_full'],
     queryFn: async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       if (error) throw error;
       return data;
     },
@@ -108,13 +82,7 @@ export function ProfileDropdown() {
   const roleCfg = ROLE_CFG[role];
   const initials = getInitials(profile?.full_name, profile?.email);
 
-  const go = useCallback(
-    (path: string) => {
-      setOpen(false);
-      router.push(path as any);
-    },
-    [router],
-  );
+  const go = useCallback((path: string) => { setOpen(false); router.push(path as any); }, [router]);
 
   const handleSignOut = useCallback(async () => {
     setOpen(false);
@@ -128,13 +96,13 @@ export function ProfileDropdown() {
       <TouchableOpacity
         onPress={() => setOpen((v) => !v)}
         activeOpacity={0.8}
-        className="items-center justify-center overflow-hidden border-2 rounded-full h-11 w-11 shadow-lg"
+        className="items-center justify-center overflow-hidden border-2 rounded-full h-11 w-11"
         style={{
           borderColor: roleCfg.color,
           backgroundColor: C.core,
           ...(Platform.OS === 'web'
-            ? ({ boxShadow: `0 0 20px ${roleCfg.color}88, inset 0 0 10px ${roleCfg.color}22` } as any)
-            : { shadowColor: roleCfg.color, shadowOpacity: 0.8, shadowRadius: 15, elevation: 20 }),
+            ? ({ boxShadow: `0 0 16px ${roleCfg.color}66` } as any)
+            : { shadowColor: roleCfg.color, shadowOpacity: 0.6, shadowRadius: 10, elevation: 12 }),
         }}
       >
         {profile?.avatar_url ? (
@@ -146,18 +114,20 @@ export function ProfileDropdown() {
 
       {open && (
         <>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            onPress={() => setOpen(false)}
-            activeOpacity={1}
-          />
+          <Animated.View
+            entering={FadeIn.duration(150)}
+            exiting={FadeOut.duration(150)}
+            style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,8,6,0.55)', zIndex: 998 }]}
+          >
+            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} activeOpacity={1} />
+          </Animated.View>
 
           <Animated.View
             entering={FadeInDown.duration(220).springify().damping(20)}
             exiting={FadeOutUp.duration(150)}
             style={{ position: 'absolute', top: 54, right: 0, width: 260, zIndex: 1000 }}
           >
-            <GlassCard tint={role === 'admin' ? 'pink' : role === 'premium' ? 'amber' : 'purple'} padding="sm" glow>
+            <GlassCard tint={role === 'admin' ? 'pink' : role === 'premium' ? 'amber' : 'purple'} padding="sm" glow hoverable={false}>
               <View className="px-2 pt-1 mb-2">
                 <Text numberOfLines={1} className="text-[15px] font-extrabold" style={{ color: C.text }}>
                   {profile?.full_name || 'Your account'}
@@ -165,18 +135,12 @@ export function ProfileDropdown() {
                 <Text numberOfLines={1} className="mt-0.5 text-[11px]" style={{ color: C.sub }}>
                   {profile?.email}
                 </Text>
-                <View
-                  className="mt-2 self-start rounded-lg border px-2.5 py-1"
-                  style={{ backgroundColor: roleCfg.bg, borderColor: roleCfg.border }}
-                >
-                  <Text className="text-[9px] font-black tracking-widest" style={{ color: roleCfg.color }}>
-                    {roleCfg.label}
-                  </Text>
+                <View className="mt-2 self-start rounded-lg border px-2.5 py-1" style={{ backgroundColor: roleCfg.bg, borderColor: roleCfg.border }}>
+                  <Text className="text-[9px] font-black tracking-widest" style={{ color: roleCfg.color }}>{roleCfg.label}</Text>
                 </View>
               </View>
 
               <View className="h-px my-1" style={{ backgroundColor: C.border }} />
-
               <MenuItem icon={User} label="Profile" onPress={() => go('/(tabs)/profile')} />
               <MenuItem icon={Settings} label="Settings" onPress={() => go('/(tabs)/(settings)')} />
 
