@@ -31,9 +31,9 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, Platform, useWindowDimensions, Image } from 'react-native';
-import { Tabs, Slot, usePathname } from 'expo-router';
-import { LayoutDashboard, Database, Briefcase, LucideIcon } from 'lucide-react-native';
+import { View, StyleSheet, Platform, useWindowDimensions, Image, Pressable } from 'react-native';
+import { Tabs, Slot, usePathname, useRouter } from 'expo-router';
+import { LayoutDashboard, Database, Briefcase, Cpu, Cog, LucideIcon } from 'lucide-react-native';
 import { C, LAYOUT } from '../../lib/theme';
 import { Sidebar } from '../../components/layout/AdaptiveLayout';
 import { ProfileDropdown } from '../../components/ui/ProfileDropdown';
@@ -43,7 +43,8 @@ type NavItem = { name: string; label: string; Icon: LucideIcon };
 const NAV_ITEMS: NavItem[] = [
   { name: 'dashboard', label: '', Icon: LayoutDashboard },
   { name: 'vault', label: '', Icon: Database },
-  { name: 'configure', label: '', Icon: Briefcase },
+  { name: 'configure', label: '', Icon: Cpu },
+  { name: 'settings', label: '', Icon: Cog },
 ];
 
 const BACKGROUND_GRADIENT = `radial-gradient(ellipse 100% 50% at 50% 0%, ${C.cyan}0D 0%, transparent 40%)`;
@@ -71,6 +72,7 @@ const TAB_BAR_STYLE = {
 export default function TabsLayout() {
   const { width } = useWindowDimensions();
   const pathname = usePathname();
+  const router = useRouter();
   const isDesktop = Platform.OS === 'web' && width >= 768;
 
   const sharedStyle = {
@@ -93,54 +95,54 @@ export default function TabsLayout() {
     );
   }
 
-  // Mobile: Fixed identity bar (logo + dropdown) + bottom tab bar
+  // Mobile: Use Slot (NOT Tabs) to prevent stacking bug. Only ONE screen
+  // is ever mounted. Custom tab bar handles navigation.
+  const getActiveTab = () => {
+    if (pathname.includes('dashboard')) return 'dashboard';
+    if (pathname.includes('vault')) return 'vault';
+    if (pathname.includes('configure')) return 'configure';
+    if (pathname.includes('settings')) return 'settings';
+    return 'dashboard';
+  };
+
+  const activeTab = getActiveTab();
+
   return (
     <View style={sharedStyle}>
+      {/* Header: Logo + Dropdown */}
       <Image
         source={require('../../assets/icon.png')}
         style={styles.mobileLogo}
         resizeMode="contain"
       />
-
       <View style={styles.mobileDropdown}>
         <ProfileDropdown />
       </View>
 
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          sceneStyle: {
-            backgroundColor: 'transparent',
-            paddingTop: LAYOUT.headerHeight + 6,
-          },
-          tabBarStyle: TAB_BAR_STYLE,
-          tabBarActiveTintColor: C.cyan,
-          tabBarInactiveTintColor: C.sub,
-          tabBarLabelStyle: {
-            fontSize: 10,
-            fontWeight: '800',
-            letterSpacing: 0.5,
-            textTransform: 'uppercase',
-            marginTop: 4,
-          },
-          tabBarItemStyle: { borderRadius: 20 },
-        }}
-      >
-        {NAV_ITEMS.map(({ name, label, Icon }) => (
-          <Tabs.Screen
+      {/* Main Content — Slot renders ONLY the active route */}
+      <View style={styles.mobileContentContainer}>
+        <Slot />
+      </View>
+
+      {/* Custom Mobile Tab Bar */}
+      <View style={styles.mobileTabBar}>
+        {NAV_ITEMS.map(({ name, Icon }) => (
+          <Pressable
             key={name}
-            name={name}
-            options={{
-              title: label,
-              tabBarIcon: ({ color, size }) => (
-                <Icon size={size ?? 24} color={color} strokeWidth={2.5} />
-              ),
-            }}
-          />
+            onPress={() => router.push(name as any)}
+            style={[
+              styles.tabBarItem,
+              activeTab === name && styles.tabBarItemActive,
+            ]}
+          >
+            <Icon
+              size={24}
+              color={activeTab === name ? C.cyan : C.sub}
+              strokeWidth={2.5}
+            />
+          </Pressable>
         ))}
-        <Tabs.Screen name="settings" options={{ href: null }} />
-        <Tabs.Screen name="profile" options={{ href: null }} />
-      </Tabs>
+      </View>
     </View>
   );
 }
@@ -159,5 +161,39 @@ const styles = StyleSheet.create({
     top: 12,
     right: 20,
     zIndex: 1000,
+  },
+  mobileContentContainer: {
+    flex: 1,
+    paddingTop: LAYOUT.headerHeight + 6,
+  },
+  mobileTabBar: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(12, 13, 29, 0.22)',
+    borderTopColor: 'transparent',
+    borderColor: `${C.cyan}1A`,
+    borderWidth: 1,
+    height: 72,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
+    paddingTop: 12,
+    marginBottom: 24,
+    marginLeft: 20,
+    marginRight: 20,
+    borderRadius: 36,
+    elevation: 10,
+    shadowColor: C.cyan,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  tabBarItem: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+  },
+  tabBarItemActive: {
+    backgroundColor: `${C.cyan}15`,
   },
 });
