@@ -13,7 +13,7 @@
 
 - **🌐 Cross-Platform Excellence**: A truly adaptive UI. Desktop web users get a beautiful hovering transparent sidebar, while mobile users get an immersive, rounded floating bottom tab bar with haptic feedback.
 - **🤖 Automated Job Scraping**: Define your rules (Keywords, Locations, Experience Levels) and the OpusHunter Edge Engine will continuously scour the internet for matching jobs.
-- **🧠 Gemini AI Intelligence**: Scraped jobs are passed to Google Gemini 1.5 Flash, which reads the job description and your Base CV, scores the match (0-100%), and flags key skills.
+- **🧠 Gemini AI Intelligence**: Scraped jobs are passed to Google Gemini 3.1 Flash, which reads the job description and your Base CV, scores the match (0-100%), and flags key skills.
 - **⚡ 1-Click Cover Letters**: Generate hyper-personalized, context-aware cover letters for any job in your pipeline with a single tap using Gemini.
 - **🔒 Secure Vault**: Upload your Base CV and certifications to a highly secure Supabase Storage bucket protected by Row Level Security (RLS).
 - **🔑 Bring Your Own Key (BYOK)**: Supports both global admin API keys and individual user API keys for RapidAPI and Gemini.
@@ -27,7 +27,7 @@ OpusHunter is built for speed, security, and aesthetics.
 - **Frontend**: React Native, Expo Router, NativeWind (Tailwind CSS v4)
 - **State Management**: React Query (data fetching), Zustand (global state)
 - **Backend**: Supabase (PostgreSQL, Auth, Storage, Edge Functions)
-- **AI Processing**: Google Gemini API (`gemini-1.5-flash`)
+- **AI Processing**: Google Gemini API (`gemini-3.1-flash`)
 - **Animations**: `react-native-reanimated`, Lucide React Native icons
 
 ---
@@ -94,8 +94,7 @@ OpusHunter is powerful, but there is always room to grow. Here are the planned i
 
 1. **Auto-Apply Scripts**: Implement a Puppeteer or Playwright engine inside a Docker container (or via specialized APIs) to automatically click "Easy Apply" on LinkedIn and submit the AI-generated cover letter without user intervention.
 2. **Multi-CV Support**: Allow users to upload multiple base CVs (e.g., one for Frontend, one for Backend) and have the AI dynamically select the best one to use for each job.
-3. **Analytics Dashboard**: Add a beautiful chart view tracking jobs scraped, applications sent, and interview conversion rates.
-4. **Local LLM Support**: For extreme privacy, add support for local models via Ollama instead of Gemini.
+3. **Analytics Dashboard**: Add a beautiful chart view tracking jobs scraped, applications sent, and interview conversion rates
 
 ---
 
