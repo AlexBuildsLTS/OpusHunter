@@ -1,25 +1,29 @@
 /**
  * app/(tabs)/dashboard.tsx
  * OpusHunter — Main Job Hunt Dashboard
- * 2026-06-29
+ * 2026-07-02 — Ported onto GlassCard/lib/theme.ts, two real bugs fixed:
  *
- * Features:
- *   - Live pipeline metrics from get_user_pipeline_metrics() RPC (single call)
- *   - Pending job cards from job_vault (swipeable)
- *   - Batch Apply Queue: processes 5 applications at a time, progress bar, no OOM
- *   - Premium gate: members see limited jobs (20), premium/admin see unlimited
- *   - "Run Scraper" shortcut button
- *   - Web: max-w-5xl centered content, sidebar-aware
- *   - Mobile: full width, scroll-safe
+ * 1. Root wrapper was `className="flex-1 bg-slate-950"` — a hardcoded
+ *    default Tailwind color completely outside the design system, not
+ *    `C.bg`. That's why this screen never matched the rest of the app no
+ *    matter what theme.ts/tailwind.config.js said — it was never reading them.
+ * 2. The "web ambient background" was a raw `<div>` with `rgba(0,212,255,…)`
+ *    hardcoded — the pre-repalette cyan, and a second, duplicate ambient
+ *    layer now that GradientBackground is mounted globally in app/_layout.tsx.
+ *    Removed; the app-wide one already covers this screen.
+ *
+ * Stat cards moved from flat `StyleSheet` color washes to `GlassCard` frost
+ * tint with a small colored icon accent — "Applied" in particular no longer
+ * renders as a solid green block.
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Platform, ActivityIndicator, Pressable,
+  StyleSheet, Platform, ActivityIndicator,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Animated, { FadeInDown, FadeInUp, Layout } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import {
   Zap, BarChart2, CheckCircle2, Clock, Briefcase,
@@ -31,34 +35,28 @@ import { SwipeableJobCard } from '../../components/pipeline/SwipeableJobCard';
 import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import type { Job } from '../../types/app.types';
 import { C } from '../../lib/theme';
-
+import { GlassCard } from '../../components/ui/GlassCard';
 
 // ── METRIC CARD ────────────────────────────────────────────────────────────────
 
 const MetricCard = ({
-  label, value, color, icon: Icon, trend,
+  label, value, color, icon: Icon,
 }: {
   label: string; value: number | string; color: string;
-  icon: React.ElementType; trend?: string;
+  icon: React.ElementType;
 }) => (
-  <View style={[mS.card, { borderColor: `${color}18`, backgroundColor: `${color}06` }]}>
-    <View style={[mS.iconBox, { backgroundColor: `${color}12`, borderColor: `${color}22` }]}>
+  <GlassCard tint="frost" padding="sm" hoverable className="flex-1" style={{ minWidth: 100, gap: 6, alignItems: 'flex-start' }}>
+    <View style={[mS.iconBox, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
       <Icon size={16} color={color} strokeWidth={2.5} />
     </View>
-    <Text style={[mS.value, { color }]}>{value}</Text>
+    <Text style={[mS.value, { color: C.text }]}>{value}</Text>
     <Text style={mS.label}>{label}</Text>
-    {trend && <Text style={[mS.trend, { color: `${color}80` }]}>{trend}</Text>}
-  </View>
+  </GlassCard>
 );
 const mS = StyleSheet.create({
-  card: {
-    flex: 1, minWidth: 100, borderRadius: 18, borderWidth: 1,
-    padding: 16, gap: 6, alignItems: 'flex-start',
-  },
-  iconBox: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  iconBox: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   value: { fontSize: 26, fontWeight: '900', letterSpacing: -0.5, marginTop: 4 },
   label: { fontSize: 10, fontWeight: '700', color: 'rgba(216,228,236,0.45)', letterSpacing: 1.5, textTransform: 'uppercase' },
-  trend: { fontSize: 10, fontWeight: '600' },
 });
 
 // ── BATCH APPLY QUEUE ──────────────────────────────────────────────────────────
@@ -71,7 +69,7 @@ interface QueueState {
   total: number;
   done: number;
   failed: number;
-  current: string | null; // job title currently being applied to
+  current: string | null;
 }
 
 const INITIAL_QUEUE: QueueState = { running: false, total: 0, done: 0, failed: 0, current: null };
@@ -79,23 +77,20 @@ const INITIAL_QUEUE: QueueState = { running: false, total: 0, done: 0, failed: 0
 // ── PREMIUM GATE BANNER ────────────────────────────────────────────────────────
 
 const PremiumGate = ({ onUpgrade }: { onUpgrade: () => void }) => (
-  <Animated.View entering={FadeInDown.springify()} style={pgS.wrap}>
-    <Lock size={18} color={C.amber} />
-    <View style={{ flex: 1 }}>
-      <Text style={pgS.title}>Premium Unlocks Unlimited Applications</Text>
-      <Text style={pgS.sub}>Free plan processes 20 jobs/day. Upgrade to remove limits.</Text>
-    </View>
-    <TouchableOpacity onPress={onUpgrade} style={pgS.btn} activeOpacity={0.8}>
-      <Text style={pgS.btnText}>UPGRADE</Text>
-    </TouchableOpacity>
+  <Animated.View entering={FadeInDown.springify()}>
+    <GlassCard tint="amber" padding="md" className="flex-row items-center gap-3 mb-5">
+      <Lock size={18} color={C.amber} />
+      <View style={{ flex: 1 }}>
+        <Text style={pgS.title}>Premium Unlocks Unlimited Applications</Text>
+        <Text style={pgS.sub}>Free plan processes 20 jobs/day. Upgrade to remove limits.</Text>
+      </View>
+      <TouchableOpacity onPress={onUpgrade} style={pgS.btn} activeOpacity={0.8}>
+        <Text style={pgS.btnText}>UPGRADE</Text>
+      </TouchableOpacity>
+    </GlassCard>
   </Animated.View>
 );
 const pgS = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: `${C.amber}08`, borderWidth: 1, borderColor: `${C.amber}30`,
-    borderRadius: 16, padding: 16, marginBottom: 20,
-  },
   title: { fontSize: 13, fontWeight: '700', color: C.text, marginBottom: 2 },
   sub: { fontSize: 11, color: C.sub, lineHeight: 16 },
   btn: {
@@ -115,7 +110,6 @@ export default function DashboardScreen() {
   const queueRef = useRef(queue);
   queueRef.current = queue;
 
-  // ── Profile + role ──────────────────────────────────────────────────────────
   const { data: profile } = useQuery({
     queryKey: ['my_profile'],
     queryFn: async () => {
@@ -131,7 +125,6 @@ export default function DashboardScreen() {
   const isPremium = role === 'premium' || role === 'admin';
   const jobLimit = isPremium ? 999 : 20;
 
-  // ── Pipeline metrics ────────────────────────────────────────────────────────
   const { data: metrics, isLoading: metricsLoading } = useQuery({
     queryKey: ['pipeline_metrics'],
     queryFn: async () => {
@@ -146,7 +139,6 @@ export default function DashboardScreen() {
     refetchInterval: 60_000,
   });
 
-  // ── Pending jobs for swipe deck ─────────────────────────────────────────────
   const { data: pendingJobs = [], isLoading: jobsLoading, isError } = useQuery<Job[]>({
     queryKey: ['pending_jobs', jobLimit],
     queryFn: async () => {
@@ -162,16 +154,11 @@ export default function DashboardScreen() {
     staleTime: 15_000,
   });
 
-  // ── Approve / Reject single job ─────────────────────────────────────────────
   const approveMutation = useMutation({
     mutationFn: async (jobId: string) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated.');
-
-      // Update job status
       await supabase.from('job_vault').update({ status: 'approved' }).eq('id', jobId).eq('user_id', user.id);
-
-      // Create application record
       const { error } = await supabase.from('job_applications').insert({
         user_id: user.id,
         job_id: jobId,
@@ -197,14 +184,10 @@ export default function DashboardScreen() {
     },
   });
 
-  // ── BATCH APPLY QUEUE ───────────────────────────────────────────────────────
-  // Gets all pending_auto_apply applications, processes CHUNK_SIZE at a time
-
   const startBatchApply = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Fetch pending applications
     const { data: apps, error } = await supabase
       .from('job_applications')
       .select('id, job_id, job_vault(title, company)')
@@ -216,9 +199,8 @@ export default function DashboardScreen() {
 
     setQueue({ running: true, total: apps.length, done: 0, failed: 0, current: null });
 
-    // Process in chunks to avoid OOM / timeout
     for (let i = 0; i < apps.length; i += CHUNK_SIZE) {
-      if (!queueRef.current.running) break; // user paused
+      if (!queueRef.current.running) break;
 
       const chunk = apps.slice(i, i + CHUNK_SIZE);
 
@@ -248,7 +230,6 @@ export default function DashboardScreen() {
         })
       );
 
-      // Breathe between chunks — prevents event loop starvation
       await new Promise((r) => setTimeout(r, 300));
     }
 
@@ -263,25 +244,15 @@ export default function DashboardScreen() {
 
   const resetQueue = useCallback(() => setQueue(INITIAL_QUEUE), []);
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-
   const isDesktop = Platform.OS === 'web';
 
   return (
-    <View className="flex-1 bg-slate-950">
+    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <ScrollView
         style={s.root}
         contentContainerStyle={[s.scroll, isDesktop && s.scrollDesktop]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Web ambient background */}
-        {isDesktop && (
-          <View style={StyleSheet.absoluteFill} pointerEvents="none">
-            {/* @ts-ignore */}
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0,212,255,0.05) 0%, transparent 60%)' }} />
-          </View>
-        )}
-
         {/* ── Header ── */}
         <Animated.View entering={FadeInDown.delay(40).springify()} style={s.header}>
           <View>
@@ -293,7 +264,6 @@ export default function DashboardScreen() {
             </Text>
           </View>
 
-          {/* Scrape CTA */}
           <TouchableOpacity
             onPress={() => triggerScrape()}
             disabled={isScraping || !metrics?.active_rules}
@@ -314,14 +284,14 @@ export default function DashboardScreen() {
 
         {/* ── Premium gate ── */}
         {!isPremium && pendingJobs.length >= 18 && (
-          <PremiumGate onUpgrade={() => router.push('/(settings)/' as any)} />
+          <PremiumGate onUpgrade={() => router.push('/(tabs)/(settings)' as any)} />
         )}
 
         {/* ── Metrics row ── */}
         <Animated.View entering={FadeInDown.delay(80).springify()} style={s.metricsRow}>
           {metricsLoading ? (
             [0, 1, 2, 3].map((i) => (
-              <View key={i} style={[mS.card, s.skeleton]} />
+              <View key={i} style={[s.skeleton, { flex: 1, minWidth: 100, height: 100 }]} />
             ))
           ) : (
             <>
@@ -335,56 +305,56 @@ export default function DashboardScreen() {
 
         {/* ── Batch Apply Engine ── */}
         {(queue.running || queue.done > 0 || queue.total > 0) && (
-          <Animated.View entering={FadeInDown.springify()} style={s.batchCard}>
-            <View style={s.batchHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Zap size={16} color={C.cyan} />
-                <Text style={s.batchTitle}>Auto-Apply Engine</Text>
-                {queue.running && <ActivityIndicator size="small" color={C.cyan} />}
+          <Animated.View entering={FadeInDown.springify()} style={{ marginBottom: 20 }}>
+            <GlassCard tint="cyan" padding="md">
+              <View style={s.batchHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Zap size={16} color={C.cyan} />
+                  <Text style={s.batchTitle}>Auto-Apply Engine</Text>
+                  {queue.running && <ActivityIndicator size="small" color={C.cyan} />}
+                </View>
+                <Text style={s.batchCount}>
+                  {queue.done}/{queue.total} {queue.failed > 0 && <Text style={{ color: C.pink }}>({queue.failed} failed)</Text>}
+                </Text>
               </View>
-              <Text style={s.batchCount}>
-                {queue.done}/{queue.total} {queue.failed > 0 && <Text style={{ color: C.pink }}>({queue.failed} failed)</Text>}
-              </Text>
-            </View>
 
-            {/* Progress bar */}
-            <View style={s.progressTrack}>
-              <Animated.View
-                style={[
-                  s.progressFill,
-                  { width: queue.total > 0 ? `${Math.round((queue.done / queue.total) * 100)}%` : '0%' as any }
-                ]}
-              />
-            </View>
+              <View style={s.progressTrack}>
+                <View
+                  style={[
+                    s.progressFill,
+                    { width: queue.total > 0 ? `${Math.round((queue.done / queue.total) * 100)}%` : '0%' as any }
+                  ]}
+                />
+              </View>
 
-            {queue.current && (
-              <Text style={s.batchCurrent} numberOfLines={1}>
-                → Applying to <Text style={{ color: C.cyan }}>{queue.current}</Text>
-              </Text>
-            )}
-
-            {/* Controls */}
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-              {queue.running ? (
-                <TouchableOpacity onPress={pauseQueue} style={[s.queueBtn, { borderColor: `${C.amber}40` }]} activeOpacity={0.8}>
-                  <Pause size={13} color={C.amber} />
-                  <Text style={[s.queueBtnText, { color: C.amber }]}>Pause</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity onPress={startBatchApply} style={[s.queueBtn, { borderColor: `${C.cyan}40` }]} activeOpacity={0.8}>
-                  <Play size={13} color={C.cyan} />
-                  <Text style={[s.queueBtnText, { color: C.cyan }]}>
-                    {queue.done > 0 ? 'Resume' : 'Start Engine'}
-                  </Text>
-                </TouchableOpacity>
+              {queue.current && (
+                <Text style={s.batchCurrent} numberOfLines={1}>
+                  → Applying to <Text style={{ color: C.cyan }}>{queue.current}</Text>
+                </Text>
               )}
-              {!queue.running && queue.total > 0 && (
-                <TouchableOpacity onPress={resetQueue} style={[s.queueBtn, { borderColor: C.border }]} activeOpacity={0.8}>
-                  <RefreshCw size={13} color={C.sub} />
-                  <Text style={[s.queueBtnText, { color: C.sub }]}>Reset</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                {queue.running ? (
+                  <TouchableOpacity onPress={pauseQueue} style={[s.queueBtn, { borderColor: `${C.amber}40` }]} activeOpacity={0.8}>
+                    <Pause size={13} color={C.amber} />
+                    <Text style={[s.queueBtnText, { color: C.amber }]}>Pause</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity onPress={startBatchApply} style={[s.queueBtn, { borderColor: `${C.cyan}40` }]} activeOpacity={0.8}>
+                    <Play size={13} color={C.cyan} />
+                    <Text style={[s.queueBtnText, { color: C.cyan }]}>
+                      {queue.done > 0 ? 'Resume' : 'Start Engine'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {!queue.running && queue.total > 0 && (
+                  <TouchableOpacity onPress={resetQueue} style={[s.queueBtn, { borderColor: C.border }]} activeOpacity={0.8}>
+                    <RefreshCw size={13} color={C.sub} />
+                    <Text style={[s.queueBtnText, { color: C.sub }]}>Reset</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </GlassCard>
           </Animated.View>
         )}
 
@@ -419,41 +389,42 @@ export default function DashboardScreen() {
               <Text style={s.centerText}>Loading pipeline…</Text>
             </View>
           ) : isError ? (
-            <View style={[s.center, s.errorBox]}>
+            <GlassCard tint="pink" padding="lg" className="items-center">
               <AlertCircle size={28} color={C.pink} />
-              <Text style={[s.centerText, { color: C.pink }]}>Failed to load jobs</Text>
+              <Text style={[s.centerText, { color: C.pink, marginTop: 10 }]}>Failed to load jobs</Text>
               <TouchableOpacity onPress={() => qc.invalidateQueries({ queryKey: ['pending_jobs'] })} style={s.retryBtn}>
                 <Text style={{ color: C.cyan, fontSize: 13, fontWeight: '700' }}>Retry</Text>
               </TouchableOpacity>
-            </View>
+            </GlassCard>
           ) : pendingJobs.length === 0 ? (
-            <Animated.View entering={FadeInUp.springify()} style={s.emptyDeck}>
-              <CheckCircle2 size={40} color={C.green} />
-              <Text style={s.emptyTitle}>All Clear!</Text>
-              <Text style={s.emptySub}>
-                No pending jobs. Run the scraper to fetch new listings from your active rules.
-              </Text>
-              <TouchableOpacity
-                onPress={() => triggerScrape()}
-                disabled={isScraping || !metrics?.active_rules}
-                style={[s.emptyBtn, (!metrics?.active_rules) && { opacity: 0.5 }]}
-                activeOpacity={0.8}
-              >
-                <Zap size={14} color={C.cyan} />
-                <Text style={{ color: C.cyan, fontWeight: '800', fontSize: 13, letterSpacing: 0.5 }}>Run Scraper</Text>
-              </TouchableOpacity>
-              {!metrics?.active_rules && (
-                <TouchableOpacity onPress={() => router.push('/(tabs)/configure' as any)} style={{ marginTop: 10 }} activeOpacity={0.8}>
-                  <Text style={{ color: C.sub, fontSize: 12 }}>
-                    No active rules —{' '}
-                    <Text style={{ color: C.cyan, fontWeight: '700' }}>add one →</Text>
-                  </Text>
+            <Animated.View entering={FadeInUp.springify()}>
+              <GlassCard tint="frost" padding="lg" className="items-center">
+                <CheckCircle2 size={40} color={C.green} />
+                <Text style={s.emptyTitle}>All Clear!</Text>
+                <Text style={s.emptySub}>
+                  No pending jobs. Launch a search to fetch new listings from your active rules.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => triggerScrape()}
+                  disabled={isScraping || !metrics?.active_rules}
+                  style={[s.emptyBtn, (!metrics?.active_rules) && { opacity: 0.5 }]}
+                  activeOpacity={0.8}
+                >
+                  <Zap size={14} color={C.cyan} />
+                  <Text style={{ color: C.cyan, fontWeight: '800', fontSize: 13, letterSpacing: 0.5 }}>Launch Search</Text>
                 </TouchableOpacity>
-              )}
+                {!metrics?.active_rules && (
+                  <TouchableOpacity onPress={() => router.push('/(tabs)/configure' as any)} style={{ marginTop: 10 }} activeOpacity={0.8}>
+                    <Text style={{ color: C.sub, fontSize: 12 }}>
+                      No active rules —{' '}
+                      <Text style={{ color: C.cyan, fontWeight: '700' }}>add one →</Text>
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </GlassCard>
             </Animated.View>
           ) : (
             <View style={s.deck}>
-              {/* Top 3 cards stacked — only top one is interactive */}
               {pendingJobs.slice(0, Math.min(3, pendingJobs.length)).reverse().map((job: any, i: number, arr: any[]) => {
                 const isTop = i === arr.length - 1;
                 return (
@@ -484,7 +455,6 @@ export default function DashboardScreen() {
                 );
               })}
 
-              {/* Remaining count */}
               {pendingJobs.length > 1 && (
                 <Animated.View entering={FadeInDown.delay(300).springify()} style={s.remainingBadge}>
                   <Text style={s.remainingText}>{pendingJobs.length} jobs pending</Text>
@@ -495,25 +465,22 @@ export default function DashboardScreen() {
         </Animated.View>
 
         {/* ── Quick Nav Cards ── */}
-        <Animated.View entering={FadeInDown.delay(280).springify()} style={s.quickNav}>
+        <Animated.View entering={FadeInDown.delay(280).springify()} style={{ gap: 10 }}>
           {[
             { label: 'Search Rules', sub: `${metrics?.active_rules ?? 0} active`, route: '/(tabs)/configure', color: C.purple, icon: Briefcase },
             { label: 'Cover Letters', sub: `${metrics?.cover_letters ?? 0} saved`, route: '/(tabs)/vault', color: C.cyan, icon: BarChart2 },
           ].map(({ label, sub, route, color, icon: Icon }) => (
-            <TouchableOpacity
-              key={route}
-              onPress={() => router.push(route as any)}
-              style={[s.quickCard, { borderColor: `${color}18` }]}
-              activeOpacity={0.8}
-            >
-              <View style={[s.quickIcon, { backgroundColor: `${color}10`, borderColor: `${color}20` }]}>
-                <Icon size={18} color={color} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.quickLabel, { color }]}>{label}</Text>
-                <Text style={s.quickSub}>{sub}</Text>
-              </View>
-              <ChevronRight size={16} color={`${color}60`} />
+            <TouchableOpacity key={route} onPress={() => router.push(route as any)} activeOpacity={0.8}>
+              <GlassCard tint="frost" padding="sm" hoverable className="flex-row items-center gap-3.5">
+                <View style={[s.quickIcon, { backgroundColor: `${color}12`, borderColor: `${color}24` }]}>
+                  <Icon size={18} color={color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.quickLabel, { color }]}>{label}</Text>
+                  <Text style={s.quickSub}>{sub}</Text>
+                </View>
+                <ChevronRight size={16} color={`${color}60`} />
+              </GlassCard>
             </TouchableOpacity>
           ))}
         </Animated.View>
@@ -527,12 +494,10 @@ export default function DashboardScreen() {
 // ── STYLES ─────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  root: { flex: 1, backgroundColor: C.bg },
+  root: { flex: 1, backgroundColor: 'transparent' },
   scroll: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16 },
   scrollDesktop: { maxWidth: 1100, width: '100%', alignSelf: 'center' as any },
 
-  /* Header */
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
   greeting: { fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.3 },
   headerSub: { fontSize: 13, color: C.sub, marginTop: 3 },
@@ -544,26 +509,16 @@ const s = StyleSheet.create({
   },
   scrapeBtnText: { fontSize: 10, fontWeight: '800', color: C.cyan, letterSpacing: 1.5 },
 
-  /* Metrics */
   metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 20, flexWrap: 'wrap' },
-  skeleton: { flex: 1, minWidth: 100, height: 100, backgroundColor: 'rgba(255,255,255,0.03)' },
+  skeleton: { borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.03)' },
 
-  /* Batch apply */
-  batchCard: {
-    backgroundColor: 'rgba(8,16,24,0.88)',
-    borderWidth: 1, borderColor: `${C.cyan}22`, borderRadius: 20,
-    padding: 18, marginBottom: 20,
-  },
   batchHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   batchTitle: { fontSize: 14, fontWeight: '800', color: C.text },
   batchCount: { fontSize: 13, fontWeight: '700', color: C.sub },
   batchCurrent: { fontSize: 12, color: C.sub, marginTop: 8, fontStyle: 'italic' },
 
   progressTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' },
-  progressFill: {
-    height: '100%' as any, borderRadius: 2,
-    backgroundColor: C.cyan,
-  },
+  progressFill: { height: '100%' as any, borderRadius: 2, backgroundColor: C.cyan },
 
   queueBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -571,16 +526,16 @@ const s = StyleSheet.create({
   },
   queueBtnText: { fontSize: 12, fontWeight: '700' },
 
-  /* Start engine */
   startEngineBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     backgroundColor: C.cyan, borderRadius: 18, padding: 18, marginBottom: 24,
-    shadowColor: C.cyan, shadowOpacity: 0.35, shadowRadius: 20, shadowOffset: { width: 0, height: 4 },
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: `0 0 24px ${C.cyan}55` } as any)
+      : { shadowColor: C.cyan, shadowOpacity: 0.35, shadowRadius: 20, shadowOffset: { width: 0, height: 4 } }),
   },
   startEngineBtnTitle: { fontSize: 13, fontWeight: '900', color: '#000', letterSpacing: 1.5, marginBottom: 2 },
   startEngineBtnSub: { fontSize: 11, color: 'rgba(0,0,0,0.55)', fontWeight: '600' },
 
-  /* Deck */
   deckSection: { marginBottom: 24 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   sectionTitle: { fontSize: 17, fontWeight: '800', color: C.text, letterSpacing: -0.2 },
@@ -598,11 +553,6 @@ const s = StyleSheet.create({
   },
   remainingText: { fontSize: 11, fontWeight: '700', color: C.sub, letterSpacing: 1 },
 
-  /* Empty deck */
-  emptyDeck: {
-    alignItems: 'center', paddingVertical: 50,
-    backgroundColor: C.card, borderRadius: 24, borderWidth: 1, borderColor: C.border,
-  },
   emptyTitle: { fontSize: 20, fontWeight: '800', color: C.text, marginTop: 16, marginBottom: 8 },
   emptySub: { fontSize: 13, color: C.sub, textAlign: 'center', paddingHorizontal: 32, lineHeight: 20 },
   emptyBtn: {
@@ -611,18 +561,10 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: `${C.cyan}35`, backgroundColor: `${C.cyan}08`,
   },
 
-  /* Error */
   center: { alignItems: 'center', paddingVertical: 40 },
-  centerText: { fontSize: 14, color: C.sub, marginTop: 12 },
-  errorBox: { backgroundColor: `${C.pink}05`, borderRadius: 20, borderWidth: 1, borderColor: `${C.pink}18` },
+  centerText: { fontSize: 14, color: C.sub },
   retryBtn: { marginTop: 14, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: `${C.cyan}35` },
 
-  /* Quick nav */
-  quickNav: { gap: 10 },
-  quickCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: C.card, borderWidth: 1, borderRadius: 18, padding: 16,
-  },
   quickIcon: { width: 46, height: 46, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   quickLabel: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
   quickSub: { fontSize: 12, color: C.sub },

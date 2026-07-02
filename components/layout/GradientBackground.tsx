@@ -17,7 +17,7 @@ import { C } from '../../lib/theme';
 interface GradientBackgroundProps extends ViewProps {
     children: React.ReactNode;
     /** Gradient colors (for native gradient stack). Must have at least two colors. */
-    colors?: string[];
+    colors?: [string, string, ...string[]];
     /** Start point for gradient (0-1 scale) */
     start?: { x: number; y: number };
     /** End point for gradient (0-1 scale) */
@@ -68,7 +68,7 @@ export function GradientBackground({
 
             {/* Gradient overlay */}
             <LinearGradient
-                colors={colors as [string, ...string[]]} // Cast to satisfy LinearGradientProps type
+                colors={colors}
                 start={start}
                 end={end}
                 style={StyleSheet.absoluteFill}
