@@ -68,13 +68,6 @@ export const ROLE_CFG = {
 
 export type RoleName = keyof typeof ROLE_CFG;
 
-export const LAYOUT = {
-    sidebarOffset: 80,
-    sidebarWidth: 80,
-    headerHeight: 60,
-    spacing: 16,
-} as const;
-
 export const webHover = {
     card: { cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' },
     scaleUp: 'scale(1.015)',
