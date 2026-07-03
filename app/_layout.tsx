@@ -18,6 +18,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { supabase } from '../lib/supabase';
 import { queryClient } from '../lib/queryClient';
 import { AmbientBackground } from '../components/ui/AmbientBackground';
+import { PageContainer } from '../components/layout/PageContainer';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -86,7 +87,7 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
             <SafeAreaProvider>
                 <QueryClientProvider client={queryClient}>
-                    <View style={{ flex: 1 }}>
+                    <PageContainer className="bg-transparent" safeAreaTop={true}>
                         <AmbientBackground />
                         <Stack
                             screenOptions={{
@@ -100,7 +101,7 @@ export default function RootLayout() {
                             <Stack.Screen name="admin" options={{ animation: 'slide_from_right' }} />
                             <Stack.Screen name="+not-found" />
                         </Stack>
-                    </View>
+                    </PageContainer>
                 </QueryClientProvider>
             </SafeAreaProvider>
         </GestureHandlerRootView>

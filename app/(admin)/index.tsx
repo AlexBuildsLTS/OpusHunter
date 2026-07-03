@@ -21,10 +21,10 @@ import { useRouter } from 'expo-router';
 import { Key, Users, Activity, Database, ChevronRight } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { C } from '../../lib/theme';
-import { AppHeader } from '../../components/layout/AppHeader';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { DonutChart } from '../../components/charts/DonutChart';
 import { BarChart } from '../../components/charts/BarChart';
+import { PageContainer } from '../../components/layout/PageContainer';
 
 const StatBox = ({ label, value, color, icon: Icon }: { label: string; value: number | string; color: string; icon: React.ElementType }) => (
     <GlassCard padding="sm" className="items-center flex-1" style={{ gap: 6, paddingVertical: 18 }}>
@@ -140,7 +140,7 @@ export default function AdminIndexScreen() {
     return (
         <View style={{ flex: 1, backgroundColor: C.bg }}>
             <ScrollView contentContainerStyle={{ paddingTop: Platform.OS === 'web' ? 40 : 56, paddingHorizontal: 20, paddingBottom: 100, maxWidth: 1080, width: '100%', alignSelf: 'center' }} showsVerticalScrollIndicator={false}>
-                <AppHeader title="Admin Overview" subtitle="Live system analytics — nothing here is placeholder data" />
+               
 
                 {/* ── Stat row ── */}
                 <Animated.View entering={FadeInDown.delay(40).springify()} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>

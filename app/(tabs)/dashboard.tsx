@@ -27,6 +27,7 @@ import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import type { Job } from '../../types/app.types';
 import { C } from '../../lib/theme';
 import { GlassCard } from '../../components/ui/GlassCard';
+import { PageContainer } from '../../components/layout/PageContainer';
 
 // ── METRIC CARD ────────────────────────────────────────────────────────────────
 
@@ -300,7 +301,7 @@ export default function DashboardScreen() {
         </Animated.View>
 
         {!isPremium && pendingJobs.length >= 18 && (
-          <PremiumGate onUpgrade={() => router.push('/settings' as any)} />
+          <PremiumGate onUpgrade={() => router.push('/(settings)' as any)} />
         )}
 
         <Animated.View entering={FadeInDown.delay(80).springify()} style={s.metricsRow}>

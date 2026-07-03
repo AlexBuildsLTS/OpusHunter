@@ -19,10 +19,11 @@ import { View, Text, TouchableOpacity, Image, Platform, useWindowDimensions } fr
 import { useRouter, usePathname } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutDashboard, Database, Briefcase, ArrowLeft } from 'lucide-react-native';
-import { C, LAYOUT } from '../../lib/theme';
+import { C } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import { ProfileDropdown } from '../ui/ProfileDropdown';
 import type { Database as DB } from '../../types/database.types';
+
 
 type ProfileRow = DB['public']['Tables']['profiles']['Row'];
 
@@ -54,7 +55,7 @@ export function Sidebar({ active }: { active: string }) {
       >
         <View
           pointerEvents="none"
-          className="absolute inset-0 rounded-3xl overflow-hidden"
+          className="absolute inset-0 overflow-hidden rounded-3xl"
           style={{ backgroundImage: `linear-gradient(to bottom, ${C.cyan}14, ${C.purple}0A)` }}
         />
 
@@ -156,7 +157,7 @@ export function AdaptiveLayout({ children, mobileTitle }: { children: React.Reac
       }}
     >
       <Sidebar active={pathname} />
-      <View className="flex-1" style={{ paddingLeft: LAYOUT.sidebarOffset }}>
+      <View className="flex-1" style={{ paddingLeft: 104 }}>
         {children}
       </View>
     </View>

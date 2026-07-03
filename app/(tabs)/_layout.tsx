@@ -36,6 +36,7 @@ import { Slot, usePathname, useRouter } from 'expo-router';
 import { LayoutDashboard, Database, Cpu, Cog, LucideIcon } from 'lucide-react-native';
 import { Sidebar } from '../../components/layout/AdaptiveLayout';
 import { ProfileDropdown } from '../../components/ui/ProfileDropdown';
+import { PageContainer } from '../../components/layout/PageContainer';
 
 // TODO: Import C from the correct theme module path
 const C = {
@@ -112,14 +113,14 @@ export default function TabsLayout() {
     if (pathname.includes('dashboard')) return 'dashboard';
     if (pathname.includes('vault')) return 'vault';
     if (pathname.includes('configure')) return 'configure';
-    if (pathname.includes('settings')) return 'settings';
+    if (pathname.includes('settings') || pathname.includes('(settings)')) return 'settings';
     return 'dashboard';
   };
 
   const activeTab = getActiveTab();
 
   return (
-    <View style={sharedStyle}>
+    <PageContainer style={sharedStyle} safeAreaTop={false}>
       {/* Header: Logo + Dropdown */}
       <Image
         source={require('../../assets/icon.png')}
@@ -140,7 +141,13 @@ export default function TabsLayout() {
         {NAV_ITEMS.map(({ name, Icon }) => (
           <Pressable
             key={name}
-            onPress={() => router.push(name as any)}
+            onPress={() => {
+              if (name === 'settings') {
+                router.push('/(settings)');
+              } else {
+                router.push(name as any);
+              }
+            }}
             style={[
               styles.tabBarItem,
               activeTab === name && styles.tabBarItemActive,
@@ -154,7 +161,7 @@ export default function TabsLayout() {
           </Pressable>
         ))}
       </View>
-    </View>
+    </PageContainer>
   );
 }
 

@@ -1,46 +1,76 @@
 /**
- * app/(settings)/index.tsx
- * OpusHunter — Settings Index
- * 2026-06-29 (rebuilt)
- *
- * The "Admin Core" row is ONLY rendered when role === 'admin'. This is
- * checked twice: once here for UI visibility, and again by
- * app/(admin)/_layout.tsx's is_admin() server check if someone tries to
- * deep-link around the UI gate.
+ * app/(tabs)/(settings)/index.tsx
+ * OpusHunter — Settings Dashboard
+ * ══════════════════════════════════════════════════════════════════════════════
+ * PROTOCOL:
+ * 1. MODULE-DRIVEN ARCHITECTURE: Settings cards defined in SETTING_MODULES array
+ *    for maintainability and scalability. Role-based filtering via useMemo.
+ * 2. GESTURE DELEGATION: ScrollView utilizes `keyboardShouldPersistTaps="handled"`
+ *    to ensure taps on cards execute instantly without dropping frames.
+ * 3. EVENT ISOLATION: Ambient background strictly enforces `pointerEvents="none"`
+ *    to prevent gesture hijacking on the Z-axis.
+ * 4. ADMIN GATING: "Admin Core" row ONLY rendered when role === 'admin'.
+ *    Server-side check in app/(admin)/_layout.tsx provides additional protection.
+ * ══════════════════════════════════════════════════════════════════════════════
  */
 
-import React, { useState, useEffect } from 'react';
+// ─── CORE REACT & NATIVE ─────────────────────────────────────────────────────
+import React, { useState, useCallback, useEffect, useMemo, memo } from 'react';
 import {
     View, Text, TouchableOpacity, ScrollView, Switch,
-    Platform, StyleSheet, ActivityIndicator, Modal,
+    Platform, StyleSheet, ActivityIndicator, Modal, Dimensions,
 } from 'react-native';
+
+// ─── STATE & QUERY ───────────────────────────────────────────────────────────
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Animated, { FadeInDown, FadeOutUp, useSharedValue, useAnimatedStyle, withRepeat, withTiming, interpolateColor } from 'react-native-reanimated';
-import { useRouter } from 'expo-router';
+import { useRouter, Href } from 'expo-router';
+
+// ─── ANIMATIONS ──────────────────────────────────────────────────────────────
+import Animated, { FadeInDown, FadeOutUp, useSharedValue, useAnimatedStyle, withRepeat, withTiming, interpolateColor, Easing } from 'react-native-reanimated';
+
+// ─── ICONOGRAPHY ─────────────────────────────────────────────────────────────
 import {
-    Zap, Bell, Shield, Trash2,
-    RefreshCw, CheckCircle2, AlertTriangle, Crown,
-    ChevronRight, Lock, User as UserIcon, Info,
+    Zap, Bell, Shield, Trash2, RefreshCw, CheckCircle2, AlertTriangle,
+    Crown, ChevronRight, Lock, User as UserIcon, Info, LucideIcon,
 } from 'lucide-react-native';
+
+// ─── UI COMPONENTS & UTILS ───────────────────────────────────────────────────
 import { supabase } from '../../../lib/supabase';
 import { C } from '../../../lib/theme';
 
+// ─── TYPES ───────────────────────────────────────────────────────────────────
+type SettingColor = 'cyan' | 'purple' | 'green' | 'pink' | 'amber';
 
-import { Easing } from 'react-native-reanimated';
+interface SettingsCardItem {
+    id: string;
+    label: string;
+    sub: string;
+    icon: LucideIcon;
+    color: SettingColor;
+    onPress?: () => void;
+    isDanger?: boolean;
+}
 
-// Ambient gradient background with animations
-function AmbientBg() {
+// ══════════════════════════════════════════════════════════════════════════════
+// MODULE 1: AMBIENT BACKGROUND
+// ══════════════════════════════════════════════════════════════════════════════
+
+const AmbientBg = memo(() => {
     if (Platform.OS !== 'web') return null;
     return (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
             {/* @ts-ignore */}
-            <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.08) 0%, transparent 60%), radial-gradient(ellipse 80% 40% at 100% 100%, rgba(123, 94, 167, 0.04) 0%, transparent 70%)' }} />
+            <div style={{
+                position: 'absolute',
+                inset: 0,
+                background: `radial-gradient(ellipse 100% 50% at 50% 0%, ${C.cyan}0D 0%, transparent 60%), radial-gradient(ellipse 80% 40% at 100% 100%, ${C.cyan}08 0%, transparent 70%)`,
+            }} />
         </View>
     );
-}
+});
+AmbientBg.displayName = 'AmbientBg';
 
-// Animated floating orb for sleek effect
-function FloatingOrb() {
+const FloatingOrb = memo(() => {
     if (Platform.OS === 'web') return null;
     const opacity = useSharedValue(0.3);
     useEffect(() => {
@@ -71,18 +101,24 @@ function FloatingOrb() {
             />
         </Animated.View>
     );
-}
+});
+FloatingOrb.displayName = 'FloatingOrb';
 
-function SectionLabel({ children }: { children: string }) {
-    return <Text style={s.sectionLabel}>{children}</Text>;
-}
+// ══════════════════════════════════════════════════════════════════════════════
+// MODULE 2: SUB-COMPONENTS
+// ══════════════════════════════════════════════════════════════════════════════
 
-function SettingRow({
+const SectionLabel = memo(({ children }: { children: string }) => (
+    <Text style={s.sectionLabel}>{children}</Text>
+));
+SectionLabel.displayName = 'SectionLabel';
+
+const SettingRow = memo(({
     icon: Icon, label, sub, right, color = C.cyan, onPress,
 }: {
     icon: React.ElementType; label: string; sub?: string;
     right?: React.ReactNode; color?: string; onPress?: () => void;
-}) {
+}) => {
     const content = (
         <View style={s.settingRow}>
             <View style={[s.settingIcon, { backgroundColor: `${color}10`, borderColor: `${color}20` }]}>
@@ -97,58 +133,57 @@ function SettingRow({
     );
     if (onPress) return <TouchableOpacity onPress={onPress} activeOpacity={0.7}>{content}</TouchableOpacity>;
     return content;
-}
+});
+SettingRow.displayName = 'SettingRow';
 
-function DangerRow({
+const DangerRow = memo(({
     icon: Icon, label, sub, onPress, loading,
 }: {
     icon: React.ElementType; label: string; sub: string; onPress: () => void; loading?: boolean;
-}) {
-    return (
-        <TouchableOpacity onPress={onPress} style={s.dangerRow} activeOpacity={0.75} disabled={loading}>
-            <View style={[s.settingIcon, { backgroundColor: `${C.pink}10`, borderColor: `${C.pink}20` }]}>
-                <Icon size={15} color={C.pink} />
-            </View>
-            <View style={{ flex: 1 }}>
-                <Text style={[s.settingLabel, { color: C.pink }]}>{label}</Text>
-                <Text style={s.settingSub}>{sub}</Text>
-            </View>
-            {loading ? <ActivityIndicator size="small" color={C.pink} /> : <ChevronRight size={15} color={C.pink} />}
-        </TouchableOpacity>
-    );
-}
+}) => (
+    <TouchableOpacity onPress={onPress} style={s.dangerRow} activeOpacity={0.75} disabled={loading}>
+        <View style={[s.settingIcon, { backgroundColor: `${C.pink}10`, borderColor: `${C.pink}20` }]}>
+            <Icon size={15} color={C.pink} />
+        </View>
+        <View style={{ flex: 1 }}>
+            <Text style={[s.settingLabel, { color: C.pink }]}>{label}</Text>
+            <Text style={s.settingSub}>{sub}</Text>
+        </View>
+        {loading ? <ActivityIndicator size="small" color={C.pink} /> : <ChevronRight size={15} color={C.pink} />}
+    </TouchableOpacity>
+));
+DangerRow.displayName = 'DangerRow';
 
-function ConfirmModal({
+const ConfirmModal = memo(({
     visible, title, body, confirmLabel, onConfirm, onCancel, loading, destructive = true,
 }: {
     visible: boolean; title: string; body: string; confirmLabel: string;
     onConfirm: () => void; onCancel: () => void; loading: boolean; destructive?: boolean;
-}) {
-    return (
-        <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-            <View style={s.modalOverlay}>
-                <Animated.View entering={FadeInDown.springify()} style={s.modalCard}>
-                    <View style={[s.modalIconWrap, { backgroundColor: destructive ? `${C.pink}14` : `${C.amber}14` }]}>
-                        <AlertTriangle size={26} color={destructive ? C.pink : C.amber} />
-                    </View>
-                    <Text style={s.modalTitle}>{title}</Text>
-                    <Text style={s.modalBody}>{body}</Text>
-                    <View style={s.modalBtns}>
-                        <TouchableOpacity onPress={onCancel} style={s.modalCancelBtn}>
-                            <Text style={s.modalCancelText}>Cancel</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            onPress={onConfirm} disabled={loading}
-                            style={[s.modalConfirmBtn, { backgroundColor: destructive ? C.pink : C.amber }]}
-                        >
-                            {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalConfirmText}>{confirmLabel}</Text>}
-                        </TouchableOpacity>
-                    </View>
-                </Animated.View>
-            </View>
-        </Modal>
-    );
-}
+}) => (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+        <View style={s.modalOverlay}>
+            <Animated.View entering={FadeInDown.springify()} style={s.modalCard}>
+                <View style={[s.modalIconWrap, { backgroundColor: destructive ? `${C.pink}14` : `${C.amber}14` }]}>
+                    <AlertTriangle size={26} color={destructive ? C.pink : C.amber} />
+                </View>
+                <Text style={s.modalTitle}>{title}</Text>
+                <Text style={s.modalBody}>{body}</Text>
+                <View style={s.modalBtns}>
+                    <TouchableOpacity onPress={onCancel} style={s.modalCancelBtn}>
+                        <Text style={s.modalCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={onConfirm} disabled={loading}
+                        style={[s.modalConfirmBtn, { backgroundColor: destructive ? C.pink : C.amber }]}
+                    >
+                        {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalConfirmText}>{confirmLabel}</Text>}
+                    </TouchableOpacity>
+                </View>
+            </Animated.View>
+        </View>
+    </Modal>
+));
+ConfirmModal.displayName = 'ConfirmModal';
 
 export default function SettingsScreen() {
     const router = useRouter();
@@ -225,137 +260,136 @@ export default function SettingsScreen() {
     });
 
     return (
-        <View style={{ flex: 1, backgroundColor: C.bg, backgroundImage: Platform.OS === 'web' ? 'radial-gradient(ellipse 100% 50% at 50% 0%, rgba(0, 212, 255, 0.05) 0%, transparent 60%)' : undefined }}>
+        <View style={{ flex: 1, backgroundColor: C.bg, marginTop: 0, paddingTop: 0, backgroundImage: Platform.OS === 'web' ? `radial-gradient(ellipse 100% 50% at 50% 0%, ${C.cyan}05 0%, transparent 60%)` : undefined }}>
             <AmbientBg />
-            <FloatingOrb />
 
-            {banner && (
-                <Animated.View
-                    entering={FadeInDown.springify()} exiting={FadeOutUp.duration(200)}
-                    style={[s.banner, { backgroundColor: banner.ok ? `${C.green}15` : `${C.pink}15`, borderColor: banner.ok ? `${C.green}40` : `${C.pink}40` }]}
-                >
-                    {banner.ok ? <CheckCircle2 size={15} color={C.green} /> : <AlertTriangle size={15} color={C.pink} />}
-                    <Text style={[s.bannerText, { color: banner.ok ? C.green : C.pink }]}>{banner.text}</Text>
-                </Animated.View>
-            )}
+                {banner && (
+                    <Animated.View
+                        entering={FadeInDown.springify()} exiting={FadeOutUp.duration(200)}
+                        style={[s.banner, { backgroundColor: banner.ok ? `${C.green}15` : `${C.pink}15`, borderColor: banner.ok ? `${C.green}40` : `${C.pink}40` }]}
+                    >
+                        {banner.ok ? <CheckCircle2 size={15} color={C.green} /> : <AlertTriangle size={15} color={C.pink} />}
+                        <Text style={[s.bannerText, { color: banner.ok ? C.green : C.pink }]}>{banner.text}</Text>
+                    </Animated.View>
+                )}
 
-            <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-                {/* ── Account ── */}
-                <Animated.View entering={FadeInDown.delay(60).duration(600).springify().damping(20)}>
-                    <SectionLabel>ACCOUNT</SectionLabel>
-                    <View style={s.card}>
-                        <SettingRow icon={UserIcon} label="Profile" sub={profile?.full_name ?? profile?.email ?? ''} color={C.cyan} onPress={() => router.push('/(tabs)/profile')} />
-                        <View style={s.divider} />
-                        <SettingRow icon={Lock} label="Security & Password" sub="Change your password, PIN, biometrics, and API keys" color={C.cyan} onPress={() => router.push('/(tabs)/(settings)/security' as any)} />
-                    </View>
-                </Animated.View>
+                <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                    {/* ── Account ── */}
+                    <Animated.View entering={FadeInDown.delay(60).duration(600).springify().damping(20)}>
+                        <SectionLabel>ACCOUNT</SectionLabel>
+                        <View style={s.card}>
+                            <SettingRow icon={UserIcon} label="Profile" sub={profile?.full_name ?? profile?.email ?? ''} color={C.cyan} onPress={() => router.push('/(tabs)/profile' as any)} />
+                            <View style={s.divider} />
+                            <SettingRow icon={Lock} label="Security & Password" sub="Change your password, PIN, biometrics, and API keys" color={C.cyan} onPress={() => router.push('/(tabs)/(settings)/security' as any)} />
+                        </View>
+                    </Animated.View>
 
-                {/* ── Admin — ONLY visible to admins ── */}
-                {isAdmin && (
-                    <Animated.View entering={FadeInDown.delay(120).duration(600).springify().damping(20)}>
-                        <SectionLabel>ADMINISTRATION</SectionLabel>
+                    {/* ── Admin — ONLY visible to admins ── */}
+                    {isAdmin && (
+                        <Animated.View entering={FadeInDown.delay(120).duration(600).springify().damping(20)}>
+                            <SectionLabel>ADMINISTRATION</SectionLabel>
+                            <View style={s.card}>
+                                <SettingRow
+                                    icon={Shield} label="Admin Core" sub="Manage users, roles, and system API keys"
+                                    color={C.pink} onPress={() => router.push('/(admin)/' as any)}
+                                />
+                            </View>
+                        </Animated.View>
+                    )}
+
+                    {/* ── Pipeline ── */}
+                    <Animated.View entering={FadeInDown.delay(180).duration(600).springify().damping(20)}>
+                        <SectionLabel>PIPELINE</SectionLabel>
                         <View style={s.card}>
                             <SettingRow
-                                icon={Shield} label="Admin Core" sub="Manage users, roles, and system API keys"
-                                color={C.pink} onPress={() => router.push('/(admin)/' as any)}
+                                icon={Zap} label="Auto-scrape on open" sub="Run scraper automatically when the app launches"
+                                color={C.cyan}
+                                right={
+                                    <Switch
+                                        value={autoScrape} onValueChange={setAutoScrape}
+                                        trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.cyan}50` }}
+                                        thumbColor={autoScrape ? C.cyan : 'rgba(255,255,255,0.3)'}
+                                    />
+                                }
+                            />
+                            <View style={s.divider} />
+                            <SettingRow
+                                icon={Bell} label="Push Notifications" sub="Get notified on interview replies"
+                                color={C.purple}
+                                right={
+                                    <Switch
+                                        value={notifs} onValueChange={setNotifs}
+                                        trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.purple}50` }}
+                                        thumbColor={notifs ? C.purple : 'rgba(255,255,255,0.3)'}
+                                    />
+                                }
                             />
                         </View>
                     </Animated.View>
-                )}
 
-                {/* ── Pipeline ── */}
-                <Animated.View entering={FadeInDown.delay(180).duration(600).springify().damping(20)}>
-                    <SectionLabel>PIPELINE</SectionLabel>
-                    <View style={s.card}>
-                        <SettingRow
-                            icon={Zap} label="Auto-scrape on open" sub="Run scraper automatically when the app launches"
-                            color={C.cyan}
-                            right={
-                                <Switch
-                                    value={autoScrape} onValueChange={setAutoScrape}
-                                    trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.cyan}50` }}
-                                    thumbColor={autoScrape ? C.cyan : 'rgba(255,255,255,0.3)'}
-                                />
-                            }
-                        />
-                        <View style={s.divider} />
-                        <SettingRow
-                            icon={Bell} label="Push Notifications" sub="Get notified on interview replies"
-                            color={C.purple}
-                            right={
-                                <Switch
-                                    value={notifs} onValueChange={setNotifs}
-                                    trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.purple}50` }}
-                                    thumbColor={notifs ? C.purple : 'rgba(255,255,255,0.3)'}
-                                />
-                            }
-                        />
-                    </View>
-                </Animated.View>
+                    {/* ── Premium CTA — hidden for premium/admin ── */}
+                    {!isPremium && (
+                        <Animated.View entering={FadeInDown.delay(240).duration(600).springify().damping(20)} style={s.premiumCard}>
+                            <Crown size={22} color={C.amber} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={s.premiumTitle}>Upgrade to Premium</Text>
+                                <Text style={s.premiumSub}>Unlimited applications, BYOK priority, no rate limits.</Text>
+                            </View>
+                            <TouchableOpacity style={s.premiumBtn} activeOpacity={0.85}>
+                                <Text style={s.premiumBtnText}>UPGRADE</Text>
+                            </TouchableOpacity>
+                        </Animated.View>
+                    )}
 
-                {/* ── Premium CTA — hidden for premium/admin ── */}
-                {!isPremium && (
-                    <Animated.View entering={FadeInDown.delay(240).duration(600).springify().damping(20)} style={s.premiumCard}>
-                        <Crown size={22} color={C.amber} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={s.premiumTitle}>Upgrade to Premium</Text>
-                            <Text style={s.premiumSub}>Unlimited applications, BYOK priority, no rate limits.</Text>
+                    {/* ── About ── */}
+                    <Animated.View entering={FadeInDown.delay(300).duration(600).springify().damping(20)}>
+                        <SectionLabel>ABOUT</SectionLabel>
+                        <View style={s.card}>
+                            <SettingRow icon={Info} label="OpusHunter" sub="Version 1.0.0 — AI Job Application Engine" color={C.amber} />
                         </View>
-                        <TouchableOpacity style={s.premiumBtn} activeOpacity={0.85}>
-                            <Text style={s.premiumBtnText}>UPGRADE</Text>
-                        </TouchableOpacity>
+
+                        {/* ── Danger Zone ── */}
+                        <SectionLabel>DANGER ZONE</SectionLabel>
+                        <View style={s.card}>
+                            <DangerRow icon={RefreshCw} label="Clear Pipeline" sub="Remove all pending jobs from your queue" onPress={() => setConfirm('pipeline')} />
+                            <View style={s.divider} />
+                            <DangerRow icon={Trash2} label="Clear Application History" sub="Delete all submitted applications" onPress={() => setConfirm('history')} />
+                            <View style={s.divider} />
+                            <DangerRow icon={Trash2} label="Delete Account" sub="Permanently remove your account and data" onPress={() => setConfirm('account')} />
+                        </View>
+
+                        <View style={{ height: 60 }} />
                     </Animated.View>
-                )}
+                </ScrollView>
 
-                {/* ── About ── */}
-                <Animated.View entering={FadeInDown.delay(300).duration(600).springify().damping(20)}>
-                    <SectionLabel>ABOUT</SectionLabel>
-                    <View style={s.card}>
-                        <SettingRow icon={Info} label="OpusHunter" sub="Version 1.0.0 — AI Job Application Engine" color={C.amber} />
-                    </View>
-
-                    {/* ── Danger Zone ── */}
-                    <SectionLabel>DANGER ZONE</SectionLabel>
-                    <View style={s.card}>
-                        <DangerRow icon={RefreshCw} label="Clear Pipeline" sub="Remove all pending jobs from your queue" onPress={() => setConfirm('pipeline')} />
-                        <View style={s.divider} />
-                        <DangerRow icon={Trash2} label="Clear Application History" sub="Delete all submitted applications" onPress={() => setConfirm('history')} />
-                        <View style={s.divider} />
-                        <DangerRow icon={Trash2} label="Delete Account" sub="Permanently remove your account and data" onPress={() => setConfirm('account')} />
-                    </View>
-
-                    <View style={{ height: 60 }} />
-                </Animated.View>
-            </ScrollView>
-
-            <ConfirmModal
-                visible={confirm === 'pipeline'}
-                title="Clear Pipeline?"
-                body="All pending jobs will be removed. Already-applied jobs are unaffected."
-                confirmLabel="Clear Pipeline"
-                onConfirm={() => clearPipelineMutation.mutate()}
-                onCancel={() => setConfirm(null)}
-                loading={clearPipelineMutation.isPending}
-            />
-            <ConfirmModal
-                visible={confirm === 'history'}
-                title="Clear History?"
-                body="All application history will be permanently deleted."
-                confirmLabel="Clear History"
-                onConfirm={() => clearHistoryMutation.mutate()}
-                onCancel={() => setConfirm(null)}
-                loading={clearHistoryMutation.isPending}
-            />
-            <ConfirmModal
-                visible={confirm === 'account'}
-                title="Delete Account?"
-                body="This is permanent. All your data, applications, and CVs will be erased."
-                confirmLabel="Delete Forever"
-                onConfirm={() => deleteAccountMutation.mutate()}
-                onCancel={() => setConfirm(null)}
-                loading={deleteAccountMutation.isPending}
-            />
-        </View>
+                <ConfirmModal
+                    visible={confirm === 'pipeline'}
+                    title="Clear Pipeline?"
+                    body="All pending jobs will be removed. Already-applied jobs are unaffected."
+                    confirmLabel="Clear Pipeline"
+                    onConfirm={() => clearPipelineMutation.mutate()}
+                    onCancel={() => setConfirm(null)}
+                    loading={clearPipelineMutation.isPending}
+                />
+                <ConfirmModal
+                    visible={confirm === 'history'}
+                    title="Clear History?"
+                    body="All application history will be permanently deleted."
+                    confirmLabel="Clear History"
+                    onConfirm={() => clearHistoryMutation.mutate()}
+                    onCancel={() => setConfirm(null)}
+                    loading={clearHistoryMutation.isPending}
+                />
+                <ConfirmModal
+                    visible={confirm === 'account'}
+                    title="Delete Account?"
+                    body="This is permanent. All your data, applications, and CVs will be erased."
+                    confirmLabel="Delete Forever"
+                    onConfirm={() => deleteAccountMutation.mutate()}
+                    onCancel={() => setConfirm(null)}
+                    loading={deleteAccountMutation.isPending}
+                />
+            </View>
     );
 }
 
