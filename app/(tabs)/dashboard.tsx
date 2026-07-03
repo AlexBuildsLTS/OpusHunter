@@ -429,7 +429,7 @@ export default function DashboardScreen() {
                   <TouchableOpacity onPress={() => router.push('/(tabs)/configure' as any)} style={{ marginTop: 10 }} activeOpacity={0.8}>
                     <Text style={{ color: C.sub, fontSize: 12 }}>
                       No active rules —{' '}
-                      <Text style={{ color: C.cyan, fontWeight: '700' }}>add one →</Text>
+                      <Text style={{ color: C.cyan, fontWeight: '700' }}> Configure →</Text>
                     </Text>
                   </TouchableOpacity>
                 )}

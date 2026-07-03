@@ -224,211 +224,227 @@ function EngineTab({
             keyboardShouldPersistTaps="handled"
         >
             {/* ── Scraper CTA ── */}
-            <Animated.View entering={FadeInDown.delay(60).springify()} style={[st.section, st.scraperCard]}>
-                <View style={st.scraperCardLeft}>
-                    <View style={st.scraperPulse}>
-                        <Zap size={18} color={C.cyan} />
+            <Animated.View entering={FadeInDown.delay(60).springify()} style={st.sectionWrapper}>
+                <GlassCard tint="cyan" padding="md" glow hoverable style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                    <View style={st.scraperCardLeft}>
+                        <View style={st.scraperPulse}>
+                            <Zap size={18} color={C.cyan} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={st.scraperTitle}>Engine Ready</Text>
+                            <Text style={st.scraperSub}>
+                                {activeRulesCount > 0
+                                    ? `${activeRulesCount} active rule${activeRulesCount > 1 ? 's' : ''} · merging all sources`
+                                    : 'Configure rules below then run'}
+                            </Text>
+                        </View>
                     </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={st.scraperTitle}>Engine Ready</Text>
-                        <Text style={st.scraperSub}>
-                            {activeRulesCount > 0
-                                ? `${activeRulesCount} active rule${activeRulesCount > 1 ? 's' : ''} · merging all sources`
-                                : 'Configure rules below then run'}
-                        </Text>
-                    </View>
-                </View>
-                <AnimatedPressable
-                    onPress={onScrape}
-                    disabled={isScraping || activeRulesCount === 0}
-                    scaleDownTo={0.96}
-                    style={[st.scrapeBtn, (isScraping || activeRulesCount === 0) && { opacity: 0.45 }]}
-                    activeOpacity={0.8}
-                >
-                    {isScraping
-                        ? <ActivityIndicator color="#000" size="small" />
-                        : <Text style={st.scrapeBtnText}>RUN</Text>}
-                </AnimatedPressable>
+                    <AnimatedPressable
+                        onPress={onScrape}
+                        disabled={isScraping || activeRulesCount === 0}
+                        scaleDownTo={0.96}
+                        style={[st.scrapeBtn, (isScraping || activeRulesCount === 0) && { opacity: 0.45 }]}
+                        activeOpacity={0.8}
+                    >
+                        {isScraping
+                            ? <ActivityIndicator color="#000" size="small" />
+                            : <Text style={st.scrapeBtnText}>RUN</Text>}
+                    </AnimatedPressable>
+                </GlassCard>
             </Animated.View>
 
             {/* ── Locations ── */}
-            <Animated.View entering={FadeInDown.delay(100).springify()} style={st.section}>
-                <SectionHeader icon={MapPin} title="Target Locations" sub="Enter cities or countries to target" />
+            <Animated.View entering={FadeInDown.delay(100).springify()} style={st.sectionWrapper}>
+                <GlassCard tint="frost" padding="md" hoverable>
+                    <SectionHeader icon={MapPin} title="Target Locations" sub="Enter cities or countries to target" />
 
-                {/* Custom location input */}
-                <View style={[st.customLocRow, { marginBottom: 16 }]}>
-                    <TextInput
-                        style={st.customLocInput}
-                        placeholder="e.g. Sweden, London, New York..."
-                        placeholderTextColor={C.dim}
-                        value={customLoc}
-                        onChangeText={setCustomLoc}
-                        onSubmitEditing={addCustomLocation}
-                        returnKeyType="done"
-                        autoCorrect={false}
-                        {...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {})}
-                    />
-                    <TouchableOpacity
-                        onPress={addCustomLocation}
-                        style={st.customLocBtn}
-                        activeOpacity={0.8}
-                        disabled={!customLoc.trim()}
-                    >
-                        <Plus size={16} color={customLoc.trim() ? '#000' : C.sub} />
-                    </TouchableOpacity>
-                </View>
+                    {/* Custom location input */}
+                    <View style={[st.customLocRow, { marginBottom: 16 }]}>
+                        <TextInput
+                            style={st.customLocInput}
+                            placeholder="e.g. Sweden, London, New York..."
+                            placeholderTextColor={C.dim}
+                            value={customLoc}
+                            onChangeText={setCustomLoc}
+                            onSubmitEditing={addCustomLocation}
+                            returnKeyType="done"
+                            autoCorrect={false}
+                            {...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {})}
+                        />
+                        <TouchableOpacity
+                            onPress={addCustomLocation}
+                            style={st.customLocBtn}
+                            activeOpacity={0.8}
+                            disabled={!customLoc.trim()}
+                        >
+                            <Plus size={16} color={customLoc.trim() ? '#000' : C.sub} />
+                        </TouchableOpacity>
+                    </View>
 
-                {/* Selected locations */}
-                {config.locations.length > 0 ? (
-                    <View style={st.chipGrid}>
-                        {config.locations.map((loc) => (
-                            <TouchableOpacity
-                                key={loc}
-                                onPress={() => toggle('locations', loc)}
-                                style={[st.chip, { borderColor: `${C.cyan}40`, backgroundColor: `${C.cyan}0A` }]}
-                            >
-                                <Text style={[st.chipText, { color: C.cyan }]}>{loc}</Text>
-                                <X size={10} color={C.cyan} />
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                ) : (
-                    <View style={{ paddingVertical: 12, alignItems: 'center', backgroundColor: '#0C0D1D', borderRadius: 12, borderWidth: 1, borderColor: '#333' }}>
-                        <Text style={{ color: C.dim, fontSize: 12 }}>No locations added yet.</Text>
-                    </View>
-                )}
+                    {/* Selected locations */}
+                    {config.locations.length > 0 ? (
+                        <View style={st.chipGrid}>
+                            {config.locations.map((loc) => (
+                                <TouchableOpacity
+                                    key={loc}
+                                    onPress={() => toggle('locations', loc)}
+                                    style={[st.chip, { borderColor: `${C.cyan}40`, backgroundColor: `${C.cyan}0A` }]}
+                                >
+                                    <Text style={[st.chipText, { color: C.cyan }]}>{loc}</Text>
+                                    <X size={10} color={C.cyan} />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    ) : (
+                        <View style={{ paddingVertical: 12, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, borderWidth: 1, borderColor: C.border }}>
+                            <Text style={{ color: C.dim, fontSize: 12 }}>No locations added yet.</Text>
+                        </View>
+                    )}
+                </GlassCard>
             </Animated.View>
 
             {/* ── Work Types ── */}
-            <Animated.View entering={FadeInDown.delay(140).springify()} style={st.section}>
-                <SectionHeader icon={Briefcase} title="Work Types" sub="Toggle all that match your search" />
-                <View style={st.chipGrid}>
-                    {WORK_TYPE_OPTIONS.map((wt) => (
-                        <ToggleChip
-                            key={wt}
-                            label={WORK_TYPE_LABELS[wt]}
-                            active={config.workTypes.includes(wt)}
-                            color={C.purple}
-                            onPress={() => toggle('workTypes', wt)}
-                        />
-                    ))}
-                </View>
+            <Animated.View entering={FadeInDown.delay(140).springify()} style={st.sectionWrapper}>
+                <GlassCard tint="frost" padding="md" hoverable>
+                    <SectionHeader icon={Briefcase} title="Work Types" sub="Toggle all that match your search" />
+                    <View style={st.chipGrid}>
+                        {WORK_TYPE_OPTIONS.map((wt) => (
+                            <ToggleChip
+                                key={wt}
+                                label={WORK_TYPE_LABELS[wt]}
+                                active={config.workTypes.includes(wt)}
+                                color={C.purple}
+                                onPress={() => toggle('workTypes', wt)}
+                            />
+                        ))}
+                    </View>
+                </GlassCard>
             </Animated.View>
 
             {/* ── Experience Level ── */}
-            <Animated.View entering={FadeInDown.delay(180).springify()} style={st.section}>
-                <SectionHeader icon={BarChart2} title="Experience Level" sub="Multi-select — scraper searches all selected" />
-                <View style={st.chipGrid}>
-                    {EXPERIENCE_LEVELS.map((lvl) => (
-                        <ToggleChip
-                            key={lvl}
-                            label={lvl}
-                            active={config.experienceLevels.includes(lvl)}
-                            color={EXPERIENCE_COLORS[lvl]}
-                            onPress={() => toggle('experienceLevels', lvl)}
-                        />
-                    ))}
-                </View>
+            <Animated.View entering={FadeInDown.delay(180).springify()} style={st.sectionWrapper}>
+                <GlassCard tint="frost" padding="md" hoverable>
+                    <SectionHeader icon={BarChart2} title="Experience Level" sub="Multi-select — scraper searches all selected" />
+                    <View style={st.chipGrid}>
+                        {EXPERIENCE_LEVELS.map((lvl) => (
+                            <ToggleChip
+                                key={lvl}
+                                label={lvl}
+                                active={config.experienceLevels.includes(lvl)}
+                                color={EXPERIENCE_COLORS[lvl]}
+                                onPress={() => toggle('experienceLevels', lvl)}
+                            />
+                        ))}
+                    </View>
+                </GlassCard>
             </Animated.View>
 
             {/* ── Remote Preference ── */}
-            <Animated.View entering={FadeInDown.delay(220).springify()} style={st.section}>
-                <SectionHeader icon={Globe} title="Remote Preference" sub="Filters job listings by work arrangement" />
-                <View style={st.remoteRow}>
-                    {REMOTE_OPTIONS.map(({ key, label }) => {
-                        const active = config.remotePreference === key;
-                        return (
-                            <AnimatedPressable
-                                key={key}
-                                onPress={() => setConfig({ ...config, remotePreference: key })}
-                                scaleDownTo={0.94}
-                                style={[
-                                    st.remoteBtn,
-                                    active
-                                        ? { borderColor: `${C.cyan}50`, backgroundColor: `${C.cyan}15` }
-                                        : { borderColor: C.border, backgroundColor: 'rgba(255,255,255,0.04)' },
-                                ]}
-                                activeOpacity={0.75}
-                            >
-                                {active && (
-                                    <View style={st.remoteDot} />
-                                )}
-                                <Text style={[st.remoteBtnText, { color: active ? C.cyan : C.sub }]}>{label}</Text>
-                            </AnimatedPressable>
-                        );
-                    })}
-                </View>
+            <Animated.View entering={FadeInDown.delay(220).springify()} style={st.sectionWrapper}>
+                <GlassCard tint="frost" padding="md" hoverable>
+                    <SectionHeader icon={Globe} title="Remote Preference" sub="Filters job listings by work arrangement" />
+                    <View style={st.remoteRow}>
+                        {REMOTE_OPTIONS.map(({ key, label }) => {
+                            const active = config.remotePreference === key;
+                            return (
+                                <AnimatedPressable
+                                    key={key}
+                                    onPress={() => setConfig({ ...config, remotePreference: key })}
+                                    scaleDownTo={0.94}
+                                    style={[
+                                        st.remoteBtn,
+                                        active
+                                            ? { borderColor: `${C.cyan}50`, backgroundColor: `${C.cyan}15` }
+                                            : { borderColor: C.border, backgroundColor: 'rgba(255,255,255,0.04)' },
+                                    ]}
+                                    activeOpacity={0.75}
+                                >
+                                    {active && (
+                                        <View style={st.remoteDot} />
+                                    )}
+                                    <Text style={[st.remoteBtnText, { color: active ? C.cyan : C.sub }]}>{label}</Text>
+                                </AnimatedPressable>
+                            );
+                        })}
+                    </View>
+                </GlassCard>
             </Animated.View>
 
             {/* ── Minimum Salary ── */}
-            <Animated.View entering={FadeInDown.delay(260).springify()} style={st.section}>
-                <SectionHeader icon={DollarSign} title="Minimum Salary" sub="Filter out roles below this threshold" />
-                <View style={st.salaryRow}>
-                    {SALARY_RANGES.map((range) => (
-                        <ToggleChip
-                            key={range}
-                            label={range}
-                            active={config.salaryMin === range}
-                            color={C.amber}
-                            onPress={() => setConfig({ ...config, salaryMin: range })}
-                        />
-                    ))}
-                </View>
+            <Animated.View entering={FadeInDown.delay(260).springify()} style={st.sectionWrapper}>
+                <GlassCard tint="frost" padding="md" hoverable>
+                    <SectionHeader icon={DollarSign} title="Minimum Salary" sub="Filter out roles below this threshold" />
+                    <View style={st.salaryRow}>
+                        {SALARY_RANGES.map((range) => (
+                            <ToggleChip
+                                key={range}
+                                label={range}
+                                active={config.salaryMin === range}
+                                color={C.amber}
+                                onPress={() => setConfig({ ...config, salaryMin: range })}
+                            />
+                        ))}
+                    </View>
+                </GlassCard>
             </Animated.View>
 
             {/* ── Job Boards ── */}
-            <Animated.View entering={FadeInDown.delay(300).springify()} style={st.section}>
-                <SectionHeader icon={Globe} title="Job Boards" sub="Sources the scraper will query" />
-                <View style={st.boardGrid}>
-                    {JOB_BOARDS.map((board) => {
-                        const active = config.jobBoards.includes(board.key);
-                        return (
-                            <TouchableOpacity
-                                key={board.key}
-                                onPress={() => toggle('jobBoards', board.key)}
-                                style={[
-                                    st.boardCard,
-                                    active
-                                        ? { borderColor: `${board.color}60`, backgroundColor: `${board.color}15` }
-                                        : { borderColor: C.border, backgroundColor: 'rgba(255,255,255,0.04)' },
-                                ]}
-                                activeOpacity={0.8}
-                            >
-                                {active && (
-                                    <View style={[st.boardCheck, { backgroundColor: board.color }]}>
-                                        <Check size={9} color="#000" />
-                                    </View>
-                                )}
-                                <Text style={[st.boardLabel, { color: active ? board.color : C.sub }]}>
-                                    {board.label}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
+            <Animated.View entering={FadeInDown.delay(300).springify()} style={st.sectionWrapper}>
+                <GlassCard tint="frost" padding="md" hoverable>
+                    <SectionHeader icon={Globe} title="Job Boards" sub="Sources the scraper will query" />
+                    <View style={st.boardGrid}>
+                        {JOB_BOARDS.map((board) => {
+                            const active = config.jobBoards.includes(board.key);
+                            return (
+                                <TouchableOpacity
+                                    key={board.key}
+                                    onPress={() => toggle('jobBoards', board.key)}
+                                    style={[
+                                        st.boardCard,
+                                        active
+                                            ? { borderColor: `${board.color}60`, backgroundColor: `${board.color}15` }
+                                            : { borderColor: C.border, backgroundColor: 'rgba(255,255,255,0.04)' },
+                                    ]}
+                                    activeOpacity={0.8}
+                                >
+                                    {active && (
+                                        <View style={[st.boardCheck, { backgroundColor: board.color }]}>
+                                            <Check size={9} color="#000" />
+                                        </View>
+                                    )}
+                                    <Text style={[st.boardLabel, { color: active ? board.color : C.sub }]}>
+                                        {board.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                </GlassCard>
             </Animated.View>
 
             {/* ── Behavior Toggles ── */}
-            <Animated.View entering={FadeInDown.delay(340).springify()} style={st.section}>
-                <SectionHeader icon={Settings2} title="Engine Behavior" />
-                {[
-                    { key: 'autoApply', label: 'Auto-Apply', sub: 'Submit applications automatically on match', color: C.pink },
-                    { key: 'skipApplied', label: 'Skip Already Applied', sub: 'Never apply twice to the same job', color: C.cyan },
-                    { key: 'activeRulesOnly', label: 'Active Rules Only', sub: 'Ignore disabled search rules', color: C.purple },
-                ].map(({ key, label, sub, color }) => (
-                    <View key={key} style={st.toggleRow}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={st.toggleLabel}>{label}</Text>
-                            <Text style={st.toggleSub}>{sub}</Text>
+            <Animated.View entering={FadeInDown.delay(340).springify()} style={st.sectionWrapper}>
+                <GlassCard tint="frost" padding="md" hoverable>
+                    <SectionHeader icon={Settings2} title="Engine Behavior" />
+                    {[
+                        { key: 'autoApply', label: 'Auto-Apply', sub: 'Submit applications automatically on match', color: C.pink },
+                        { key: 'skipApplied', label: 'Skip Already Applied', sub: 'Never apply twice to the same job', color: C.cyan },
+                        { key: 'activeRulesOnly', label: 'Active Rules Only', sub: 'Ignore disabled search rules', color: C.purple },
+                    ].map(({ key, label, sub, color }) => (
+                        <View key={key} style={st.toggleRow}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={st.toggleLabel}>{label}</Text>
+                                <Text style={st.toggleSub}>{sub}</Text>
+                            </View>
+                            <Switch
+                                value={(config as any)[key] as boolean}
+                                onValueChange={(v) => setConfig({ ...config, [key]: v })}
+                                trackColor={{ false: 'rgba(255,255,255,0.08)', true: `${color}50` }}
+                                thumbColor={(config as any)[key] ? color : 'rgba(255,255,255,0.25)'}
+                            />
                         </View>
-                        <Switch
-                            value={(config as any)[key] as boolean}
-                            onValueChange={(v) => setConfig({ ...config, [key]: v })}
-                            trackColor={{ false: 'rgba(255,255,255,0.08)', true: `${color}50` }}
-                            thumbColor={(config as any)[key] ? color : 'rgba(255,255,255,0.25)'}
-                        />
-                    </View>
-                ))}
+                    ))}
+                </GlassCard>
             </Animated.View>
         </ScrollView>
     );
@@ -449,51 +465,57 @@ function RuleCard({
             layout={Layout.springify().damping(20)}
             entering={FadeInDown.springify()}
             exiting={FadeOutUp.duration(200)}
-            style={[st.ruleCard, { borderColor: rule.is_active ? `${C.cyan}22` : C.border }]}
         >
-            <View style={[st.ruleActiveLine, { backgroundColor: rule.is_active ? C.cyan : 'transparent' }]} />
-            <View style={{ flex: 1 }}>
-                <View style={st.ruleRow}>
-                    <Tag size={12} color={C.cyan} />
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, flexDirection: 'row' }}>
-                        {rule.keywords.map((kw) => (
-                            <View key={kw} style={st.kwChip}>
-                                <Text style={st.kwChipText}>{kw}</Text>
-                            </View>
-                        ))}
-                    </ScrollView>
-                </View>
-                <View style={[st.ruleRow, { marginTop: 7 }]}>
-                    <MapPin size={12} color={C.purple} />
-                    <Text style={st.ruleMeta}>{rule.location}</Text>
-                    <View style={st.ruleDot} />
-                    <Briefcase size={12} color={C.purple} />
-                    <Text style={st.ruleMeta}>{rule.work_types.map(wt => WORK_TYPE_LABELS[wt] ?? wt).join(', ')}</Text>
-                </View>
-                {rule.base_cover_letter.length > 0 && (
-                    <View style={[st.ruleRow, { marginTop: 5 }]}>
-                        <FileText size={12} color={C.dim} />
-                        <Text style={st.ruleMetaSub} numberOfLines={1}>
-                            {rule.base_cover_letter.substring(0, 55)}…
-                        </Text>
+            <GlassCard
+                tint={rule.is_active ? 'cyan' : 'default'}
+                padding="sm"
+                hoverable
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 11, overflow: 'hidden' }}
+            >
+                <View style={[st.ruleActiveLine, { backgroundColor: rule.is_active ? C.cyan : 'transparent' }]} />
+                <View style={{ flex: 1 }}>
+                    <View style={st.ruleRow}>
+                        <Tag size={12} color={C.cyan} />
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, flexDirection: 'row' }}>
+                            {rule.keywords.map((kw) => (
+                                <View key={kw} style={st.kwChip}>
+                                    <Text style={st.kwChipText}>{kw}</Text>
+                                </View>
+                            ))}
+                        </ScrollView>
                     </View>
-                )}
-            </View>
-            <View style={st.ruleActions}>
-                <Switch
-                    value={rule.is_active ?? false}
-                    onValueChange={(v) => onToggle(rule.id, v)}
-                    trackColor={{ false: 'rgba(255,255,255,0.08)', true: `${C.cyan}50` }}
-                    thumbColor={rule.is_active ? C.cyan : 'rgba(255,255,255,0.25)'}
-                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                />
-                <TouchableOpacity onPress={() => onEdit(rule)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Edit3 size={16} color={C.purple} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => onDelete(rule.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Trash2 size={16} color={C.pink} />
-                </TouchableOpacity>
-            </View>
+                    <View style={[st.ruleRow, { marginTop: 7 }]}>
+                        <MapPin size={12} color={C.purple} />
+                        <Text style={st.ruleMeta}>{rule.location}</Text>
+                        <View style={st.ruleDot} />
+                        <Briefcase size={12} color={C.purple} />
+                        <Text style={st.ruleMeta}>{rule.work_types.map(wt => WORK_TYPE_LABELS[wt] ?? wt).join(', ')}</Text>
+                    </View>
+                    {rule.base_cover_letter.length > 0 && (
+                        <View style={[st.ruleRow, { marginTop: 5 }]}>
+                            <FileText size={12} color={C.dim} />
+                            <Text style={st.ruleMetaSub} numberOfLines={1}>
+                                {rule.base_cover_letter.substring(0, 55)}…
+                            </Text>
+                        </View>
+                    )}
+                </View>
+                <View style={st.ruleActions}>
+                    <Switch
+                        value={rule.is_active ?? false}
+                        onValueChange={(v) => onToggle(rule.id, v)}
+                        trackColor={{ false: 'rgba(255,255,255,0.08)', true: `${C.cyan}50` }}
+                        thumbColor={rule.is_active ? C.cyan : 'rgba(255,255,255,0.25)'}
+                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                    />
+                    <TouchableOpacity onPress={() => onEdit(rule)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Edit3 size={16} color={C.purple} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => onDelete(rule.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Trash2 size={16} color={C.pink} />
+                    </TouchableOpacity>
+                </View>
+            </GlassCard>
         </Animated.View>
     );
 }
@@ -668,18 +690,22 @@ function RulesTab({
     if (rules.length === 0) {
         return (
             <ScrollView contentContainerStyle={st.tabScroll}>
-                <Animated.View entering={FadeInDown.springify()} style={st.emptyState}>
-                    <View style={st.emptyIcon}>
-                        <Tag size={26} color={C.purple} />
-                    </View>
-                    <Text style={st.emptyTitle}>No Rules Yet</Text>
-                    <Text style={st.emptyBody}>
-                        Rules power the scraper — each rule defines keywords, location, and work types for automated job hunting.
-                    </Text>
-                    <TouchableOpacity onPress={onAdd} style={st.emptyAddBtn} activeOpacity={0.8}>
-                        <Plus size={14} color={C.cyan} />
-                        <Text style={st.emptyAddText}>Add First Rule</Text>
-                    </TouchableOpacity>
+                <Animated.View entering={FadeInDown.springify()} style={st.sectionWrapper}>
+                    <GlassCard tint="frost" padding="lg" hoverable={false}>
+                        <View style={st.emptyState}>
+                            <View style={st.emptyIcon}>
+                                <Tag size={26} color={C.purple} />
+                            </View>
+                            <Text style={st.emptyTitle}>No Rules Yet</Text>
+                            <Text style={st.emptyBody}>
+                                Rules power the scraper — each rule defines keywords, location, and work types for automated job hunting.
+                            </Text>
+                            <TouchableOpacity onPress={onAdd} style={st.emptyAddBtn} activeOpacity={0.8}>
+                                <Plus size={14} color={C.cyan} />
+                                <Text style={st.emptyAddText}>Add First Rule</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </GlassCard>
                 </Animated.View>
             </ScrollView>
         );
@@ -691,24 +717,22 @@ function RulesTab({
             contentContainerStyle={st.tabScroll}
             showsVerticalScrollIndicator={false}
         >
-            <Animated.View entering={FadeInDown.springify()} style={st.section}>
-                <View style={{ gap: 11 }}>
-                    {rules.map((rule, index) => (
-                        <Animated.View
-                            key={rule.id}
-                            style={[st.section, { marginBottom: index === rules.length - 1 ? 0 : 16 }]}
-                            entering={FadeInDown.delay(index * 50).springify()}
-                        >
-                            <RuleCard
-                                rule={rule}
-                                onEdit={onEdit}
-                                onDelete={onDelete}
-                                onToggle={onToggle}
-                            />
-                        </Animated.View>
-                    ))}
-                </View>
-            </Animated.View>
+            <View style={st.sectionWrapper}>
+                {rules.map((rule, index) => (
+                    <Animated.View
+                        key={rule.id}
+                        style={{ marginBottom: index === rules.length - 1 ? 0 : 10 }}
+                        entering={FadeInDown.delay(index * 50).springify()}
+                    >
+                        <RuleCard
+                            rule={rule}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                            onToggle={onToggle}
+                        />
+                    </Animated.View>
+                ))}
+            </View>
         </ScrollView>
     );
 }
@@ -823,29 +847,28 @@ export default function ConfigureScreen() {
     ];
 
     return (
-        <View style={{ flex: 1, backgroundColor: C.bg }}>
-
+        <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: Platform.OS === 'web' ? 16 : 0 }}>
 
             {/* ── Banner ── */}
             {banner && (
                 <Animated.View
                     entering={FadeInDown.springify()}
                     exiting={FadeOutUp.duration(200)}
-                    style={[
-                        st.banner,
-                        {
-                            borderColor: banner.type === 'success' ? `${C.cyan}35` : `${C.pink}35`,
-                            backgroundColor: banner.type === 'success' ? `${C.cyan}0A` : `${C.pink}0A`,
-                            marginHorizontal: 20,
-                        },
-                    ]}
+                    style={{ marginHorizontal: 20, marginBottom: 12 }}
                 >
-                    {banner.type === 'success'
-                        ? <CheckCircle2 size={15} color={C.cyan} />
-                        : <AlertCircle size={15} color={C.pink} />}
-                    <Text style={[st.bannerText, { color: banner.type === 'success' ? C.cyan : C.pink }]}>
-                        {banner.text}
-                    </Text>
+                    <GlassCard
+                        tint={banner.type === 'success' ? 'cyan' : 'pink'}
+                        padding="sm"
+                        hoverable={false}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                    >
+                        {banner.type === 'success'
+                            ? <CheckCircle2 size={15} color={C.cyan} />
+                            : <AlertCircle size={15} color={C.pink} />}
+                        <Text style={[st.bannerText, { color: banner.type === 'success' ? C.cyan : C.pink }]}>
+                            {banner.text}
+                        </Text>
+                    </GlassCard>
                 </Animated.View>
             )}
 
@@ -860,7 +883,7 @@ export default function ConfigureScreen() {
                             style={[st.tabBtn, active && st.tabBtnActive]}
                             activeOpacity={0.75}
                         >
-                            <Icon size={14} color={active ? C.cyan : C.sub} />
+                            <Icon size={13} color={active ? C.cyan : C.sub} />
                             <Text style={[st.tabBtnText, { color: active ? C.cyan : C.sub }]}>{label}</Text>
                         </TouchableOpacity>
                     );
@@ -937,12 +960,10 @@ const st = StyleSheet.create({
     greeting: { fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.3 },
     headerSub: { fontSize: 13, color: C.sub, marginTop: 3 },
     scrapeBtn: {
-        flexDirection: 'row', alignItems: 'center', gap: 6,
-        paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12,
-        borderWidth: 1, borderColor: `${C.cyan}30`,
-        backgroundColor: `${C.cyan}08`,
+        paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12,
+        backgroundColor: C.cyan, minWidth: 64, alignItems: 'center', justifyContent: 'center',
     },
-    scrapeBtnText: { fontSize: 10, fontWeight: '800', color: C.cyan, letterSpacing: 1.5 },
+    scrapeBtnText: { color: '#000', fontSize: 11, fontWeight: '900', letterSpacing: 2 },
 
     metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 20, flexWrap: 'wrap' },
     skeleton: { borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.03)' },
@@ -972,8 +993,8 @@ const st = StyleSheet.create({
     startEngineBtnSub: { fontSize: 11, color: 'rgba(0,0,0,0.55)', fontWeight: '600' },
 
     deckSection: { marginBottom: 24 },
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-    sectionTitle: { fontSize: 17, fontWeight: '800', color: C.text, letterSpacing: -0.2 },
+    sectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 14 },
+    sectionTitle: { fontSize: 13, fontWeight: '800', color: C.text, letterSpacing: 0.3 },
     sectionLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     sectionLinkText: { fontSize: 12, fontWeight: '700', color: C.cyan },
 
@@ -1012,23 +1033,24 @@ const st = StyleSheet.create({
     bannerText: { fontSize: 12, fontWeight: '600', flex: 1 },
 
     tabBar: {
-        flexDirection: 'row', marginHorizontal: 0, marginBottom: 14,
+        flexDirection: 'row', marginHorizontal: 20, marginTop: 28, marginBottom: 16,
         backgroundColor: 'rgba(255,255,255,0.025)',
-        borderRadius: 14, borderWidth: 1, borderColor: C.border, padding: 3, gap: 3,
+        borderRadius: 14, borderWidth: 1, borderColor: C.border, padding: 2, gap: 2,
     },
     tabBtn: {
         flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        gap: 7, paddingVertical: 12, borderRadius: 12, borderWidth: 2,
+        gap: 5, paddingVertical: 8, borderRadius: 11, borderWidth: 2,
         borderColor: 'transparent',
     },
     tabBtnActive: {
         borderColor: `${C.cyan}28`,
         backgroundColor: `${C.cyan}0C`,
     },
-    tabBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+    tabBtnText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
 
     tabScroll: {
         paddingHorizontal: 20,
+        paddingTop: 8,
         paddingBottom: 120,
         gap: 0,
     },
@@ -1059,6 +1081,12 @@ const st = StyleSheet.create({
         padding: 16,
         maxWidth: 600,
         alignSelf: 'center',
+        width: '100%',
+    },
+    sectionWrapper: {
+        marginBottom: 14,
+        maxWidth: 600,
+        alignSelf: 'center' as any,
         width: '100%',
     },
     sectionHeaderOld: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 14 },
@@ -1173,7 +1201,7 @@ const st = StyleSheet.create({
     },
     kwChipText: { fontSize: 10, color: C.cyan, fontWeight: '700' },
 
-    emptyState: { alignItems: 'center', paddingVertical: 70, paddingHorizontal: 32 },
+    emptyState: { alignItems: 'center', paddingVertical: 24 },
     emptyIcon: {
         width: 72, height: 72, borderRadius: 36,
         borderWidth: 1, borderColor: `${C.purple}40`,

@@ -54,30 +54,39 @@ export type Database = {
         Row: {
           base_cover_letter: string
           created_at: string
+          experience_levels: string[]
           id: string
           is_active: boolean | null
           keywords: string[]
           location: string
+          remote_preference: string
+          salary_min: number | null
           user_id: string
           work_types: string[]
         }
         Insert: {
           base_cover_letter: string
           created_at?: string
+          experience_levels?: string[]
           id?: string
           is_active?: boolean | null
           keywords: string[]
           location: string
+          remote_preference?: string
+          salary_min?: number | null
           user_id: string
           work_types: string[]
         }
         Update: {
           base_cover_letter?: string
           created_at?: string
+          experience_levels?: string[]
           id?: string
           is_active?: boolean | null
           keywords?: string[]
           location?: string
+          remote_preference?: string
+          salary_min?: number | null
           user_id?: string
           work_types?: string[]
         }
