@@ -32,11 +32,22 @@
 
 import React from 'react';
 import { View, StyleSheet, Platform, useWindowDimensions, Image, Pressable } from 'react-native';
-import { Tabs, Slot, usePathname, useRouter } from 'expo-router';
-import { LayoutDashboard, Database, Briefcase, Cpu, Cog, LucideIcon } from 'lucide-react-native';
-import { C, LAYOUT } from '../../lib/theme';
+import { Slot, usePathname, useRouter } from 'expo-router';
+import { LayoutDashboard, Database, Cpu, Cog, LucideIcon } from 'lucide-react-native';
 import { Sidebar } from '../../components/layout/AdaptiveLayout';
 import { ProfileDropdown } from '../../components/ui/ProfileDropdown';
+
+// TODO: Import C from the correct theme module path
+const C = {
+  bg: '#0c0d1d',
+  cyan: '#00d9ff',
+  sub: '#6b7280',
+};
+
+const LAYOUT = {
+  sidebarOffset: 280,
+  headerHeight: 64,
+};
 
 type NavItem = { name: string; label: string; Icon: LucideIcon };
 
@@ -85,7 +96,7 @@ export default function TabsLayout() {
     return (
       <View className="flex-1" style={sharedStyle}>
         <Sidebar active={pathname} />
-        <View className="flex-1 relative" style={{ paddingLeft: LAYOUT.sidebarOffset }}>
+        <View className="relative flex-1" style={{ paddingLeft: LAYOUT.sidebarOffset }}>
           {/* Slot renders exactly one screen — the one matching the current
               route — and unmounts everything else. This is what makes
               switching Sidebar items swap content instead of stacking it. */}
