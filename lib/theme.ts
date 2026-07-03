@@ -16,7 +16,7 @@
  *   NOT use it as a full-card background wash anywhere going forward.
  *
  *   Backgrounds moved from green-black to true deep purple-black
- *   (#0A0714), matching the frosted, minimal reference mood — a barely-
+ *   (#0C0D1D), matching the frosted, minimal reference mood — a barely-
  *   there gradient, not a colored surface.
  *
  * Token KEYS are unchanged (cyan/purple/pink/green/amber) so existing
@@ -33,18 +33,18 @@ export const C = {
 
     // Backgrounds — deep frosted purple-black, ONE canonical value shared
     // byte-for-byte with tailwind.config.js and global.css.
-    obsidian: '#0A0714',
-    bg: '#0A0714',
-    core: '#120D1E',
-    mid: '#170F26',
+    obsidian: '#0C0D1D',
+    bg: '#0C0D1D',
+    core: '#14122A',
+    mid: '#121127',
 
     // Surface tokens — true glass: near-transparent, blurred, not colored
-    card: 'rgba(20,14,32,0.68)',
-    sidebar: '#0D0918',
+    card: 'rgba(20,14,32,0.08)',
+    sidebar: '#101024',
     border: 'rgba(255,255,255,0.08)',
 
     // Tinted / semantic borders
-    borderCyan: 'rgba(155,107,255,0.16)',
+    borderCyan: 'rgba(155,107,255,0.06)',
     borderError: 'rgba(240,70,110,0.3)',
     borderSuccess: 'rgba(52,211,153,0.3)',
     borderWarning: 'rgba(245,166,35,0.3)',
@@ -72,5 +72,5 @@ export const webHover = {
     card: { cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' },
     scaleUp: 'scale(1.015)',
     scaleDown: 'scale(0.97)',
-    glowCyan: `0 0 24px rgba(155,107,255,0.22), 0 8px 32px rgba(0,0,0,0.4)`,
+    glowCyan: `0 0 24px rgba(155,107,255,0.15), 0 8px 32px rgba(0,0,0,0.4)`,
 };

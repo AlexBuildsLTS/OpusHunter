@@ -39,6 +39,7 @@ import { GlassCard } from '../../components/ui/GlassCard';
 
 
 
+
 // ── Engine Config Types ───────────────────────────────────────────────────────
 
 const LOCATION_PRESETS = [
@@ -140,19 +141,6 @@ function parseKeywords(raw: string): string[] {
     return raw.split(',').map((k) => k.trim()).filter(Boolean);
 }
 
-// ── Ambient Bg ────────────────────────────────────────────────────────────────
-
-function AmbientBg() {
-    if (Platform.OS !== 'web') return null;
-    return (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-            {/* @ts-ignore */}
-            <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 60% 45% at 90% 5%, rgba(123,94,167,0.09) 0%, transparent 65%)' }} />
-            {/* @ts-ignore */}
-            <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 40% 40% at 10% 80%, rgba(0,212,255,0.06) 0%, transparent 60%)' }} />
-        </View>
-    );
-}
 
 // ── Toggle Chip ───────────────────────────────────────────────────────────────
 
@@ -181,10 +169,10 @@ ToggleChip.displayName = 'ToggleChip';
 
 // ── Section Header ────────────────────────────────────────────────────────────
 
-const SectionHeader = memo(({ icon: Icon, title, sub }: { icon: any; title: string; sub?: string }) => (
+const SectionHeader = memo(({ icon: Icon, title, sub }: { icon: any; title: string; sub?: string; }) => (
     <View style={st.sectionHeader}>
-        <View style={st.sectionIconBox}>
-            <Icon size={14} color={C.cyan} />
+        <View style={[st.sectionIconBox, { backgroundColor: `${C.cyan}10`, borderColor: `${C.cyan}10` }]}>
+            <Icon size={16} color={C.cyan} />
         </View>
         <View style={{ flex: 1 }}>
             <Text style={st.sectionTitle}>{title}</Text>
@@ -938,25 +926,99 @@ export default function ConfigureScreen() {
     );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// ── STYLES ────────────────────────────────────────────────────────────────────
 
 const st = StyleSheet.create({
-    // Banner
+    root: { flex: 1, backgroundColor: 'transparent' },
+    scroll: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 16 },
+    scrollDesktop: { maxWidth: 1100, width: '100%', alignSelf: 'center' as any },
+
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
+    greeting: { fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.3 },
+    headerSub: { fontSize: 13, color: C.sub, marginTop: 3 },
+    scrapeBtn: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12,
+        borderWidth: 1, borderColor: `${C.cyan}30`,
+        backgroundColor: `${C.cyan}08`,
+    },
+    scrapeBtnText: { fontSize: 10, fontWeight: '800', color: C.cyan, letterSpacing: 1.5 },
+
+    metricsRow: { flexDirection: 'row', gap: 10, marginBottom: 20, flexWrap: 'wrap' },
+    skeleton: { borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.03)' },
+
+    batchHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+    batchTitle: { fontSize: 14, fontWeight: '800', color: C.text },
+    batchCount: { fontSize: 13, fontWeight: '700', color: C.sub },
+    batchCurrent: { fontSize: 12, color: C.sub, marginTop: 8, fontStyle: 'italic' },
+
+    progressTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' },
+    progressFill: { height: '100%' as any, borderRadius: 2, backgroundColor: C.cyan },
+
+    queueBtn: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1,
+    },
+    queueBtnText: { fontSize: 12, fontWeight: '700' },
+
+    startEngineBtn: {
+        flexDirection: 'row', alignItems: 'center', gap: 14,
+        backgroundColor: C.cyan, borderRadius: 18, padding: 18, marginBottom: 24,
+        ...(Platform.OS === 'web'
+            ? ({ boxShadow: `0 0 24px ${C.cyan}55` } as any)
+            : { shadowColor: C.cyan, shadowOpacity: 0.35, shadowRadius: 20, shadowOffset: { width: 0, height: 4 } }),
+    },
+    startEngineBtnTitle: { fontSize: 13, fontWeight: '900', color: '#000', letterSpacing: 1.5, marginBottom: 2 },
+    startEngineBtnSub: { fontSize: 11, color: 'rgba(0,0,0,0.55)', fontWeight: '600' },
+
+    deckSection: { marginBottom: 24 },
+    sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+    sectionTitle: { fontSize: 17, fontWeight: '800', color: C.text, letterSpacing: -0.2 },
+    sectionLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    sectionLinkText: { fontSize: 12, fontWeight: '700', color: C.cyan },
+
+    deck: { height: 440, position: 'relative', alignItems: 'center' },
+    cardLayer: { position: 'absolute', width: '100%', height: 400 },
+    bgCard: { width: '100%', height: 400, borderRadius: 24, borderWidth: 1, borderColor: C.border },
+
+    remainingBadge: {
+        position: 'absolute', bottom: 0, alignSelf: 'center',
+        paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+        backgroundColor: 'rgba(8,16,24,0.8)', borderWidth: 1, borderColor: C.border,
+    },
+    remainingText: { fontSize: 11, fontWeight: '700', color: C.sub, letterSpacing: 1 },
+
+    emptyTitle: { fontSize: 20, fontWeight: '800', color: C.text, marginTop: 16, marginBottom: 8 },
+    emptySub: { fontSize: 13, color: C.sub, textAlign: 'center', paddingHorizontal: 32, lineHeight: 20 },
+    emptyBtn: {
+        flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20,
+        paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14,
+        borderWidth: 1, borderColor: `${C.cyan}35`, backgroundColor: `${C.cyan}08`,
+    },
+
+    center: { alignItems: 'center', paddingVertical: 40 },
+    centerText: { fontSize: 14, color: C.sub },
+    retryBtn: { marginTop: 14, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: `${C.cyan}35` },
+
+    quickIcon: { width: 46, height: 46, borderRadius: 13, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    quickLabel: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
+    quickSub: { fontSize: 12, color: C.sub },
+
+    // Legacy configure-specific styles
     banner: {
         flexDirection: 'row', alignItems: 'center', gap: 8,
         padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 12,
     },
     bannerText: { fontSize: 12, fontWeight: '600', flex: 1 },
 
-    // Tab bar
     tabBar: {
-        flexDirection: 'row', marginHorizontal: 20, marginBottom: 14,
+        flexDirection: 'row', marginHorizontal: 0, marginBottom: 14,
         backgroundColor: 'rgba(255,255,255,0.025)',
         borderRadius: 14, borderWidth: 1, borderColor: C.border, padding: 3, gap: 3,
     },
     tabBtn: {
         flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        gap: 7, paddingVertical: 10, borderRadius: 11, borderWidth: 1,
+        gap: 7, paddingVertical: 12, borderRadius: 12, borderWidth: 2,
         borderColor: 'transparent',
     },
     tabBtnActive: {
@@ -965,14 +1027,12 @@ const st = StyleSheet.create({
     },
     tabBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
 
-    // Engine tab scroll
     tabScroll: {
         paddingHorizontal: 20,
         paddingBottom: 120,
         gap: 0,
     },
 
-    // Scraper card
     scraperCard: {
         flexDirection: 'row', alignItems: 'center',
         padding: 16, borderRadius: 18, borderWidth: 1,
@@ -987,13 +1047,12 @@ const st = StyleSheet.create({
     },
     scraperTitle: { fontSize: 14, fontWeight: '800', color: C.text },
     scraperSub: { fontSize: 11, color: C.sub, marginTop: 2 },
-    scrapeBtn: {
+    scrapeBtnOld: {
         paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12,
         backgroundColor: C.cyan, minWidth: 62, alignItems: 'center',
     },
-    scrapeBtnText: { color: '#000', fontSize: 11, fontWeight: '900', letterSpacing: 2 },
+    scrapeBtnTextOld: { color: '#000', fontSize: 11, fontWeight: '900', letterSpacing: 2 },
 
-    // Section
     section: {
         marginBottom: 16,
         borderRadius: 18, borderWidth: 1, borderColor: C.border,
@@ -1002,16 +1061,15 @@ const st = StyleSheet.create({
         alignSelf: 'center',
         width: '100%',
     },
-    sectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 14 },
+    sectionHeaderOld: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 14 },
     sectionIconBox: {
         width: 30, height: 30, borderRadius: 9,
         backgroundColor: `${C.cyan}10`, borderWidth: 1, borderColor: `${C.cyan}20`,
         alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1,
     },
-    sectionTitle: { fontSize: 13, fontWeight: '800', color: C.text },
+    sectionTitleOld: { fontSize: 13, fontWeight: '800', color: C.text },
     sectionSub: { fontSize: 11, color: C.sub, marginTop: 2, lineHeight: 16 },
 
-    // Chip grid
     chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: {
         flexDirection: 'row', alignItems: 'center', gap: 5,
@@ -1022,7 +1080,6 @@ const st = StyleSheet.create({
     chipText: { fontSize: 12, fontWeight: '700' },
     chipTextSmall: { fontSize: 10 },
 
-    // Custom location
     customLocRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
     customLocInput: {
         flex: 1, height: 42, borderRadius: 10, borderWidth: 1,
@@ -1034,7 +1091,6 @@ const st = StyleSheet.create({
         backgroundColor: C.cyan, alignItems: 'center', justifyContent: 'center',
     },
 
-    // Remote preference
     remoteRow: {
         flexDirection: 'row',
         gap: 8,
@@ -1055,7 +1111,6 @@ const st = StyleSheet.create({
     remoteDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.cyan },
     remoteBtnText: { fontSize: 12, fontWeight: '700' },
 
-    // Salary range
     salaryRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -1064,7 +1119,6 @@ const st = StyleSheet.create({
         alignItems: 'center',
     },
 
-    // Job boards grid
     boardGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -1102,7 +1156,6 @@ const st = StyleSheet.create({
     toggleLabel: { fontSize: 13, fontWeight: '700', color: C.text },
     toggleSub: { fontSize: 11, color: C.sub, marginTop: 2 },
 
-    // Rule card
     ruleCard: {
         flexDirection: 'row', alignItems: 'center',
         padding: 13, borderRadius: 16, borderWidth: 1,
@@ -1120,14 +1173,13 @@ const st = StyleSheet.create({
     },
     kwChipText: { fontSize: 10, color: C.cyan, fontWeight: '700' },
 
-    // Empty state
     emptyState: { alignItems: 'center', paddingVertical: 70, paddingHorizontal: 32 },
     emptyIcon: {
         width: 72, height: 72, borderRadius: 36,
         borderWidth: 1, borderColor: `${C.purple}40`,
         alignItems: 'center', justifyContent: 'center', marginBottom: 18,
     },
-    emptyTitle: { fontSize: 18, fontWeight: '800', color: C.text, marginBottom: 8 },
+    emptyStateTitle: { fontSize: 18, fontWeight: '800', color: C.text, marginBottom: 8 },
     emptyBody: { fontSize: 13, color: C.sub, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
     emptyAddBtn: {
         flexDirection: 'row', alignItems: 'center', gap: 7,
@@ -1136,7 +1188,6 @@ const st = StyleSheet.create({
     },
     emptyAddText: { color: C.cyan, fontSize: 13, fontWeight: '700' },
 
-    // Modal
     modalOverlay: {
         flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
         justifyContent: 'flex-end',
@@ -1173,7 +1224,6 @@ const st = StyleSheet.create({
         ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
     },
 
-    // Delete confirm
     confirmCard: {
         position: 'absolute', bottom: 0, left: 0, right: 0,
         backgroundColor: C.core, borderTopLeftRadius: 24, borderTopRightRadius: 24,

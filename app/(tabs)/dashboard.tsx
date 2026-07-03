@@ -478,7 +478,7 @@ export default function DashboardScreen() {
 
         <Animated.View entering={FadeInDown.delay(280).springify()} style={{ gap: 10 }}>
           {[
-            { label: 'Search Rules', sub: `${metrics?.active_rules ?? 0} active`, route: '/(tabs)/configure', color: C.purple, icon: Briefcase },
+            { label: 'Search Parameters', sub: `${metrics?.active_rules ?? 0} active`, route: '/(tabs)/configure', color: C.purple, icon: Briefcase },
             { label: 'Cover Letters', sub: `${metrics?.cover_letters ?? 0} saved`, route: '/(tabs)/vault', color: C.cyan, icon: BarChart2 },
           ].map(({ label, sub, route, color, icon: Icon }) => (
             <TouchableOpacity key={route} onPress={() => router.push(route as any)} activeOpacity={0.8}>
