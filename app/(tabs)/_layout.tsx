@@ -37,6 +37,7 @@
 
 import React from 'react';
 import { View, StyleSheet, Platform, useWindowDimensions, Image, Pressable } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Slot, usePathname, useRouter } from 'expo-router';
 import { LayoutDashboard, Cpu, Cog, ServerCog, CloudCog, FolderCog, Briefcase } from 'lucide-react-native';
 import { LucideIcon } from 'lucide-react-native';
@@ -141,7 +142,7 @@ export default function TabsLayout() {
       </View>
 
       {/* Custom Mobile Tab Bar */}
-      <View style={styles.mobileTabBar}>
+      <BlurView intensity={40} tint="dark" style={[styles.mobileTabBar, Platform.OS === 'web' && { backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' } as any]}>
         {NAV_ITEMS.map(({ name, Icon }) => (
           <Pressable
             key={name}
@@ -164,7 +165,7 @@ export default function TabsLayout() {
             />
           </Pressable>
         ))}
-      </View>
+      </BlurView>
     </PageContainer>
   );
 }
@@ -188,19 +189,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mobileTabBar: {
+    position: 'absolute',
+    bottom: 24,
+    left: 12,
+    right: 12,
     flexDirection: 'row',
-    backgroundColor: 'rgba(10, 7, 21, 0.02)',
+    backgroundColor: 'rgba(18, 13, 30, 0.65)',
     borderTopColor: 'transparent',
     borderColor: `${C.cyan}1A`,
     borderWidth: 1,
     height: 72,
     paddingBottom: Platform.OS === 'ios' ? 20 : 12,
     paddingTop: 12,
-    marginBottom: 24,
-    marginLeft: 12,
-    marginRight: 12,
     borderRadius: 36,
     elevation: 12,
+    zIndex: 100,
     shadowColor: C.cyan,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
