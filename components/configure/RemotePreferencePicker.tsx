@@ -1,18 +1,19 @@
 /**
- * components/configure/RemotePreferencePicker.tsx
+ * components/features/configure/RemotePreferencePicker.tsx
  * OpusHunter — Real, Persisted Work-Arrangement Filter
- * 2026-07-03 — New. Replaces the fake local-only "Remote Preference"
- * section — writes to automation_rules.remote_preference (real column).
+ * 2026-07-04 — Ported from the orphaned components/configure/ tree (see
+ * README §9). Writes to automation_rules.remote_preference — a real
+ * column, previously only reachable as non-persisted global EngineTab state.
  */
 
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { C } from '../../lib/theme';
-import { REMOTE_OPTIONS, type RuleFormState } from './types';
+import { REMOTE_OPTIONS } from '../features/configure/constants';
 
 interface RemotePreferencePickerProps {
-    value: RuleFormState['remote_preference'];
-    onChange: (v: RuleFormState['remote_preference']) => void;
+    value: string;
+    onChange: (v: string) => void;
 }
 
 export function RemotePreferencePicker({ value, onChange }: RemotePreferencePickerProps) {

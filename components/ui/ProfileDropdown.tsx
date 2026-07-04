@@ -145,13 +145,13 @@ export function ProfileDropdown() {
               </View>
 
               <View className="h-px my-1" style={{ backgroundColor: C.border }} />
-              <MenuItem icon={User} label="Profile" onPress={() => go('/(tabs)/profile')} />
-              <MenuItem icon={Settings} label="Settings" onPress={() => go('/(tabs)/(settings)')} />
+              <MenuItem icon={User} label="Profile" onPress={() => go('/(tabs)/settings/profile')} />
+              <MenuItem icon={Settings} label="Settings" onPress={() => go('/(tabs)/settings')} />
 
               {role === 'admin' && (
                 <>
                   <View className="h-px my-1" style={{ backgroundColor: C.border }} />
-                  <MenuItem icon={ShieldCheck} label="Admin Core" onPress={() => go('/(admin)/')} />
+                  <MenuItem icon={ShieldCheck} label="Admin Core" onPress={() => go('/admin/')} />
                 </>
               )}
 
@@ -164,8 +164,4 @@ export function ProfileDropdown() {
       }
     </View >
   );
-}
-
-function setOpen(arg0: boolean) {
-  throw new Error('Function not implemented.');
 }

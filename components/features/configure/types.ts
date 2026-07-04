@@ -33,6 +33,9 @@ export const DEFAULT_ENGINE: EngineConfig = {
 };
 
 export interface AutomationRule {
+    experience_levels: string[];
+    remote_preference: string;
+    salary_min: number | null;
     id: string;
     keywords: string[];
     location: string;
@@ -46,6 +49,9 @@ export interface RuleFormState {
     keywords: string;
     location: string;
     work_types: string[];
+    experience_levels: string[];
+    remote_preference: string;
+    salary_min: number | null;
     base_cover_letter: string;
     is_active: boolean;
 }
@@ -54,6 +60,9 @@ export const DEFAULT_FORM: RuleFormState = {
     keywords: '',
     location: 'Remote',
     work_types: ['FULLTIME'],
+    experience_levels: [],
+    remote_preference: 'any',
+    salary_min: null,
     base_cover_letter: '',
     is_active: true,
 };

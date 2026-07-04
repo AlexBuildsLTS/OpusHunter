@@ -17,12 +17,13 @@ import { supabase } from '../lib/supabase';
 
 export interface CityResult {
     id: number;
+    type: 'city' | 'country';
     city: string;
     region: string | null;
     country: string;
     countryCode: string;
-    latitude: number;
-    longitude: number;
+    latitude: number | null;
+    longitude: number | null;
     population: number | null;
 }
 

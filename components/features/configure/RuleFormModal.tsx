@@ -2,18 +2,33 @@
  * components/features/configure/RuleFormModal.tsx
  * OpusHunter — Create/Edit Automation Rule Modal
  * 2026-07-03 — Extracted from app/(tabs)/configure.tsx
+ * 2026-07-04 — Real Location autocomplete replaces the plain text field
+ *   (was letting people type "Remote, Onsite, Hybrid" into a location box,
+ *   which is a work-mode value, not a place — RemotePreferencePicker below
+ *   is the actual control for that now).
+ * 2026-07-04 — Added the missing "Generate with AI" button for the base
+ *   cover letter, using the rule's own toggled criteria (keywords,
+ *   location, work types, experience, remote preference) via the new
+ *   generate-rule-template edge function. Previously this was a blank
+ *   textarea with zero assistance despite the modal already holding every
+ *   input Gemini needs to draft a real starting point.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, ScrollView,
     Platform, ActivityIndicator, Modal, Switch, KeyboardAvoidingView,
 } from 'react-native';
-import { X, Check } from 'lucide-react-native';
+import { X, Check, Sparkles } from 'lucide-react-native';
+import { supabase } from '../../../lib/supabase';
 import { C } from '../../../lib/theme';
 import { st } from './styles';
 import { WORK_TYPE_OPTIONS, WORK_TYPE_LABELS } from './constants';
 import type { RuleFormState } from './types';
+import { ExperienceLevelPicker } from '../../configure/ExperienceLevelPicker';
+import { RemotePreferencePicker } from '../../configure/RemotePreferencePicker';
+import { SalaryMinPicker } from '../../configure/SalaryMinPicker';
+import { LocationAutocomplete } from './LocationAutocomplete';
 
 export function RuleFormModal({
     visible, initial, onClose, onSave, saving,
@@ -35,6 +50,32 @@ export function RuleFormModal({
                 : [...f.work_types, wt],
         }));
     };
+
+    const [generating, setGenerating] = useState(false);
+    const [generateError, setGenerateError] = useState<string | null>(null);
+
+    const handleGenerateTemplate = useCallback(async () => {
+        setGenerating(true);
+        setGenerateError(null);
+        try {
+            const { data, error } = await supabase.functions.invoke('generate-rule-template', {
+                body: {
+                    keywords: form.keywords.split(',').map((k) => k.trim()).filter(Boolean),
+                    location: form.location,
+                    work_types: form.work_types,
+                    experience_levels: form.experience_levels,
+                    remote_preference: form.remote_preference,
+                },
+            });
+            if (error) throw new Error(error.message);
+            if (data?.error) throw new Error(data.error);
+            setForm((f) => ({ ...f, base_cover_letter: data.draft }));
+        } catch (e) {
+            setGenerateError(e instanceof Error ? e.message : 'Could not generate a draft.');
+        } finally {
+            setGenerating(false);
+        }
+    }, [form.keywords, form.location, form.work_types, form.experience_levels, form.remote_preference]);
 
     return (
         <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
@@ -67,16 +108,15 @@ export function RuleFormModal({
                             </View>
 
                             <View>
-                                <Text style={st.fieldLabel}>LOCATION</Text>
-                                <TextInput
-                                    style={st.textInput}
-                                    placeholder="Remote, London, New York..."
-                                    placeholderTextColor={C.dim}
-                                    value={form.location}
-                                    onChangeText={(v) => setForm((f) => ({ ...f, location: v }))}
-                                    autoCorrect={false}
-                                    {...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {})}
+                                <Text style={st.fieldLabel}>LOCATIONS</Text>
+                                <LocationAutocomplete
+                                    selected={form.location ? form.location.split(',').map((s) => s.trim()).filter(Boolean) : []}
+                                    onChange={(locations) => setForm((f) => ({ ...f, location: locations.join(', ') }))}
                                 />
+                                <Text style={{ color: C.dim, fontSize: 11, marginTop: 6, lineHeight: 15 }}>
+                                    Add as many cities or whole countries as you want. Work mode (remote/hybrid/
+                                    on-site) is set separately below — it no longer needs to be typed in here.
+                                </Text>
                             </View>
 
                             <View>
@@ -105,11 +145,48 @@ export function RuleFormModal({
                                 </View>
                             </View>
 
+                            <ExperienceLevelPicker
+                                value={form.experience_levels}
+                                onChange={(experience_levels: string[]) => setForm((f) => ({ ...f, experience_levels }))}
+                            />
+
+                            <RemotePreferencePicker
+                                value={form.remote_preference}
+                                onChange={(remote_preference: string) => setForm((f) => ({ ...f, remote_preference }))}
+                            />
+
+                            <SalaryMinPicker
+                                value={form.salary_min}
+                                onChange={(salary_min: number | null) => setForm((f) => ({ ...f, salary_min }))}
+                            />
+
                             <View>
-                                <Text style={st.fieldLabel}>
-                                    BASE COVER LETTER{' '}
-                                    <Text style={{ color: C.sub, fontWeight: '500' }}>(AI personalises per job)</Text>
-                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                    <Text style={st.fieldLabel}>
+                                        BASE COVER LETTER{' '}
+                                        <Text style={{ color: C.sub, fontWeight: '500' }}>(AI personalises per job)</Text>
+                                    </Text>
+                                    <TouchableOpacity
+                                        onPress={handleGenerateTemplate}
+                                        disabled={generating || !form.keywords.trim()}
+                                        style={{
+                                            flexDirection: 'row', alignItems: 'center', gap: 6,
+                                            paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+                                            backgroundColor: `${C.cyan}14`, borderWidth: 1, borderColor: `${C.cyan}30`,
+                                            opacity: !form.keywords.trim() ? 0.4 : 1,
+                                        }}
+                                    >
+                                        {generating
+                                            ? <ActivityIndicator size="small" color={C.cyan} />
+                                            : <Sparkles size={12} color={C.cyan} />}
+                                        <Text style={{ color: C.cyan, fontSize: 11, fontWeight: '800' }}>
+                                            {generating ? 'Generating…' : 'Generate with AI'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                                {generateError && (
+                                    <Text style={{ color: C.pink, fontSize: 11, marginBottom: 6 }}>{generateError}</Text>
+                                )}
                                 <TextInput
                                     style={[st.textInput, { minHeight: 130, paddingTop: 14 }]}
                                     placeholder={`Dear Hiring Team,\n\nI am excited to apply for this role...`}
@@ -144,8 +221,8 @@ export function RuleFormModal({
                         <View style={st.modalFooter}>
                             <TouchableOpacity
                                 onPress={() => onSave(form)}
-                                disabled={saving || !form.keywords.trim() || !form.location.trim()}
-                                style={[st.saveBtn, (!form.keywords.trim() || !form.location.trim()) && { opacity: 0.45 }]}
+                                disabled={saving || !form.keywords.trim() || (form.remote_preference !== 'remote' && !form.location.trim())}
+                                style={[st.saveBtn, (!form.keywords.trim() || (form.remote_preference !== 'remote' && !form.location.trim())) && { opacity: 0.45 }]}
                                 activeOpacity={0.8}
                             >
                                 {saving

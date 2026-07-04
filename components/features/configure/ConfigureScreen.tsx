@@ -140,6 +140,9 @@ export function ConfigureScreen() {
             location: editingRule.location,
             work_types: editingRule.work_types,
             base_cover_letter: editingRule.base_cover_letter,
+            experience_levels: editingRule.experience_levels,
+            remote_preference: editingRule.remote_preference,
+            salary_min: editingRule.salary_min,
             is_active: editingRule.is_active ?? true,
         }
         : DEFAULT_FORM;

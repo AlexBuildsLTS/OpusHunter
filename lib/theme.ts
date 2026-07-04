@@ -1,62 +1,81 @@
 /**
  * lib/theme.ts
  * OpusHunter — Single Source of Truth for Design Tokens
- * 2026-07-02 — Repalette #2: "Frosted Obsidian Violet"
+ * 2026-07-04 — Sync pass: all C.* values now match tailwind.config.js exactly.
  *
- * WHAT CHANGED FROM LAST PASS:
- *   The previous repalette set `purple` (the secondary accent, used on 1 of
- *   4 dashboard metric cards, nav cards, etc.) to a deep EMERALD GREEN
- *   (#12B76A), on top of `green` already being green — so 2 of the app's 5
- *   accent colors were both green, and MetricCard washes each stat card's
- *   *entire background* in `${color}06`, which is why the dashboard read
- *   as a solid green block. `purple` is now genuinely purple (deep indigo
- *   violet, #6C5CE0), distinct from the primary violet (`cyan` key,
- *   #9B6BFF) and nothing like green. `green` stays reserved for small
- *   success accents (checkmarks, tiny status dots) — per instruction, nDO
- *   NOT use it as a full-card background wash anywhere going forward.
+ * WHY THIS MATTERS:
+ *   NativeWind class-based styling (bg-brand-cyan, text-content-primary, etc.)
+ *   pulls from tailwind.config.js. Inline style props (color: C.cyan, etc.)
+ *   pulled from this file. When these diverged the app had TWO different color
+ *   sets — Tailwind cards rendered violet (#9B6BFF) while inline text/icons
+ *   rendered dark crimson (#8C2748). This pass aligns both sources so every
+ *   pixel is consistent regardless of which styling path is used.
  *
- *   Backgrounds moved from green-black to true deep purple-black
- *   (#0C0D1D), matching the frosted, minimal reference mood — a barely-
- *   there gradient, not a colored surface.
+ *   New flat tokens added to C (bg, core, text, sub, dim, border, borderCyan)
+ *   mirror the surface.* and content.* Tailwind tokens so components no longer
+ *   need a separate import to get basic layout colors.
  *
- * Token KEYS are unchanged (cyan/purple/pink/green/amber) so existing
- * `C.cyan`, `bg-brand-cyan` etc. keep working — only values moved.
+ * DESIGN SYSTEM:
+ *   Background layers (darkest → lightest):  bg → core → card
+ *   Text hierarchy (most → least visible):   text → sub → dim
+ *   Accent hierarchy (primary → secondary):  cyan → purple → pink
  */
 
 export const C = {
-    // Primary neons — OpusHunter brand colors
-    cyan: '#9B6BFF',     // Primary — vivid violet. CTAs, active states, links.
-    purple: '#6C5CE0',   // Secondary — true deep indigo/blue-violet. Distinct from primary, NOT green.
-    pink: '#F0466E',     // Admin badge, destructive actions, alerts.
-    green: '#34D399',    // Success ONLY — small icons/dots/checkmarks. Never a full-card background wash.
-    amber: '#F5A623',    // Premium badge, warnings, BYOK highlights.
+    // ── Brand accent colors (synced with tailwind.config.js `brand.*`) ──────
+    cyan: '#9B6BFF',   // Primary violet  — CTAs, active nav, focus rings
+    purple: '#6C5CE0',   // Secondary indigo — hover states, secondary accents
+    pink: '#F0466E',   // Destructive / admin badge / error alerts
+    green: '#34D399',   // Success ONLY — checkmarks, status dots, never card bg
+    amber: '#F5A623',   // Premium badge, warnings, BYOK highlights
 
-    // Backgrounds — deep frosted purple-black, ONE canonical value shared
-    // byte-for-byte with tailwind.config.js and global.css.
-    obsidian: '#0C0D1D',
-    bg: '#0C0D1D',
-    core: '#14122A',
-    mid: '#121127',
+    // ── Background layers (synced with tailwind.config.js `surface.*`) ──────
+    bg: '#0A0714',     // Page canvas — outermost container backgrounds
+    core: '#120D1E',     // Elevated surface — headers, modals, sidebars
 
-    // Surface tokens — true glass: near-transparent, blurred, not colored
-    card: 'rgba(20,14,32,0.08)',
-    sidebar: '#101024',
-    border: 'rgba(255,255,255,0.08)',
+    // ── Text hierarchy — white-on-dark (synced with `content.*`) ─────────────
+    text: '#EDEAF7',                      // Primary: headings, labels, values
+    sub: 'rgba(237,234,247,0.46)',        // Secondary: captions, meta, descriptions
+    dim: 'rgba(237,234,247,0.24)',        // Tertiary: placeholders, disabled, hints
 
-    // Tinted / semantic borders
-    borderCyan: 'rgba(155,107,255,0.06)',
-    borderError: 'rgba(240,70,110,0.3)',
-    borderSuccess: 'rgba(52,211,153,0.3)',
-    borderWarning: 'rgba(245,166,35,0.3)',
-    borderC: 'rgba(155,107,255,0.14)',
-    borderP: 'rgba(108,92,224,0.14)',
-    borderK: 'rgba(240,70,110,0.14)',
+    // ── Borders ──────────────────────────────────────────────────────────────
+    border: 'rgba(255,255,255,0.08)',  // Default glass card border
+    borderCyan: 'rgba(155,107,255,0.18)', // Violet-tinted border for focused/active states    card:       'rgba(20,14,32,0.68)',     // Glass card background
+    // ── Legacy nested color map (kept for backward compat with C.colors.*) ──
+    colors: {
+        background: '#0A0714',
+        card: 'rgba(20,14,32,0.68)',
+        cardBorder: 'rgba(255,255,255,0.08)',
+        neon: {
+            cyan: '#9B6BFF',
+            pink: '#F0466E',
+            purple: '#6C5CE0',
+            orange: '#FF4500',
+            navy: '#000f2e',
+            red: '#FF0000',
+            obsidian: '#010914',
+            green: '#1BA16F',
+        },
+        text: {
+            primary: '#EDEAF7',
+            secondary: 'rgba(237,234,247,0.46)',
+        },
+    },
 
-    // Content/text
-    text: '#EDEAF7',
-    sub: 'rgba(237,234,247,0.46)',
-    dim: 'rgba(237,234,247,0.24)',
+    animation: {
+        spring: { damping: 15, stiffness: 300 },
+        timing: { fast: 150, normal: 300, slow: 500 },
+    },
+} as const;
 
+/** @deprecated — tokens have moved to C.*  (C.bg, C.sub, C.dim, etc.)
+ *  This export is kept to avoid breaking any imports that may exist outside
+ *  the tracked files. New code should use C.bg, C.sub, C.dim directly.
+ */
+export const bg = {
+    text: C.text,
+    sub: C.sub,
+    dim: C.dim,
     transparent: 'transparent',
 } as const;
 
@@ -73,4 +92,50 @@ export const webHover = {
     scaleUp: 'scale(1.015)',
     scaleDown: 'scale(0.97)',
     glowCyan: `0 0 24px rgba(155,107,255,0.15), 0 8px 32px rgba(0,0,0,0.4)`,
-};
+} as const;
+
+/**
+ * ╔═══════════════════════════════════════════════════════════════════════════╗
+ * ║ AMBIENT BACKGROUND CONFIGURATION — GLOBAL NEBULA ENGINE                   ║
+ * ║ 2026-07-04 — Rendered on every page via components/layout/AmbientBackground.tsx
+ * ║                                                                            ║
+ * ║ CUSTOMIZATION GUIDE:                                                       ║
+ * ║  • enabled: true/false to toggle ambient effect on all pages              ║
+ * ║  • pulseColors: [color1, color2, color3] — RGB hex for expanding rings   ║
+ * ║  • orbColors: [color1, color2, color3] — RGB hex for wandering blobs     ║
+ * ║  • pulseTimingMs: Duration of each pulse cycle (8000 = 8 seconds)         ║
+ * ║  • pulsDelayOffset: Stagger between pulse rings (2500 = 2.5 sec)          ║
+ * ║  • pulseScale: [min, max] ring size range during animation                ║
+ * ║  • pulseOpacity: [start, mid, end] opacity curve over pulse lifetime      ║
+ * ║  • orbBreathingFreq: Frequency of blob breathing & movement (0.5 = slow)  ║
+ * ║                                                                            ║
+ * ║ COLORS: Use C.cyan, C.purple, C.pink from above, or any hex string        ║
+ * ╚═══════════════════════════════════════════════════════════════════════════╝
+ */
+export const AMBIENT_CONFIG = {
+    // Global on/off for the entire ambient background system
+    enabled: true,
+
+    // ────────────────────────────────────────────────────────────────────────
+    // CORE PULSE CONFIGURATION (expanding rings from center)
+    // ────────────────────────────────────────────────────────────────────────
+    pulseColors: [C.cyan, C.purple, C.pink] as const,
+    pulseTimingMs: 8000,          // 8 seconds per full pulse cycle
+    pulsDelayOffset: 2500,        // 2.5 second stagger between rings
+    pulseScaleMin: 0.8,           // Smallest scale at pulse start
+    pulseScaleMax: 2.5,           // Largest scale at pulse end
+    pulseOpacityStart: 0.3,       // Opacity when pulse begins
+    pulseOpacityMid: 0.1,         // Opacity at midpoint
+    pulseOpacityEnd: 0,           // Opacity when pulse fades completely
+
+    // ────────────────────────────────────────────────────────────────────────
+    // ORGANIC ORB CONFIGURATION (wandering colored blobs)
+    // ────────────────────────────────────────────────────────────────────────
+    orbColors: [C.cyan, C.purple, C.pink] as const,
+    orbBreathingFreq: 0.5,        // Frequency of blob breathing (0.5 = slow, 2 = fast)
+
+    // NOTE: Speed & phase offsets are hard-coded in AmbientBackground.tsx
+    //       to maintain consistency. To adjust the three orb trajectories,
+    //       edit components/layout/AmbientBackground.tsx directly (search for
+    //       "ORGANIC ORBS" section, lines ~70-130).
+} as const;

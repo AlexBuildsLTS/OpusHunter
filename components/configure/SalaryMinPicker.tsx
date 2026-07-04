@@ -1,14 +1,24 @@
 /**
- * components/configure/SalaryMinPicker.tsx
+ * components/features/configure/SalaryMinPicker.tsx
  * OpusHunter — Real, Persisted Minimum-Salary Filter
- * 2026-07-03 — New. Replaces the fake local-only "Minimum Salary" section
- * — writes an actual integer to automation_rules.salary_min (real column).
+ * 2026-07-04 — Ported from the orphaned components/configure/ tree (see
+ * README §9). Writes to automation_rules.salary_min — a real column,
+ * previously only reachable as non-persisted global EngineTab state.
  */
 
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { C } from '../../lib/theme';
-import { SALARY_STEPS } from './types';
+
+const SALARY_STEPS: { label: string; value: number | null }[] = [
+    { label: 'Any', value: null },
+    { label: '$50k+', value: 50000 },
+    { label: '$75k+', value: 75000 },
+    { label: '$100k+', value: 100000 },
+    { label: '$125k+', value: 125000 },
+    { label: '$150k+', value: 150000 },
+    { label: '$200k+', value: 200000 },
+];
 
 interface SalaryMinPickerProps {
     value: number | null;

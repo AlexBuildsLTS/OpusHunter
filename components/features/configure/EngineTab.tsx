@@ -61,6 +61,17 @@ export const SectionHeader = memo(({ icon: Icon, title, sub }: { icon: any; titl
 ));
 SectionHeader.displayName = 'SectionHeader';
 
+// ── Section Card — glass wrapper with web hover ───────────────────────────────
+const SectionCard = ({ children, entering, extraStyle }: { children: React.ReactNode; entering: any; extraStyle?: any }) => (
+    <Animated.View
+        entering={entering}
+        className="transition-all duration-300 hover:-translate-y-0.5 hover:scale-[1.012] hover:border-white/20 hover:shadow-glass-lg"
+        style={[st.section, extraStyle]}
+    >
+        {children}
+    </Animated.View>
+);
+
 // ── Engine Tab ────────────────────────────────────────────────────────────────
 
 export function EngineTab({
@@ -99,7 +110,7 @@ export function EngineTab({
             keyboardShouldPersistTaps="handled"
         >
             {/* ── Scraper CTA ── */}
-            <Animated.View entering={FadeInDown.delay(60).springify()} style={[st.section, st.scraperCard]}>
+            <SectionCard entering={FadeInDown.delay(60).springify()} extraStyle={st.scraperCard}>
                 <View style={st.scraperCardLeft}>
                     <View style={st.scraperPulse}>
                         <Zap size={18} color={C.cyan} />
@@ -124,10 +135,10 @@ export function EngineTab({
                         ? <ActivityIndicator color="#000" size="small" />
                         : <Text style={st.scrapeBtnText}>RUN</Text>}
                 </AnimatedPressable>
-            </Animated.View>
+            </SectionCard>
 
             {/* ── Locations ── */}
-            <Animated.View entering={FadeInDown.delay(100).springify()} style={st.section}>
+            <SectionCard entering={FadeInDown.delay(100).springify()}>
                 <SectionHeader icon={MapPin} title="Target Locations" sub="Enter cities or countries to target" />
 
                 <View style={[st.customLocRow, { marginBottom: 16 }]}>
@@ -170,10 +181,10 @@ export function EngineTab({
                         <Text style={{ color: C.dim, fontSize: 12 }}>No locations added yet.</Text>
                     </View>
                 )}
-            </Animated.View>
+            </SectionCard>
 
             {/* ── Work Types ── */}
-            <Animated.View entering={FadeInDown.delay(140).springify()} style={st.section}>
+            <SectionCard entering={FadeInDown.delay(140).springify()}>
                 <SectionHeader icon={Briefcase} title="Work Types" sub="Toggle all that match your search" />
                 <View style={st.chipGrid}>
                     {WORK_TYPE_OPTIONS.map((wt) => (
@@ -186,10 +197,10 @@ export function EngineTab({
                         />
                     ))}
                 </View>
-            </Animated.View>
+            </SectionCard>
 
             {/* ── Experience Level ── */}
-            <Animated.View entering={FadeInDown.delay(180).springify()} style={st.section}>
+            <SectionCard entering={FadeInDown.delay(180).springify()}>
                 <SectionHeader icon={BarChart2} title="Experience Level" sub="Multi-select — scraper searches all selected" />
                 <View style={st.chipGrid}>
                     {EXPERIENCE_LEVELS.map((lvl) => (
@@ -202,10 +213,10 @@ export function EngineTab({
                         />
                     ))}
                 </View>
-            </Animated.View>
+            </SectionCard>
 
             {/* ── Remote Preference ── */}
-            <Animated.View entering={FadeInDown.delay(220).springify()} style={st.section}>
+            <SectionCard entering={FadeInDown.delay(220).springify()}>
                 <SectionHeader icon={Globe} title="Remote Preference" sub="Filters job listings by work arrangement" />
                 <View style={st.remoteRow}>
                     {REMOTE_OPTIONS.map(({ key, label }) => {
@@ -229,10 +240,10 @@ export function EngineTab({
                         );
                     })}
                 </View>
-            </Animated.View>
+            </SectionCard>
 
             {/* ── Minimum Salary ── */}
-            <Animated.View entering={FadeInDown.delay(260).springify()} style={st.section}>
+            <SectionCard entering={FadeInDown.delay(260).springify()}>
                 <SectionHeader icon={DollarSign} title="Minimum Salary" sub="Filter out roles below this threshold" />
                 <View style={st.salaryRow}>
                     {SALARY_RANGES.map((range) => (
@@ -245,10 +256,10 @@ export function EngineTab({
                         />
                     ))}
                 </View>
-            </Animated.View>
+            </SectionCard>
 
             {/* ── Job Boards ── */}
-            <Animated.View entering={FadeInDown.delay(300).springify()} style={st.section}>
+            <SectionCard entering={FadeInDown.delay(300).springify()}>
                 <SectionHeader icon={Globe} title="Job Boards" sub="Sources the scraper will query" />
                 <View style={st.boardGrid}>
                     {JOB_BOARDS.map((board) => {
@@ -277,10 +288,10 @@ export function EngineTab({
                         );
                     })}
                 </View>
-            </Animated.View>
+            </SectionCard>
 
             {/* ── Behavior Toggles ── */}
-            <Animated.View entering={FadeInDown.delay(340).springify()} style={st.section}>
+            <SectionCard entering={FadeInDown.delay(340).springify()}>
                 <SectionHeader icon={Settings2} title="Engine Behavior" />
                 {[
                     { key: 'autoApply', label: 'Auto-Apply', sub: 'Submit applications automatically on match', color: C.pink },
@@ -300,7 +311,7 @@ export function EngineTab({
                         />
                     </View>
                 ))}
-            </Animated.View>
+            </SectionCard>
         </ScrollView>
     );
 }

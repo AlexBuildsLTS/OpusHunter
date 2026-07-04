@@ -2,6 +2,11 @@
  * app/(tabs)/_layout.tsx
  * OpusHunter — Unified Tabs Layout
  * 2026-07-02 — Sidebar de-duplicated, palette drift fixed
+ * 2026-07-04 — Removed "Vault" from both nav bars (mobile here + desktop
+ *   Sidebar in AdaptiveLayout.tsx). Moved to Settings → Documents — see
+ *   that file's header comment for why a single-purpose upload screen
+ *   shouldn't occupy a permanent primary-nav slot next to Dashboard and
+ *   Configure.
  * 2026-07-02 — FIX (stacking/cluttering bug): desktop no longer renders a
  *   `<Tabs>` navigator at all.
  *
@@ -33,20 +38,15 @@
 import React from 'react';
 import { View, StyleSheet, Platform, useWindowDimensions, Image, Pressable } from 'react-native';
 import { Slot, usePathname, useRouter } from 'expo-router';
-import { LayoutDashboard, Database, Cpu, Cog, LucideIcon } from 'lucide-react-native';
+import { LayoutDashboard, Cpu, Cog, LucideIcon } from 'lucide-react-native';
 import { Sidebar } from '../../components/layout/AdaptiveLayout';
 import { ProfileDropdown } from '../../components/ui/ProfileDropdown';
 import { PageContainer } from '../../components/layout/PageContainer';
-
-// TODO: Import C from the correct theme module path
-const C = {
-  bg: '#0c0d1d',
-  cyan: '#00d9ff',
-  sub: '#6b7280',
-};
+import { C } from '../../lib/theme';
 
 const LAYOUT = {
-  sidebarOffset: 280,
+  // 72px sidebar width + 24px left offset + 8px breathing room = 104px
+  sidebarOffset: 104,
   headerHeight: 64,
 };
 
@@ -54,17 +54,14 @@ type NavItem = { name: string; label: string; Icon: LucideIcon };
 
 const NAV_ITEMS: NavItem[] = [
   { name: 'dashboard', label: '', Icon: LayoutDashboard },
-  { name: 'vault', label: '', Icon: Database },
   { name: 'configure', label: '', Icon: Cpu },
   { name: 'settings', label: '', Icon: Cog },
 ];
 
-const BACKGROUND_GRADIENT = `radial-gradient(ellipse 100% 50% at 50% 0%, ${C.cyan}0D 0%, transparent 40%)`;
-
 const TAB_BAR_STYLE = {
-  backgroundColor: 'rgba(12, 13, 29, 0.22)',
+  backgroundColor: 'rgba(18, 13, 30, 0.88)',
   borderTopColor: 'transparent',
-  borderColor: `${C.cyan}1A`,
+  borderColor: `${C.cyan}22`,
   borderWidth: 1,
   height: 72,
   paddingBottom: Platform.OS === 'ios' ? 20 : 12,
@@ -87,10 +84,17 @@ export default function TabsLayout() {
   const router = useRouter();
   const isDesktop = Platform.OS === 'web' && width >= 768;
 
-  const sharedStyle = {
+  const sharedStyle: any = {
     flex: 1,
     backgroundColor: C.bg,
-    ...(Platform.OS === 'web' && { backgroundImage: BACKGROUND_GRADIENT }),
+    // On web: layer a violet radial gradient over the solid dark base.
+    // Cards with backdrop-blur diffuse this gradient, creating the frosted look.
+    ...(Platform.OS === 'web' && {
+      backgroundImage: [
+        `radial-gradient(ellipse 120% 80% at 15% 0%, ${C.cyan}12 0%, transparent 55%)`,
+        `radial-gradient(ellipse 80% 60% at 85% 100%, ${C.purple}0E 0%, transparent 55%)`,
+      ].join(', '),
+    }),
   };
 
   if (isDesktop) {
@@ -111,7 +115,6 @@ export default function TabsLayout() {
   // is ever mounted. Custom tab bar handles navigation.
   const getActiveTab = () => {
     if (pathname.includes('dashboard')) return 'dashboard';
-    if (pathname.includes('vault')) return 'vault';
     if (pathname.includes('configure')) return 'configure';
     if (pathname.includes('settings') || pathname.includes('(settings)')) return 'settings';
     return 'dashboard';
@@ -143,7 +146,7 @@ export default function TabsLayout() {
             key={name}
             onPress={() => {
               if (name === 'settings') {
-                router.push('/(settings)');
+                router.push('./settings');
               } else {
                 router.push(name as any);
               }

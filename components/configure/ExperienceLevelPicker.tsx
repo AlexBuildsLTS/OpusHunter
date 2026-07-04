@@ -1,20 +1,19 @@
 /**
- * components/configure/ExperienceLevelPicker.tsx
+ * components/features/configure/ExperienceLevelPicker.tsx
  * OpusHunter — Real, Persisted Experience-Level Multi-Select
- * 2026-07-03 — New. Replaces the fake local-only "Experience Level"
- * section from the deleted Engine tab — writes to
- * automation_rules.experience_levels (real column, see migration SQL).
+ * 2026-07-04 — Ported from the orphaned components/configure/ tree (see
+ * README §9 — that split was never wired to any route, this piece of it
+ * was correct and salvaged rather than deleted). Writes to
+ * automation_rules.experience_levels — an existing real column your
+ * database.types.ts already declares, previously never actually written
+ * per-rule (only as global, non-persisted EngineTab UI state).
  */
 
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Check } from 'lucide-react-native';
 import { C } from '../../lib/theme';
-import { EXPERIENCE_LEVELS } from './types';
-
-const LEVEL_COLOR: Record<string, string> = {
-    Entry: C.green, Mid: C.cyan, Senior: C.purple, Lead: C.amber, Director: C.pink,
-};
+import { EXPERIENCE_LEVELS, EXPERIENCE_COLORS } from '../features/configure/constants';
 
 interface ExperienceLevelPickerProps {
     value: string[];
@@ -32,9 +31,9 @@ export function ExperienceLevelPicker({ value, onChange }: ExperienceLevelPicker
                 EXPERIENCE LEVEL <Text style={{ color: C.sub, fontWeight: '500' }}>(optional — leave empty for any)</Text>
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {EXPERIENCE_LEVELS.map((lvl) => {
+                {EXPERIENCE_LEVELS.map((lvl: string) => {
+                    const color = EXPERIENCE_COLORS[lvl];
                     const active = value.includes(lvl);
-                    const color = LEVEL_COLOR[lvl];
                     return (
                         <TouchableOpacity
                             key={lvl}

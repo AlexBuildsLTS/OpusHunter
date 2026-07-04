@@ -1,5 +1,5 @@
 /**
- * app/(tabs)/(settings)/profile.tsx
+ * app/(tabs)/settings/profile.tsx
  * ══════════════════════════════════════════════════════════════════════════════
  * OpusHunter — Professional User Profile Management
  * Architecture: 2026 High-Performance Standards (Web Vercel & Native APK)
@@ -91,181 +91,6 @@ function getResponsiveDimensions() {
     const isSmallMobile = width < 375;
     return { width, height, isMobile, isSmallMobile };
 }
-
-// ══════════════════════════════════════════════════════════════════════════════
-// MODULE 1: NEBULA AMBIENT ENGINE
-// ══════════════════════════════════════════════════════════════════════════════
-
-const CorePulse = React.memo(
-    ({ delay, color, size, centerX, centerY }: any) => {
-        const pulse = useSharedValue(0);
-
-        useEffect(() => {
-            pulse.value = withDelay(
-                delay,
-                withRepeat(
-                    withTiming(1, { duration: 8000, easing: Easing.out(Easing.cubic) }),
-                    -1,
-                    false,
-                ),
-            );
-        }, [delay, pulse]);
-
-        const animatedStyle = useAnimatedStyle(() => ({
-            transform: [{ scale: interpolate(pulse.value, [0, 1], [0.8, 2.5]) }],
-            opacity: interpolate(pulse.value, [0, 0.4, 1], [0.3, 0.1, 0]),
-        }));
-
-        return (
-            <Animated.View
-                pointerEvents="none"
-                style={[
-                    animatedStyle,
-                    {
-                        position: 'absolute',
-                        left: centerX - size / 2,
-                        top: centerY - size / 2,
-                        width: size,
-                        height: size,
-                        borderRadius: size / 2,
-                        backgroundColor: `${color}15`,
-                        ...(IS_WEB ? ({ filter: 'blur(20px)' } as any) : {}),
-                    },
-                ]}
-            />
-        );
-    },
-);
-CorePulse.displayName = 'CorePulse';
-
-const OrganicOrb = React.memo(
-    ({
-        color,
-        size,
-        initialX,
-        initialY,
-        speedX,
-        speedY,
-        phaseOffsetX,
-        phaseOffsetY,
-        opacityBase,
-    }: any) => {
-        const { width, height } = Dimensions.get('window');
-        const time = useSharedValue(0);
-
-        useFrameCallback((frameInfo) => {
-            if (frameInfo.timeSincePreviousFrame === null) return;
-            time.value += frameInfo.timeSincePreviousFrame / 1000;
-        });
-
-        const animatedStyle = useAnimatedStyle(() => {
-            const xOffset =
-                Math.sin(time.value * speedX + phaseOffsetX) * (width * 0.3);
-            const yOffset =
-                Math.cos(time.value * speedY + phaseOffsetY) * (height * 0.2);
-            const breathe = 1 + Math.sin(time.value * 0.5) * 0.15;
-
-            return {
-                transform: [
-                    { translateX: initialX + xOffset },
-                    { translateY: initialY + yOffset },
-                    { scale: breathe },
-                ],
-                opacity: opacityBase + Math.sin(time.value * 0.5) * 0.02,
-            };
-        });
-
-        return (
-            <Animated.View
-                pointerEvents="none"
-                style={[
-                    {
-                        position: 'absolute',
-                        top: -size / 2,
-                        left: -size / 2,
-                        width: size,
-                        height: size,
-                        borderRadius: size / 2,
-                        backgroundColor: color,
-                        ...(IS_WEB ? ({ filter: 'blur(60px)' } as any) : {}),
-                    },
-                    animatedStyle,
-                ]}
-            />
-        );
-    },
-);
-OrganicOrb.displayName = 'OrganicOrb';
-
-const AmbientArchitecture = React.memo(() => {
-    const { width, height } = Dimensions.get('window');
-    const isDesktop = width >= 1024;
-
-    const coreX = width / 2;
-    const coreY = isDesktop ? 160 : 120;
-    const basePulseSize = isDesktop ? 300 : 200;
-
-    return (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-            <CorePulse
-                delay={0}
-                color={C.cyan}
-                size={basePulseSize}
-                centerX={coreX}
-                centerY={coreY}
-            />
-            <CorePulse
-                delay={2500}
-                color={C.purple}
-                size={basePulseSize}
-                centerX={coreX}
-                centerY={coreY}
-            />
-            <CorePulse
-                delay={5000}
-                color={C.pink}
-                size={basePulseSize}
-                centerX={coreX}
-                centerY={coreY}
-            />
-
-            <OrganicOrb
-                color={C.cyan}
-                size={width * 0.5}
-                initialX={width * 0.2}
-                initialY={height * 0.3}
-                speedX={0.2}
-                speedY={0.15}
-                phaseOffsetX={0}
-                phaseOffsetY={Math.PI / 2}
-                opacityBase={0.06}
-            />
-            <OrganicOrb
-                color={C.purple}
-                size={width * 0.6}
-                initialX={width * 0.8}
-                initialY={height * 0.6}
-                speedX={0.15}
-                speedY={0.25}
-                phaseOffsetX={Math.PI}
-                phaseOffsetY={0}
-                opacityBase={0.08}
-            />
-            <OrganicOrb
-                color={C.pink}
-                size={width * 0.4}
-                initialX={width * 0.5}
-                initialY={height * 0.8}
-                speedX={0.25}
-                speedY={0.1}
-                phaseOffsetX={Math.PI / 4}
-                phaseOffsetY={Math.PI}
-                opacityBase={0.05}
-            />
-        </View>
-    );
-});
-AmbientArchitecture.displayName = 'AmbientArchitecture';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MODULE 2: BIOMETRIC IDENTITY MATRIX (Animated SVG)
@@ -691,7 +516,7 @@ export default function ProfileScreen() {
             }
 
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ['pdf', 'images'],
+                mediaTypes: ['images'],
                 quality: 0.95,
             });
 
@@ -726,7 +551,7 @@ export default function ProfileScreen() {
             if (dbError) throw dbError;
 
             setProfile((prev) => (prev ? { ...prev, cv_url: bustedUrl } : null));
-            Alert.alert('Success', 'CV uploaded successfully!');
+            Alert.alert('Success', 'CV updated successfully!');
         } catch (e: any) {
             Alert.alert('Error', e.message ?? 'CV upload failed.');
         } finally {
@@ -744,9 +569,6 @@ export default function ProfileScreen() {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: C.core }}>
-            {/* ── NEBULA AMBIENT BACKGROUND ── */}
-            <AmbientArchitecture />
-
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
@@ -975,10 +797,10 @@ export default function ProfileScreen() {
                                             </View>
                                             <View style={{ flex: 1 }}>
                                                 <Text style={s.certTitle}>
-                                                    {profile?.cv_url ? 'Update CV' : 'Upload CV'}
+                                                    {profile?.cv_storage_path ? 'Update CV' : 'Upload CV'}
                                                 </Text>
                                                 <Text style={s.certSub}>
-                                                    {profile?.cv_url
+                                                    {profile?.cv_storage_path
                                                         ? 'Replace your current CV'
                                                         : 'Upload PDF or image for job applications'}
                                                 </Text>

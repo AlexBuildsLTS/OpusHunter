@@ -17,7 +17,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import * as SplashScreen from 'expo-splash-screen';
 import { supabase } from '../lib/supabase';
 import { queryClient } from '../lib/queryClient';
-import { AmbientBackground } from '../components/ui/AmbientBackground';
+import { AmbientBackground } from '../components/layout/AmbientBackground';
 import { PageContainer } from '../components/layout/PageContainer';
 
 SplashScreen.preventAutoHideAsync();

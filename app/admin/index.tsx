@@ -140,7 +140,7 @@ export default function AdminIndexScreen() {
     return (
         <View style={{ flex: 1, backgroundColor: C.bg }}>
             <ScrollView contentContainerStyle={{ paddingTop: Platform.OS === 'web' ? 40 : 56, paddingHorizontal: 20, paddingBottom: 100, maxWidth: 1080, width: '100%', alignSelf: 'center' }} showsVerticalScrollIndicator={false}>
-               
+
 
                 {/* ── Stat row ── */}
                 <Animated.View entering={FadeInDown.delay(40).springify()} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>

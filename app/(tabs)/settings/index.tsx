@@ -31,7 +31,7 @@ import Animated, { FadeInDown, FadeOutUp, useSharedValue, useAnimatedStyle, with
 // ─── ICONOGRAPHY ─────────────────────────────────────────────────────────────
 import {
     Zap, Bell, Shield, Trash2, RefreshCw, CheckCircle2, AlertTriangle,
-    Crown, ChevronRight, Lock, User as UserIcon, Info, LucideIcon,
+    Crown, ChevronRight, Lock, User as UserIcon, Info, LucideIcon, FileText,
 } from 'lucide-react-native';
 
 // ─── UI COMPONENTS & UTILS ───────────────────────────────────────────────────
@@ -260,141 +260,147 @@ export default function SettingsScreen() {
     });
 
     return (
-        <View style={{ flex: 1, backgroundColor: C.bg, marginTop: 0, paddingTop: 0, backgroundImage: Platform.OS === 'web' ? `radial-gradient(ellipse 100% 50% at 50% 0%, ${C.cyan}05 0%, transparent 60%)` : undefined }}>
+        <View style={{ flex: 1, backgroundColor: C.bg }}>
             <AmbientBg />
 
-                {banner && (
-                    <Animated.View
-                        entering={FadeInDown.springify()} exiting={FadeOutUp.duration(200)}
-                        style={[s.banner, { backgroundColor: banner.ok ? `${C.green}15` : `${C.pink}15`, borderColor: banner.ok ? `${C.green}40` : `${C.pink}40` }]}
-                    >
-                        {banner.ok ? <CheckCircle2 size={15} color={C.green} /> : <AlertTriangle size={15} color={C.pink} />}
-                        <Text style={[s.bannerText, { color: banner.ok ? C.green : C.pink }]}>{banner.text}</Text>
+            {banner && (
+                <Animated.View
+                    entering={FadeInDown.springify()} exiting={FadeOutUp.duration(200)}
+                    style={[s.banner, { backgroundColor: banner.ok ? `${C.green}15` : `${C.pink}15`, borderColor: banner.ok ? `${C.green}40` : `${C.pink}40` }]}
+                >
+                    {banner.ok ? <CheckCircle2 size={15} color={C.green} /> : <AlertTriangle size={15} color={C.pink} />}
+                    <Text style={[s.bannerText, { color: banner.ok ? C.green : C.pink }]}>{banner.text}</Text>
+                </Animated.View>
+            )}
+
+            <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={s.scroll}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+            >
+                {/* ── Account ── */}
+                <Animated.View entering={FadeInDown.delay(60).duration(600).springify().damping(20)}>
+                    <SectionLabel>ACCOUNT</SectionLabel>
+                    <View style={s.card}>
+                        <SettingRow icon={UserIcon} label="Profile" sub={profile?.full_name ?? profile?.email ?? ''} color={C.cyan} onPress={() => router.push('/(tabs)/settings/profile' as any)} />
+                        <View style={s.divider} />
+                        <SettingRow icon={FileText} label="Documents" sub="CV and certifications" color={C.purple} onPress={() => router.push('/settings/documents' as any)} />
+                        <SettingRow icon={Lock} label="Security & Password" sub="Change your password, PIN, biometrics, and API keys" color={C.cyan} onPress={() => router.push('/settings/security' as any)} />
+                    </View>
+                </Animated.View>
+
+                {/* ── Admin — ONLY visible to admins ── */}
+                {isAdmin && (
+                    <Animated.View entering={FadeInDown.delay(120).duration(600).springify().damping(20)}>
+                        <SectionLabel>ADMINISTRATION</SectionLabel>
+                        <View style={s.card}>
+                            <SettingRow
+                                icon={Shield} label="Admin Core" sub="Manage users, roles, and system API keys"
+                                color={C.pink} onPress={() => router.push('/admin' as any)}
+                            />
+                        </View>
                     </Animated.View>
                 )}
 
-                <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                    {/* ── Account ── */}
-                    <Animated.View entering={FadeInDown.delay(60).duration(600).springify().damping(20)}>
-                        <SectionLabel>ACCOUNT</SectionLabel>
-                        <View style={s.card}>
-                            <SettingRow icon={UserIcon} label="Profile" sub={profile?.full_name ?? profile?.email ?? ''} color={C.cyan} onPress={() => router.push('/(tabs)/profile' as any)} />
-                            <View style={s.divider} />
-                            <SettingRow icon={Lock} label="Security & Password" sub="Change your password, PIN, biometrics, and API keys" color={C.cyan} onPress={() => router.push('/(tabs)/(settings)/security' as any)} />
-                        </View>
-                    </Animated.View>
-
-                    {/* ── Admin — ONLY visible to admins ── */}
-                    {isAdmin && (
-                        <Animated.View entering={FadeInDown.delay(120).duration(600).springify().damping(20)}>
-                            <SectionLabel>ADMINISTRATION</SectionLabel>
-                            <View style={s.card}>
-                                <SettingRow
-                                    icon={Shield} label="Admin Core" sub="Manage users, roles, and system API keys"
-                                    color={C.pink} onPress={() => router.push('/(admin)/' as any)}
+                {/* ── Pipeline ── */}
+                <Animated.View entering={FadeInDown.delay(180).duration(600).springify().damping(20)}>
+                    <SectionLabel>PIPELINE</SectionLabel>
+                    <View style={s.card}>
+                        <SettingRow
+                            icon={Zap} label="Auto-scrape on open" sub="Run scraper automatically when the app launches"
+                            color={C.cyan}
+                            right={
+                                <Switch
+                                    value={autoScrape} onValueChange={setAutoScrape}
+                                    trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.cyan}50` }}
+                                    thumbColor={autoScrape ? C.cyan : 'rgba(255,255,255,0.3)'}
                                 />
-                            </View>
-                        </Animated.View>
-                    )}
+                            }
+                        />
+                        <View style={s.divider} />
+                        <SettingRow
+                            icon={Bell} label="Push Notifications" sub="Get notified on interview replies"
+                            color={C.purple}
+                            right={
+                                <Switch
+                                    value={notifs} onValueChange={setNotifs}
+                                    trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.purple}50` }}
+                                    thumbColor={notifs ? C.purple : 'rgba(255,255,255,0.3)'}
+                                />
+                            }
+                        />
+                    </View>
+                </Animated.View>
 
-                    {/* ── Pipeline ── */}
-                    <Animated.View entering={FadeInDown.delay(180).duration(600).springify().damping(20)}>
-                        <SectionLabel>PIPELINE</SectionLabel>
-                        <View style={s.card}>
-                            <SettingRow
-                                icon={Zap} label="Auto-scrape on open" sub="Run scraper automatically when the app launches"
-                                color={C.cyan}
-                                right={
-                                    <Switch
-                                        value={autoScrape} onValueChange={setAutoScrape}
-                                        trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.cyan}50` }}
-                                        thumbColor={autoScrape ? C.cyan : 'rgba(255,255,255,0.3)'}
-                                    />
-                                }
-                            />
-                            <View style={s.divider} />
-                            <SettingRow
-                                icon={Bell} label="Push Notifications" sub="Get notified on interview replies"
-                                color={C.purple}
-                                right={
-                                    <Switch
-                                        value={notifs} onValueChange={setNotifs}
-                                        trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.purple}50` }}
-                                        thumbColor={notifs ? C.purple : 'rgba(255,255,255,0.3)'}
-                                    />
-                                }
-                            />
+                {/* ── Premium CTA — hidden for premium/admin ── */}
+                {!isPremium && (
+                    <Animated.View entering={FadeInDown.delay(240).duration(600).springify().damping(20)} style={s.premiumCard}>
+                        <Crown size={22} color={C.amber} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={s.premiumTitle}>Upgrade to Premium</Text>
+                            <Text style={s.premiumSub}>Unlimited applications, BYOK priority, no rate limits.</Text>
                         </View>
+                        <TouchableOpacity style={s.premiumBtn} activeOpacity={0.85}>
+                            <Text style={s.premiumBtnText}>UPGRADE</Text>
+                        </TouchableOpacity>
                     </Animated.View>
+                )}
 
-                    {/* ── Premium CTA — hidden for premium/admin ── */}
-                    {!isPremium && (
-                        <Animated.View entering={FadeInDown.delay(240).duration(600).springify().damping(20)} style={s.premiumCard}>
-                            <Crown size={22} color={C.amber} />
-                            <View style={{ flex: 1 }}>
-                                <Text style={s.premiumTitle}>Upgrade to Premium</Text>
-                                <Text style={s.premiumSub}>Unlimited applications, BYOK priority, no rate limits.</Text>
-                            </View>
-                            <TouchableOpacity style={s.premiumBtn} activeOpacity={0.85}>
-                                <Text style={s.premiumBtnText}>UPGRADE</Text>
-                            </TouchableOpacity>
-                        </Animated.View>
-                    )}
+                {/* ── About ── */}
+                <Animated.View entering={FadeInDown.delay(300).duration(600).springify().damping(20)}>
+                    <SectionLabel>ABOUT</SectionLabel>
+                    <View style={s.card}>
+                        <SettingRow icon={Info} label="OpusHunter" sub="Version 1.0.0 — AI Job Application Engine" color={C.amber} />
+                    </View>
 
-                    {/* ── About ── */}
-                    <Animated.View entering={FadeInDown.delay(300).duration(600).springify().damping(20)}>
-                        <SectionLabel>ABOUT</SectionLabel>
-                        <View style={s.card}>
-                            <SettingRow icon={Info} label="OpusHunter" sub="Version 1.0.0 — AI Job Application Engine" color={C.amber} />
-                        </View>
+                    {/* ── Danger Zone ── */}
+                    <SectionLabel>DANGER ZONE</SectionLabel>
+                    <View style={s.card}>
+                        <DangerRow icon={RefreshCw} label="Clear Pipeline" sub="Remove all pending jobs from your queue" onPress={() => setConfirm('pipeline')} />
+                        <View style={s.divider} />
+                        <DangerRow icon={Trash2} label="Clear Application History" sub="Delete all submitted applications" onPress={() => setConfirm('history')} />
+                        <View style={s.divider} />
+                        <DangerRow icon={Trash2} label="Delete Account" sub="Permanently remove your account and data" onPress={() => setConfirm('account')} />
+                    </View>
 
-                        {/* ── Danger Zone ── */}
-                        <SectionLabel>DANGER ZONE</SectionLabel>
-                        <View style={s.card}>
-                            <DangerRow icon={RefreshCw} label="Clear Pipeline" sub="Remove all pending jobs from your queue" onPress={() => setConfirm('pipeline')} />
-                            <View style={s.divider} />
-                            <DangerRow icon={Trash2} label="Clear Application History" sub="Delete all submitted applications" onPress={() => setConfirm('history')} />
-                            <View style={s.divider} />
-                            <DangerRow icon={Trash2} label="Delete Account" sub="Permanently remove your account and data" onPress={() => setConfirm('account')} />
-                        </View>
+                    <View style={{ height: 60 }} />
+                </Animated.View>
+            </ScrollView>
 
-                        <View style={{ height: 60 }} />
-                    </Animated.View>
-                </ScrollView>
-
-                <ConfirmModal
-                    visible={confirm === 'pipeline'}
-                    title="Clear Pipeline?"
-                    body="All pending jobs will be removed. Already-applied jobs are unaffected."
-                    confirmLabel="Clear Pipeline"
-                    onConfirm={() => clearPipelineMutation.mutate()}
-                    onCancel={() => setConfirm(null)}
-                    loading={clearPipelineMutation.isPending}
-                />
-                <ConfirmModal
-                    visible={confirm === 'history'}
-                    title="Clear History?"
-                    body="All application history will be permanently deleted."
-                    confirmLabel="Clear History"
-                    onConfirm={() => clearHistoryMutation.mutate()}
-                    onCancel={() => setConfirm(null)}
-                    loading={clearHistoryMutation.isPending}
-                />
-                <ConfirmModal
-                    visible={confirm === 'account'}
-                    title="Delete Account?"
-                    body="This is permanent. All your data, applications, and CVs will be erased."
-                    confirmLabel="Delete Forever"
-                    onConfirm={() => deleteAccountMutation.mutate()}
-                    onCancel={() => setConfirm(null)}
-                    loading={deleteAccountMutation.isPending}
-                />
-            </View>
+            <ConfirmModal
+                visible={confirm === 'pipeline'}
+                title="Clear Pipeline?"
+                body="All pending jobs will be removed. Already-applied jobs are unaffected."
+                confirmLabel="Clear Pipeline"
+                onConfirm={() => clearPipelineMutation.mutate()}
+                onCancel={() => setConfirm(null)}
+                loading={clearPipelineMutation.isPending}
+            />
+            <ConfirmModal
+                visible={confirm === 'history'}
+                title="Clear History?"
+                body="All application history will be permanently deleted."
+                confirmLabel="Clear History"
+                onConfirm={() => clearHistoryMutation.mutate()}
+                onCancel={() => setConfirm(null)}
+                loading={clearHistoryMutation.isPending}
+            />
+            <ConfirmModal
+                visible={confirm === 'account'}
+                title="Delete Account?"
+                body="This is permanent. All your data, applications, and CVs will be erased."
+                confirmLabel="Delete Forever"
+                onConfirm={() => deleteAccountMutation.mutate()}
+                onCancel={() => setConfirm(null)}
+                loading={deleteAccountMutation.isPending}
+            />
+        </View>
     );
 }
 
 const s = StyleSheet.create({
-    root: { flex: 1, backgroundColor: C.bg },
+    root: { flex: 1 },
     banner: {
         position: 'absolute', top: 56, left: 16, right: 16, zIndex: 100,
         flexDirection: 'row', alignItems: 'center', gap: 8,

@@ -19,11 +19,12 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
-import { MapPin, X, Navigation, Search } from 'lucide-react-native';
+import { MapPin, Globe2, X, Navigation, Search } from 'lucide-react-native';
 import { C } from '../../../lib/theme';
 import { useCitySearch, type CityResult } from '../../../hooks/useCitySearch';
 
-function formatCity(c: CityResult): string {
+function formatLocation(c: CityResult): string {
+    if (c.type === 'country') return c.country;
     return c.region && c.region !== c.city ? `${c.city}, ${c.region}, ${c.country}` : `${c.city}, ${c.country}`;
 }
 
@@ -55,7 +56,7 @@ export function LocationAutocomplete({
         const nearby = await requestNearby();
         setLocating(false);
         if (nearby.length > 0) {
-            addCity(formatCity(nearby[0]));
+            addCity(formatLocation(nearby[0]));
         }
     }, [requestNearby, addCity]);
 
@@ -87,7 +88,7 @@ export function LocationAutocomplete({
                             onChangeText={setQuery}
                             onFocus={handleFocus}
                             onBlur={handleBlur}
-                            placeholder="Search any city worldwide — Stockholm, Austin, Lagos..."
+                            placeholder="City or country — Sweden, Stockholm, Austin, Lagos..."
                             placeholderTextColor={C.dim}
                             style={{ flex: 1, color: C.text, fontSize: 14, paddingVertical: 12 }}
                             {...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {})}
@@ -111,19 +112,31 @@ export function LocationAutocomplete({
                             ) : (
                                 results.map((c) => (
                                     <TouchableOpacity
-                                        key={c.id}
-                                        onPress={() => addCity(formatCity(c))}
+                                        key={`${c.type}-${c.id}`}
+                                        onPress={() => addCity(formatLocation(c))}
                                         style={{
                                             flexDirection: 'row', alignItems: 'center', gap: 8,
                                             paddingHorizontal: 14, paddingVertical: 11,
                                             borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)',
                                         }}
                                     >
-                                        <MapPin size={13} color={C.purple} />
-                                        <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>{c.city}</Text>
-                                        <Text style={{ color: C.dim, fontSize: 12 }}>
-                                            {c.region && c.region !== c.city ? `${c.region}, ` : ''}{c.country}
+                                        {c.type === 'country' ? (
+                                            <Globe2 size={13} color={C.cyan} />
+                                        ) : (
+                                            <MapPin size={13} color={C.purple} />
+                                        )}
+                                        <Text style={{ color: C.text, fontSize: 13, fontWeight: '600' }}>
+                                            {c.type === 'country' ? c.country : c.city}
                                         </Text>
+                                        {c.type === 'country' ? (
+                                            <Text style={{ color: C.dim, fontSize: 11, fontWeight: '700', textTransform: 'uppercase' }}>
+                                                Whole country
+                                            </Text>
+                                        ) : (
+                                            <Text style={{ color: C.dim, fontSize: 12 }}>
+                                                {c.region && c.region !== c.city ? `${c.region}, ` : ''}{c.country}
+                                            </Text>
+                                        )}
                                     </TouchableOpacity>
                                 ))
                             )}

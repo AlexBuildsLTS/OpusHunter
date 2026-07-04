@@ -28,6 +28,7 @@ function RuleCard({
             layout={ReanimatedLayout.springify().damping(20)}
             entering={FadeInDown.springify()}
             exiting={FadeOutUp.duration(200)}
+            className="transition-all duration-300 hover:-translate-y-0.5 hover:border-white/20 hover:shadow-glass"
             style={[st.ruleCard, { borderColor: rule.is_active ? `${C.cyan}22` : C.border }]}
         >
             <View style={[st.ruleActiveLine, { backgroundColor: rule.is_active ? C.cyan : 'transparent' }]} />

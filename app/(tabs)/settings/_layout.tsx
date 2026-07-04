@@ -1,7 +1,8 @@
 /**
  * app/(tabs)/settings/_layout.tsx
  * OpusHunter — Settings Stack Layout
- * 2026-06-29
+ * 2026-07-04 — Added `documents` screen (former top-level Vault tab,
+ * moved here — see documents.tsx header comment for why).
  */
 import { Stack } from 'expo-router';
 import { C } from '../../../lib/theme';
@@ -12,14 +13,15 @@ export default function SettingsLayout() {
             screenOptions={{
                 headerShown: false,
                 contentStyle: {
-                    backgroundColor: 'transparent',
+                    backgroundColor: C.bg,
                 },
                 animation: 'slide_from_right',
             }}
         >
             <Stack.Screen name="index" />
-            <Stack.Screen name="profile" />
             <Stack.Screen name="security" />
+            <Stack.Screen name="documents" />
+            <Stack.Screen name="profile" />
         </Stack>
     );
 }
