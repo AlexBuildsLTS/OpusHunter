@@ -58,7 +58,7 @@ export function Sidebar({ active }: { active: string }) {
     <>
       <View
         className="absolute left-6 top-8 bottom-8 w-[80px] border border-brand-cyan/15 rounded-3xl items-center py-6 z-50 shadow-2xl shadow-brand-cyan/10 overflow-hidden"
-        style={{ backgroundColor: 'rgba(18, 13, 30, 0.88)' }}
+        style={{ backgroundColor: C.bg }}
       >
         <View
           pointerEvents="none"
@@ -171,7 +171,7 @@ export function AdaptiveLayout({ children, mobileTitle }: { children: React.Reac
         backgroundColor: C.bg,
         ...(Platform.OS === 'web' ? ({
           backgroundImage: [
-            `radial-gradient(ellipse 120% 80% at 15% 0%, ${C.cyan}12 0%, transparent 55%)`,
+            `radial-gradient(ellipse 120% 80% at 50% 0%, ${C.cyan}12 0%, transparent 55%)`,
             `radial-gradient(ellipse 80% 60% at 85% 100%, ${C.purple}0E 0%, transparent 55%)`,
           ].join(', '),
         } as any) : {}),

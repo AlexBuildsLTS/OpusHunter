@@ -138,7 +138,7 @@ export default function AdminIndexScreen() {
     ];
 
     return (
-        <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <View style={{ flex: 1, backgroundColor: 'transparent' }}>
             <ScrollView contentContainerStyle={{ paddingTop: Platform.OS === 'web' ? 40 : 56, paddingHorizontal: 20, paddingBottom: 100, maxWidth: 1080, width: '100%', alignSelf: 'center' }} showsVerticalScrollIndicator={false}>
 
 

@@ -355,7 +355,7 @@ export default function AdminUsersScreen() {
 }
 
 const s = StyleSheet.create({
-    root: { flex: 1, backgroundColor: C.bg },
+    root: { flex: 1, backgroundColor: 'transparent' },
     banner: {
         position: 'absolute', top: 56, left: 16, right: 16, zIndex: 100,
         flexDirection: 'row', alignItems: 'center', gap: 8,

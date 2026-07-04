@@ -568,7 +568,7 @@ export default function ProfileScreen() {
     }
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: C.core }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }}>
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}

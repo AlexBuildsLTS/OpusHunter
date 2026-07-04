@@ -21,7 +21,7 @@ import { C } from '../../../lib/theme';
 export const st = StyleSheet.create({
     root: { flex: 1, backgroundColor: 'transparent' },
 
-    screenWrapper: { flex: 1, backgroundColor: C.bg, paddingTop: 24, paddingHorizontal: 24 },
+    screenWrapper: { flex: 1, backgroundColor: 'transparent', paddingTop: 24, paddingHorizontal: 24 },
 
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
     greeting: { fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.3 },

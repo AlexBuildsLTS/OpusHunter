@@ -15,7 +15,7 @@
  */
 import { AdaptiveLayout } from '../../components/layout/AdaptiveLayout';
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet, Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { ShieldAlert } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
@@ -76,7 +76,15 @@ export default function AdminLayout() {
             <AdaptiveLayout mobileTitle="Admin Core">
                 <Stack screenOptions={{
                     headerShown: false,
-                    contentStyle: { backgroundColor: C.bg },
+                    contentStyle: {
+                        backgroundColor: C.bg,
+                        ...(Platform.OS === 'web' ? {
+                            backgroundImage: [
+                                `radial-gradient(ellipse 120% 80% at 50% 0%, ${C.cyan}12 0%, transparent 55%)`,
+                                `radial-gradient(ellipse 80% 60% at 85% 100%, ${C.purple}0E 0%, transparent 55%)`,
+                            ].join(', '),
+                        } : {}),
+                    },
                 }}>
                     <Stack.Screen name="index" />
                     <Stack.Screen name="users" />

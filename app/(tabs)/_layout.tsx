@@ -91,7 +91,7 @@ export default function TabsLayout() {
     // Cards with backdrop-blur diffuse this gradient, creating the frosted look.
     ...(Platform.OS === 'web' && {
       backgroundImage: [
-        `radial-gradient(ellipse 120% 80% at 15% 0%, ${C.cyan}12 0%, transparent 55%)`,
+        `radial-gradient(ellipse 120% 80% at 50% 0%, ${C.cyan}12 0%, transparent 55%)`,
         `radial-gradient(ellipse 80% 60% at 85% 100%, ${C.purple}0E 0%, transparent 55%)`,
       ].join(', '),
     }),

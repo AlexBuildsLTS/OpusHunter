@@ -114,7 +114,7 @@ export default function ApiKeysScreen() {
     ];
 
     return (
-        <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <View style={{ flex: 1, backgroundColor: 'transparent' }}>
             <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
                 {/* Back */}

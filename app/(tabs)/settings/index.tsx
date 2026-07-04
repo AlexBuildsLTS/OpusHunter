@@ -52,59 +52,6 @@ interface SettingsCardItem {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// MODULE 1: AMBIENT BACKGROUND
-// ══════════════════════════════════════════════════════════════════════════════
-
-const AmbientBg = memo(() => {
-    if (Platform.OS !== 'web') return null;
-    return (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-            {/* @ts-ignore */}
-            <div style={{
-                position: 'absolute',
-                inset: 0,
-                background: `radial-gradient(ellipse 100% 50% at 50% 0%, ${C.cyan}0D 0%, transparent 60%), radial-gradient(ellipse 80% 40% at 100% 100%, ${C.cyan}08 0%, transparent 70%)`,
-            }} />
-        </View>
-    );
-});
-AmbientBg.displayName = 'AmbientBg';
-
-const FloatingOrb = memo(() => {
-    if (Platform.OS === 'web') return null;
-    const opacity = useSharedValue(0.3);
-    useEffect(() => {
-        opacity.value = withRepeat(
-            withTiming(0.8, { duration: 3000, easing: Easing.inOut(Easing.sin) }),
-            -1,
-            true
-        );
-    }, []);
-    const animStyle = useAnimatedStyle(() => ({
-        opacity: opacity.value,
-    }));
-    return (
-        <Animated.View
-            style={[StyleSheet.absoluteFill, animStyle, { pointerEvents: 'none' }]}
-        >
-            <View
-                style={{
-                    position: 'absolute',
-                    width: 300,
-                    height: 300,
-                    borderRadius: 150,
-                    backgroundColor: C.cyan,
-                    top: -100,
-                    right: -50,
-                    opacity: 0.04,
-                }}
-            />
-        </Animated.View>
-    );
-});
-FloatingOrb.displayName = 'FloatingOrb';
-
-// ══════════════════════════════════════════════════════════════════════════════
 // MODULE 2: SUB-COMPONENTS
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -260,9 +207,7 @@ export default function SettingsScreen() {
     });
 
     return (
-        <View style={{ flex: 1, backgroundColor: C.bg }}>
-            <AmbientBg />
-
+        <View style={{ flex: 1, backgroundColor: 'transparent' }}>
             {banner && (
                 <Animated.View
                     entering={FadeInDown.springify()} exiting={FadeOutUp.duration(200)}
