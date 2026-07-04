@@ -73,7 +73,7 @@ const SettingRow = memo(({
             </View>
             <View style={{ flex: 1 }}>
                 <Text style={s.settingLabel}>{label}</Text>
-                {sub && <Text style={s.settingSub}>{sub}</Text>}
+                {!!sub && <Text style={s.settingSub}>{sub}</Text>}
             </View>
             {right ?? (onPress ? <ChevronRight size={15} color={C.sub} /> : null)}
         </View>

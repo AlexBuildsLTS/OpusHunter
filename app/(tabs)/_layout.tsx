@@ -38,7 +38,8 @@
 import React from 'react';
 import { View, StyleSheet, Platform, useWindowDimensions, Image, Pressable } from 'react-native';
 import { Slot, usePathname, useRouter } from 'expo-router';
-import { LayoutDashboard, Cpu, Cog, LucideIcon } from 'lucide-react-native';
+import { LayoutDashboard, Cpu, Cog, ServerCog, CloudCog, FolderCog, Briefcase } from 'lucide-react-native';
+import { LucideIcon } from 'lucide-react-native';
 import { Sidebar } from '../../components/layout/AdaptiveLayout';
 import { ProfileDropdown } from '../../components/ui/ProfileDropdown';
 import { PageContainer } from '../../components/layout/PageContainer';
@@ -53,25 +54,25 @@ const LAYOUT = {
 type NavItem = { name: string; label: string; Icon: LucideIcon };
 
 const NAV_ITEMS: NavItem[] = [
-  { name: 'dashboard', label: '', Icon: LayoutDashboard },
-  { name: 'configure', label: '', Icon: Cpu },
-  { name: 'settings', label: '', Icon: Cog },
+  { name: 'dashboard', label: '', Icon: ServerCog },
+  { name: 'configure', label: '', Icon: CloudCog },
+  { name: 'settings', label: '', Icon: FolderCog },
 ];
 
 const TAB_BAR_STYLE = {
   backgroundColor: 'rgba(18, 13, 30, 0.88)',
   borderTopColor: 'transparent',
-  borderColor: `${C.cyan}22`,
+  borderColor: `${C.cyan}12`,
   borderWidth: 1,
   height: 72,
   paddingBottom: Platform.OS === 'ios' ? 20 : 12,
   paddingTop: 12,
   position: 'absolute' as const,
   bottom: 24,
-  left: 20,
-  right: 20,
+  left: 12,
+  right: 12,
   borderRadius: 36,
-  elevation: 10,
+  elevation: 12,
   shadowColor: C.cyan,
   shadowOffset: { width: 0, height: 4 },
   shadowOpacity: 0.12,
@@ -185,11 +186,10 @@ const styles = StyleSheet.create({
   },
   mobileContentContainer: {
     flex: 1,
-    paddingTop: LAYOUT.headerHeight + 6,
   },
   mobileTabBar: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(12, 13, 29, 0.22)',
+    backgroundColor: 'rgba(10, 7, 21, 0.02)',
     borderTopColor: 'transparent',
     borderColor: `${C.cyan}1A`,
     borderWidth: 1,
@@ -197,10 +197,10 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 20 : 12,
     paddingTop: 12,
     marginBottom: 24,
-    marginLeft: 20,
-    marginRight: 20,
+    marginLeft: 12,
+    marginRight: 12,
     borderRadius: 36,
-    elevation: 10,
+    elevation: 12,
     shadowColor: C.cyan,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
@@ -215,6 +215,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   tabBarItemActive: {
-    backgroundColor: `${C.cyan}15`,
+    backgroundColor: `${C.cyan}5`,
   },
 });

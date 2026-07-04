@@ -26,7 +26,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Image, Platform, useWindowDimensions } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, Briefcase, ArrowLeft } from 'lucide-react-native';
+import { LayoutDashboard, Briefcase, ArrowLeft, CloudCog, ServerCog  } from 'lucide-react-native';
 import { C } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import { ProfileDropdown } from '../ui/ProfileDropdown';
@@ -36,8 +36,8 @@ import type { Database as DB } from '../../types/database.types';
 type ProfileRow = DB['public']['Tables']['profiles']['Row'];
 
 const NAV_ITEMS = [
-  { name: 'dashboard', label: 'DASH', Icon: LayoutDashboard },
-  { name: 'configure', label: 'RULES', Icon: Briefcase },
+  { name: 'dashboard', label: 'HOME', Icon: ServerCog },
+  { name: 'configure', label: 'CONFIGURE', Icon: CloudCog },
 ] as const;
 
 export function Sidebar({ active }: { active: string }) {
