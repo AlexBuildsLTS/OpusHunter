@@ -354,12 +354,43 @@ export type Database = {
         }
         Relationships: []
       }
+      usage_counters: {
+        Row: {
+          applications_count: number
+          counter_date: string
+          user_id: string
+        }
+        Insert: {
+          applications_count?: number
+          counter_date?: string
+          user_id: string
+        }
+        Update: {
+          applications_count?: number
+          counter_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_counters_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
       admin_delete_user: { Args: { target_id: string }; Returns: undefined }
+      check_and_increment_daily_applications: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
+      clear_my_api_key: { Args: { p_provider: string }; Returns: undefined }
       force_set_role: {
         Args: { target_email: string; target_role: string }
         Returns: undefined
@@ -379,6 +410,10 @@ export type Database = {
       }
       get_user_pipeline_metrics: { Args: never; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
+      set_my_api_key: {
+        Args: { p_key: string; p_provider: string }
+        Returns: undefined
+      }
     }
     Enums: {
       job_status: "pending" | "approved" | "rejected" | "applied"

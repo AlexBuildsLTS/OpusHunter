@@ -11,12 +11,16 @@
   "css.validate": false,
   "cSpell.words": [
     "supabase",
-    "Supabase"
+    "Supabase",
+    "RapidAPI",
+    "rapidapi"
   ],
   "json.schemaDownload.trustedDomains": {
     "https://raw.githubusercontent.com/denoland/deno/main/cli/schemas/lint-rules.v1.json": true,
     "https://raw.githubusercontent.com": true
   },
   "sarif-viewer.connectToGithubCodeScanning": "off",
-  "tailwindClassConvert.enableMode": "on"
+  "tailwindClassConvert.enableMode": "on",
+  "chat.utilityModel": "gemini/models/gemini-3-pro-preview",
+  "chat.utilitySmallModel": "gemini/models/gemini-3.1-pro-preview"
 }

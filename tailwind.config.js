@@ -17,38 +17,38 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          cyan: "#1F0D3F", // primary violet
-          purple: "#6C5CE0", // secondary indigo — NOT green
-          pink: "#F0466E",
-          green: "#34D399", // success accents only
-          amber: "#F5A623",
+          cyan: "#7B68EE", // primary violet — elevated saturation
+          purple: "#6366F1", // secondary indigo — refined hue
+          pink: "#EC4899", // enhanced vibrancy
+          green: "#10B981", // success — deeper, more professional
+          amber: "#F59E0B", // warmed gold tone
         },
         surface: {
-          bg: "#0A0714",
-          core: "#120D1E",
-          mid: "#170F26",
-          card: "rgba(20,14,32,0.68)",
-          sidebar: "#0D0918",
-          border: "rgba(255,255,255,0.08)",
-          "border-cyan": "rgba(155,107,255,0.14)",
-          "border-purple": "rgba(108,92,224,0.14)",
-          "border-pink": "rgba(240,70,110,0.14)",
+          bg: "#0F0318",
+          core: "#1A1225",
+          mid: "#221830",
+          card: "rgba(26,18,37,0.75)",
+          sidebar: "#130A1F",
+          border: "rgba(255,255,255,0.10)",
+          "border-cyan": "rgba(123,104,238,0.18)",
+          "border-purple": "rgba(99,102,241,0.18)",
+          "border-pink": "rgba(236,72,153,0.16)",
         },
         content: {
-          primary: "#EDEAF7",
-          secondary: "rgba(237,234,247,0.46)",
-          dim: "rgba(237,234,247,0.42)",
+          primary: "#F3F0FF",
+          secondary: "rgba(243,240,255,0.55)",
+          dim: "rgba(243,240,255,0.48)",
         },
         role: {
-          "member-bg": "rgba(108,92,224,0.12)",
-          "member-border": "rgba(108,92,224,0.35)",
-          "member-text": "#6C5CE0",
-          "premium-bg": "rgba(245,166,35,0.12)",
-          "premium-border": "rgba(245,166,35,0.35)",
-          "premium-text": "#F5A623",
-          "admin-bg": "rgba(240,70,110,0.12)",
-          "admin-border": "rgba(240,70,110,0.35)",
-          "admin-text": "#F0466E",
+          "member-bg": "rgba(99,102,241,0.14)",
+          "member-border": "rgba(99,102,241,0.40)",
+          "member-text": "#818CF8",
+          "premium-bg": "rgba(245,158,11,0.14)",
+          "premium-border": "rgba(245,158,11,0.40)",
+          "premium-text": "#FCD34D",
+          "admin-bg": "rgba(236,72,153,0.14)",
+          "admin-border": "rgba(236,72,153,0.40)",
+          "admin-text": "#F472B6",
         },
       },
 

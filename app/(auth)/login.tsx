@@ -963,7 +963,7 @@ export default function LoginScreen() {
 const s = StyleSheet.create({
     root: {
         flex: 1,
-        backgroundColor: T.cyan,
+        backgroundColor: C.bg,
     },
 
     // ── Brand header ──
@@ -1175,7 +1175,7 @@ const s = StyleSheet.create({
         height: 54,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(0,212,255,0.10)',
+        backgroundColor: 'rgba(0,212,255,0.00)',
     },
     submitBtnText: {
         color: T.cyan,
@@ -1241,7 +1241,7 @@ const s = StyleSheet.create({
         height: 76,
         borderRadius: 38,
         borderWidth: 1.5,
-        borderColor: 'rgba(0,212,255,0.3)',
+        borderColor: 'rgba(0,212,255,0.9)',
         backgroundColor: 'rgba(0,212,255,0.07)',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1502,7 +1502,7 @@ const s = StyleSheet.create({
         maxHeight: '80%',
         backgroundColor: 'rgba(8,14,22,0.97)',
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.14)',
+        borderColor: 'rgba(0,212,255,0.04)',
         borderRadius: 22,
         overflow: 'hidden',
     },
@@ -1513,7 +1513,7 @@ const s = StyleSheet.create({
         paddingHorizontal: 18,
         paddingVertical: 14,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255,255,255,0.05)',
+        borderBottomColor: 'rgba(8,16,26,0.05)',
     },
     termsHeaderLeft: {
         flexDirection: 'row',
@@ -1531,7 +1531,7 @@ const s = StyleSheet.create({
         width: 28,
         height: 28,
         borderRadius: 8,
-        backgroundColor: 'rgba(255,255,255,0.05)',
+        backgroundColor: 'rgba(8,16,26,0.05)',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -1568,7 +1568,7 @@ const s = StyleSheet.create({
         gap: 4,
         paddingLeft: 12,
         borderLeftWidth: 2,
-        borderLeftColor: 'rgba(0,212,255,0.12)',
+        borderLeftColor: 'rgba(8,16,26,0.12)',
     },
     termsItemTitle: {
         fontSize: 12,
@@ -1584,12 +1584,12 @@ const s = StyleSheet.create({
         paddingHorizontal: 18,
         paddingVertical: 14,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.05)',
+        borderTopColor: 'rgba(8,16,26,0.05)',
         gap: 8,
     },
     termsScrollHint: {
         fontSize: 10,
-        color: 'rgba(255,255,255,0.28)',
+        color: 'rgba(8,16,26,0.28)',
         textAlign: 'center',
         letterSpacing: 1,
     },
@@ -1603,9 +1603,9 @@ const s = StyleSheet.create({
         backgroundColor: T.cyan,
     },
     termsAcceptDisabled: {
-        backgroundColor: 'rgba(255,255,255,0.04)',
+        backgroundColor: 'rgba(8,16,26,0.04)',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.06)',
+        borderColor: 'rgba(8,16,26,0.06)',
     },
     termsAcceptText: {
         fontSize: 12,

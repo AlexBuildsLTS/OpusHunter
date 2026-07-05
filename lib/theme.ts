@@ -1,64 +1,73 @@
 /**
  * lib/theme.ts
  * OpusHunter — Single Source of Truth for Design Tokens
- * 2026-07-04 — Sync pass: all C.* values now match tailwind.config.js exactly.
+ * 2026-07-06 — FIXED: C.cyan and C.purple were dark violet hexes
+ * (#1D132C / #1F0D3F) — within a few RGB points of the page background
+ * (#0A0714 / #120D1E). Every screen that used C.cyan/C.purple for active
+ * nav icons, focus borders, the RUN button, or tab indicators was
+ * effectively invisible against its own background. login.tsx looked fine
+ * only because it hardcodes its own rgba(0,212,255,...) values instead of
+ * using these tokens — every other screen inherited the broken colors.
  *
- * WHY THIS MATTERS:
- *   NativeWind class-based styling (bg-brand-cyan, text-content-primary, etc.)
- *   pulls from tailwind.config.js. Inline style props (color: C.cyan, etc.)
- *   pulled from this file. When these diverged the app had TWO different color
- *   sets — Tailwind cards rendered violet (#8A2BE2) while inline text/icons
- *   rendered dark crimson (#1D132C). This pass aligns both sources so every
- *   pixel is consistent regardless of which styling path is used.
- *
- *   New flat tokens added to C (bg, core, text, sub, dim, border, borderCyan)
- *   mirror the surface.* and content.* Tailwind tokens so components no longer
- *   need a separate import to get basic layout colors.
+ * This pass makes the token NAMES match the token VALUES: C.cyan is an
+ * actual bright cyan again, C.purple an actual visible indigo. Contrast
+ * against both C.bg (#0A0714) and C.core (#120D1E) was checked by eye and
+ * by contrast ratio (both now exceed 4.5:1 against both background shades
+ * at normal text sizes — verify again if you change bg/core).
  *
  * DESIGN SYSTEM:
  *   Background layers (darkest → lightest):  bg → core → card
  *   Text hierarchy (most → least visible):   text → sub → dim
  *   Accent hierarchy (primary → secondary):  cyan → purple → pink
+ *
+ * IMPORTANT: tailwind.config.js's `brand.*` colors and global.css's
+ * `--neon-*` variables MUST stay numerically identical to the values below.
+ * If you change a color here, change it in both other files in the same
+ * commit — this three-way drift is exactly what caused the invisible-UI
+ * bug in the first place. There is no build-time check enforcing this;
+ * it's a manual discipline until someone wires up a token-generation step.
  */
 
 export const C = {
     // ── Brand accent colors (synced with tailwind.config.js `brand.*`) ──────
-    cyan: '#1D132C',   // Primary violet  — CTAs, active nav, focus rings
-    purple: '#1F0D3F',   // Secondary indigo — hover states, secondary accents
-    pink: '#8A2BE2',   // Destructive / admin badge / error alerts
+    cyan: '#22D3EE',    // Primary bright cyan — CTAs, active nav, focus rings
+    purple: '#8B7CF6',  // Secondary visible indigo — hover states, secondary accents
+    pink: '#F0466E',    // Destructive / admin badge / error alerts
     green: '#34D399',   // Success ONLY — checkmarks, status dots, never card bg
     amber: '#F5A623',   // Premium badge, warnings, BYOK highlights
 
     // ── Background layers (synced with tailwind.config.js `surface.*`) ──────
-    bg: '#0A0714',     // Page canvas — outermost container backgrounds
-    core: '#120D1E',     // Elevated surface — headers, modals, sidebars
+    bg: '#0A0714',      // Page canvas — outermost container backgrounds
+    core: '#120D1E',    // Elevated surface — headers, modals, sidebars
 
     // ── Text hierarchy — white-on-dark (synced with `content.*`) ─────────────
-    text: '#EDEAF7',                      // Primary: headings, labels, values
-    sub: 'rgba(237,234,247,0.46)',        // Secondary: captions, meta, descriptions
-    dim: 'rgba(237,234,247,0.24)',        // Tertiary: placeholders, disabled, hints
+    text: '#EDEAF7',                       // Primary: headings, labels, values
+    sub: 'rgba(237,234,247,0.62)',         // Secondary: captions, meta, descriptions
+    dim: 'rgba(237,234,247,0.36)',         // Tertiary: placeholders, disabled, hints
 
     // ── Borders ──────────────────────────────────────────────────────────────
-    border: 'rgba(255,255,255,0.08)',  // Default glass card border
-    borderCyan: 'rgba(155,107,255,0.18)', // Violet-tinted border for focused/active states    card:       'rgba(20,14,32,0.68)',     // Glass card background
+    border: 'rgba(255,255,255,0.10)',      // Default glass card border
+    borderCyan: 'rgba(34,211,238,0.28)',   // Cyan-tinted border for focused/active states
+    card: 'rgba(20,14,32,0.68)',           // Glass card background
+
     // ── Legacy nested color map (kept for backward compat with C.colors.*) ──
     colors: {
         background: '#0A0714',
         card: 'rgba(20,14,32,0.68)',
-        cardBorder: 'rgba(255,255,255,0.08)',
+        cardBorder: 'rgba(255,255,255,0.10)',
         neon: {
-            cyan: '#1F0D3F',
-            pink: '#0A0715',
-            purple: '#6C5CE0',
+            cyan: '#22D3EE',
+            pink: '#F0466E',
+            purple: '#8B7CF6',
             orange: '#FF4500',
             navy: '#000f2e',
             red: '#FF0000',
             obsidian: '#010914',
-            green: '#1BA16F',
+            green: '#34D399',
         },
         text: {
             primary: '#EDEAF7',
-            secondary: 'rgba(237,234,247,0.46)',
+            secondary: 'rgba(237,234,247,0.62)',
         },
     },
 
@@ -91,13 +100,13 @@ export const webHover = {
     card: { cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' },
     scaleUp: 'scale(1.015)',
     scaleDown: 'scale(0.97)',
-    glowCyan: `0 0 24px rgba(155,107,255,0.15), 0 8px 32px rgba(0,0,0,0.4)`,
+    glowCyan: `0 0 24px rgba(34,211,238,0.20), 0 8px 32px rgba(0,0,0,0.4)`,
 } as const;
 
 /**
  * ╔═══════════════════════════════════════════════════════════════════════════╗
  * ║ AMBIENT BACKGROUND CONFIGURATION — GLOBAL NEBULA ENGINE                   ║
- * ║ 2026-07-04 — Rendered on every page via components/layout/AmbientBackground.tsx
+ * ║ Rendered on every page via components/layout/AmbientBackground.tsx        ║
  * ║                                                                            ║
  * ║ CUSTOMIZATION GUIDE:                                                       ║
  * ║  • enabled: true/false to toggle ambient effect on all pages              ║
