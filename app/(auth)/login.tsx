@@ -82,7 +82,8 @@ import { supabase } from '../../lib/supabase';
 const IS_WEB = Platform.OS === 'web';
 WebBrowser.maybeCompleteAuthSession();
 
-import { C as T } from '../../lib/theme';
+import { C, C as T } from '../../lib/theme';
+
 
 
 // ── Feature card data ─────────────────────────────────────────────────────────
@@ -962,7 +963,7 @@ export default function LoginScreen() {
 const s = StyleSheet.create({
     root: {
         flex: 1,
-        backgroundColor: T.obsidian,
+        backgroundColor: T.cyan,
     },
 
     // ── Brand header ──
@@ -974,9 +975,9 @@ const s = StyleSheet.create({
         width: 80,
         height: 80,
         borderRadius: 22,
-        backgroundColor: 'rgba(0,212,255,0.06)',
+        backgroundColor: `${C.cyan}0F`,
         borderWidth: 1.5,
-        borderColor: 'rgba(0,212,255,0.18)',
+        borderColor: `${C.cyan}2E`,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 14,

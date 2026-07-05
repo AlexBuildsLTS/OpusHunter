@@ -24,7 +24,7 @@
 
     /* Brand neons — cyan slot is now primary violet, purple slot is now emerald.
        See lib/theme.ts header comment for why the variable names weren't renamed. */
-    --neon-cyan: #9b6bff;
+    --neon-cyan: #1f0d3f;
     --neon-cyan-glow: rgba(155, 107, 255, 0.257);
     --neon-purple: #6c5ce0;
     --neon-purple-glow: rgba(108, 92, 224, 0.18);
@@ -438,7 +438,7 @@ body,
 /* ── BUTTONS ─────────────────────────────────────────────────────────────────── */
 
 .btn-primary {
-  background: linear-gradient(135deg, #9b6bff 0%, #7b3fe4 100%);
+  background: linear-gradient(135deg, #1f0d3f 0%, #7b3fe4 100%);
   color: #020507;
   font-weight: 800;
   letter-spacing: 1.5px;
@@ -540,7 +540,7 @@ body,
 }
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #9b6bff 0%, #6c5ce0 50%, #9b6bff 100%);
+  background: linear-gradient(90deg, #0a0715 0%, #1f0d3f 50%, #1d132c 100%);
   background-size: 200% 100%;
   border-radius: 2px;
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);

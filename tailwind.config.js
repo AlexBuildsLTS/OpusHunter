@@ -17,7 +17,7 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          cyan: "#9B6BFF", // primary violet
+          cyan: "#1F0D3F", // primary violet
           purple: "#6C5CE0", // secondary indigo — NOT green
           pink: "#F0466E",
           green: "#34D399", // success accents only
@@ -125,8 +125,8 @@ module.exports = {
       },
 
       backgroundImage: {
-        "brand-gradient": "linear-gradient(135deg, #9B6BFF 0%, #6C5CE0 100%)",
-        "cyan-gradient": "linear-gradient(135deg, #9B6BFF 0%, #7C4FE8 100%)",
+        "brand-gradient": "linear-gradient(135deg, #1F0D3F 0%, #0A0715 100%)",
+        "cyan-gradient": "linear-gradient(135deg, #1D132C 0%, #14122A 100%)",
         "dark-gradient":
           "radial-gradient(circle at 50% 50%, #120D1E 0%, #0A0714 100%)",
         "ambient-cyan":
@@ -134,7 +134,7 @@ module.exports = {
         "ambient-purple":
           "radial-gradient(ellipse 80% 60% at 85% 100%, rgba(108,92,224,0.06) 0%, transparent 55%)",
         "progress-shimmer":
-          "linear-gradient(90deg, #9B6BFF 0%, #6C5CE0 50%, #9B6BFF 80%)",
+          "linear-gradient(90deg, #8629DC 0%, #080E17 50%, #1F0D3F 80%)",
       },
     },
   },

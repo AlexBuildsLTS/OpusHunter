@@ -7,8 +7,8 @@
  *   NativeWind class-based styling (bg-brand-cyan, text-content-primary, etc.)
  *   pulls from tailwind.config.js. Inline style props (color: C.cyan, etc.)
  *   pulled from this file. When these diverged the app had TWO different color
- *   sets — Tailwind cards rendered violet (#9B6BFF) while inline text/icons
- *   rendered dark crimson (#8C2748). This pass aligns both sources so every
+ *   sets — Tailwind cards rendered violet (#8A2BE2) while inline text/icons
+ *   rendered dark crimson (#1D132C). This pass aligns both sources so every
  *   pixel is consistent regardless of which styling path is used.
  *
  *   New flat tokens added to C (bg, core, text, sub, dim, border, borderCyan)
@@ -23,9 +23,9 @@
 
 export const C = {
     // ── Brand accent colors (synced with tailwind.config.js `brand.*`) ──────
-    cyan: '#9B6BFF',   // Primary violet  — CTAs, active nav, focus rings
-    purple: '#6C5CE0',   // Secondary indigo — hover states, secondary accents
-    pink: '#F0466E',   // Destructive / admin badge / error alerts
+    cyan: '#1D132C',   // Primary violet  — CTAs, active nav, focus rings
+    purple: '#1F0D3F',   // Secondary indigo — hover states, secondary accents
+    pink: '#8A2BE2',   // Destructive / admin badge / error alerts
     green: '#34D399',   // Success ONLY — checkmarks, status dots, never card bg
     amber: '#F5A623',   // Premium badge, warnings, BYOK highlights
 
@@ -47,8 +47,8 @@ export const C = {
         card: 'rgba(20,14,32,0.68)',
         cardBorder: 'rgba(255,255,255,0.08)',
         neon: {
-            cyan: '#9B6BFF',
-            pink: '#F0466E',
+            cyan: '#1F0D3F',
+            pink: '#0A0715',
             purple: '#6C5CE0',
             orange: '#FF4500',
             navy: '#000f2e',
