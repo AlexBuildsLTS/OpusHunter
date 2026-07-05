@@ -8,7 +8,7 @@
 
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { C } from '../../lib/theme';
+import { C } from '../../../lib/theme';
 
 const SALARY_STEPS: { label: string; value: number | null }[] = [
     { label: 'Any', value: null },

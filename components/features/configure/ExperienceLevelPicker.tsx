@@ -12,8 +12,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Check } from 'lucide-react-native';
-import { C } from '../../lib/theme';
-import { EXPERIENCE_LEVELS, EXPERIENCE_COLORS } from '../features/configure/constants';
+import { C } from '../../../lib/theme';
+import { EXPERIENCE_LEVELS, EXPERIENCE_COLORS } from './constants';
 
 interface ExperienceLevelPickerProps {
     value: string[];
@@ -31,9 +31,9 @@ export function ExperienceLevelPicker({ value, onChange }: ExperienceLevelPicker
                 EXPERIENCE LEVEL <Text style={{ color: C.sub, fontWeight: '500' }}>(optional — leave empty for any)</Text>
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {EXPERIENCE_LEVELS.map((lvl: string) => {
-                    const color = EXPERIENCE_COLORS[lvl];
+                {EXPERIENCE_LEVELS.map((lvl) => {
                     const active = value.includes(lvl);
+                    const color = EXPERIENCE_COLORS[lvl];
                     return (
                         <TouchableOpacity
                             key={lvl}

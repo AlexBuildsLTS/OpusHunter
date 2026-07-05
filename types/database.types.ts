@@ -122,6 +122,42 @@ export type Database = {
         }
         Relationships: []
       }
+      connected_email_accounts: {
+        Row: {
+          connected_at: string
+          created_at: string
+          email: string
+          id: string
+          is_primary_sender: boolean
+          provider: string
+          refresh_token: string
+          scopes: string[]
+          user_id: string
+        }
+        Insert: {
+          connected_at?: string
+          created_at?: string
+          email: string
+          id?: string
+          is_primary_sender?: boolean
+          provider?: string
+          refresh_token: string
+          scopes?: string[]
+          user_id: string
+        }
+        Update: {
+          connected_at?: string
+          created_at?: string
+          email?: string
+          id?: string
+          is_primary_sender?: boolean
+          provider?: string
+          refresh_token?: string
+          scopes?: string[]
+          user_id?: string
+        }
+        Relationships: []
+      }
       cover_letters: {
         Row: {
           automation_rule_id: string | null
@@ -175,31 +211,43 @@ export type Database = {
       job_applications: {
         Row: {
           applied_at: string | null
+          ats_provider: string | null
           cover_letter_used: string | null
           created_at: string
           id: string
           job_id: string
           status: string
+          submission_confirmation: string | null
+          submission_error: string | null
+          submission_method: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           applied_at?: string | null
+          ats_provider?: string | null
           cover_letter_used?: string | null
           created_at?: string
           id?: string
           job_id: string
           status?: string
+          submission_confirmation?: string | null
+          submission_error?: string | null
+          submission_method?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           applied_at?: string | null
+          ats_provider?: string | null
           cover_letter_used?: string | null
           created_at?: string
           id?: string
           job_id?: string
           status?: string
+          submission_confirmation?: string | null
+          submission_error?: string | null
+          submission_method?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -273,6 +321,7 @@ export type Database = {
           full_name: string | null
           gemini_key: string | null
           id: string
+          max_daily_applications: number
           rapidapi_key: string | null
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
@@ -285,6 +334,7 @@ export type Database = {
           full_name?: string | null
           gemini_key?: string | null
           id: string
+          max_daily_applications?: number
           rapidapi_key?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
@@ -297,6 +347,7 @@ export type Database = {
           full_name?: string | null
           gemini_key?: string | null
           id?: string
+          max_daily_applications?: number
           rapidapi_key?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
@@ -316,6 +367,16 @@ export type Database = {
       get_key_for_provider:
         | { Args: { p_provider: string; p_user_id: string }; Returns: string }
         | { Args: { p_provider: string; p_user_id: string }; Returns: string }
+      get_my_connected_email_accounts: {
+        Args: never
+        Returns: {
+          connected_at: string
+          email: string
+          id: string
+          is_primary_sender: boolean
+          provider: string
+        }[]
+      }
       get_user_pipeline_metrics: { Args: never; Returns: Json }
       is_admin: { Args: never; Returns: boolean }
     }

@@ -25,9 +25,9 @@ import { C } from '../../../lib/theme';
 import { st } from './styles';
 import { WORK_TYPE_OPTIONS, WORK_TYPE_LABELS } from './constants';
 import type { RuleFormState } from './types';
-import { ExperienceLevelPicker } from '../../configure/ExperienceLevelPicker';
-import { RemotePreferencePicker } from '../../configure/RemotePreferencePicker';
-import { SalaryMinPicker } from '../../configure/SalaryMinPicker';
+import { ExperienceLevelPicker } from './ExperienceLevelPicker';
+import { RemotePreferencePicker } from './RemotePreferencePicker';
+import { SalaryMinPicker } from './SalaryMinPicker';
 import { LocationAutocomplete } from './LocationAutocomplete';
 
 export function RuleFormModal({
@@ -147,17 +147,17 @@ export function RuleFormModal({
 
                             <ExperienceLevelPicker
                                 value={form.experience_levels}
-                                onChange={(experience_levels: string[]) => setForm((f) => ({ ...f, experience_levels }))}
+                                onChange={(experience_levels) => setForm((f) => ({ ...f, experience_levels }))}
                             />
 
                             <RemotePreferencePicker
                                 value={form.remote_preference}
-                                onChange={(remote_preference: string) => setForm((f) => ({ ...f, remote_preference }))}
+                                onChange={(remote_preference) => setForm((f) => ({ ...f, remote_preference }))}
                             />
 
                             <SalaryMinPicker
                                 value={form.salary_min}
-                                onChange={(salary_min: number | null) => setForm((f) => ({ ...f, salary_min }))}
+                                onChange={(salary_min) => setForm((f) => ({ ...f, salary_min }))}
                             />
 
                             <View>

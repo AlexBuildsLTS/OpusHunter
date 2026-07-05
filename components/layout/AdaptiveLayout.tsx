@@ -26,7 +26,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Image, Platform, useWindowDimensions } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, Briefcase, ArrowLeft, CloudCog, ServerCog  } from 'lucide-react-native';
+import { LayoutDashboard, Briefcase, ArrowLeft, CloudCog, ServerCog, FolderCog  } from 'lucide-react-native';
 import { C } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import { ProfileDropdown } from '../ui/ProfileDropdown';
@@ -38,6 +38,7 @@ type ProfileRow = DB['public']['Tables']['profiles']['Row'];
 const NAV_ITEMS = [
   { name: 'dashboard', label: 'HOME', Icon: ServerCog },
   { name: 'configure', label: 'CONFIGURE', Icon: CloudCog },
+  { name: 'settings', label: 'SETTINGS', Icon: FolderCog },
 ] as const;
 
 export function Sidebar({ active }: { active: string }) {
@@ -57,18 +58,18 @@ export function Sidebar({ active }: { active: string }) {
   return (
     <>
       <View
-        className="absolute left-6 top-8 bottom-8 w-[80px] border border-brand-cyan/15 rounded-3xl items-center py-6 z-50 shadow-2xl shadow-brand-cyan/10 overflow-hidden"
+        className="absolute left-1 top-12 bottom-12 w-[90px] border border-brand-cyan/12 rounded-4xl items-center py-6 z-50 shadow-1xl shadow-brand-cyan/12 overflow-hidden"
         style={{ backgroundColor: C.bg }}
       >
         <View
           pointerEvents="none"
-          className="absolute inset-0 overflow-hidden rounded-3xl"
+          className="absolute inset-0 overflow-hidden rounded-4xl"
           style={{ backgroundImage: `linear-gradient(to bottom, ${C.cyan}14, ${C.purple}0A)` }}
         />
 
         <TouchableOpacity
-          className="w-[44px] h-[44px] rounded-2xl border border-brand-cyan/20 items-center justify-center mb-8 shadow-lg shadow-brand-cyan/20"
-          style={{ backgroundColor: `${C.cyan}14` }}
+          className="w-[48px] h-[48px] rounded-2xl border border-brand-cyan/40 items-center justify-center mb-12 shadow-lg shadow-brand-cyan/40"
+          style={{ backgroundColor: `${C.cyan}18` }}
           onPress={() => router.push('/(tabs)/dashboard')}
           activeOpacity={0.8}
         >
@@ -83,19 +84,19 @@ export function Sidebar({ active }: { active: string }) {
                 key={name}
                 onPress={() => router.push(`/(tabs)/${name}` as any)}
                 activeOpacity={0.8}
-                className={`w-[68px] py-2.5 rounded-2xl items-center justify-center gap-1.5 relative transition-colors duration-200 ${isActive ? 'bg-brand-cyan/10' : 'hover:bg-white/[0.05]'
+                className={`w-[78px] py-3.5 rounded-2xl items-center justify-center gap-3.5 relative transition-colors duration-200 ${isActive ? 'bg-brand-cyan/10' : 'hover:bg-white/[0.05]'
                   }`}
               >
                 {isActive && (
                   <View
-                    className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-md bg-brand-cyan"
-                    style={Platform.OS === 'web' ? ({ boxShadow: `0 0 8px ${C.cyan}CC` } as any) : {}}
+                    className="absolute left-0 top-4 bottom-4 w-[2px] rounded-r-md bg-brand-cyan"
+                    style={Platform.OS === 'web' ? ({ boxShadow: `0 0 1px ${C.cyan}CC` } as any) : {}}
                   />
                 )}
-                <Icon size={20} color={isActive ? C.cyan : C.sub} strokeWidth={isActive ? 2.5 : 2} />
+                <Icon size={20} color={isActive ? C.cyan : C.sub} strokeWidth={isActive ? 2.5 : 2.5} />
                 <Text
                   style={{
-                    fontSize: 9, fontWeight: '800', letterSpacing: 1.2,
+                    fontSize: 9, fontWeight: '800', letterSpacing: 0.8,
                     color: isActive ? C.cyan : C.sub,
                     textTransform: 'uppercase',
                   }}

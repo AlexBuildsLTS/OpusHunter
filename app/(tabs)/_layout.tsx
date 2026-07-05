@@ -142,30 +142,57 @@ export default function TabsLayout() {
       </View>
 
       {/* Custom Mobile Tab Bar */}
-      <BlurView intensity={40} tint="dark" style={[styles.mobileTabBar, Platform.OS === 'web' && { backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' } as any]}>
-        {NAV_ITEMS.map(({ name, Icon }) => (
-          <Pressable
-            key={name}
-            onPress={() => {
-              if (name === 'settings') {
-                router.push('./settings');
-              } else {
-                router.push(name as any);
-              }
-            }}
-            style={[
-              styles.tabBarItem,
-              activeTab === name && styles.tabBarItemActive,
-            ]}
-          >
-            <Icon
-              size={24}
-              color={activeTab === name ? C.cyan : C.sub}
-              strokeWidth={2.5}
-            />
-          </Pressable>
-        ))}
-      </BlurView>
+      {Platform.OS === 'web' ? (
+        <View style={[styles.mobileTabBar, { backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' } as any]}>
+          {NAV_ITEMS.map(({ name, Icon }) => (
+            <Pressable
+              key={name}
+              onPress={() => {
+                if (name === 'settings') {
+                  router.push('./settings');
+                } else {
+                  router.push(name as any);
+                }
+              }}
+              style={[
+                styles.tabBarItem,
+                activeTab === name && styles.tabBarItemActive,
+              ]}
+            >
+              <Icon
+                size={24}
+                color={activeTab === name ? C.cyan : C.sub}
+                strokeWidth={2.5}
+              />
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <BlurView intensity={40} tint="dark" style={styles.mobileTabBar}>
+          {NAV_ITEMS.map(({ name, Icon }) => (
+            <Pressable
+              key={name}
+              onPress={() => {
+                if (name === 'settings') {
+                  router.push('./settings');
+                } else {
+                  router.push(name as any);
+                }
+              }}
+              style={[
+                styles.tabBarItem,
+                activeTab === name && styles.tabBarItemActive,
+              ]}
+            >
+              <Icon
+                size={24}
+                color={activeTab === name ? C.cyan : C.sub}
+                strokeWidth={2.5}
+              />
+            </Pressable>
+          ))}
+        </BlurView>
+      )}
     </PageContainer>
   );
 }
@@ -194,7 +221,7 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     flexDirection: 'row',
-    backgroundColor: 'rgba(18, 13, 30, 0.65)',
+    backgroundColor: 'rgba(18, 13, 30, 0.05)',
     borderTopColor: 'transparent',
     borderColor: `${C.cyan}1A`,
     borderWidth: 1,

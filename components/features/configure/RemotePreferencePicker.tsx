@@ -8,8 +8,8 @@
 
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import { C } from '../../lib/theme';
-import { REMOTE_OPTIONS } from '../features/configure/constants';
+import { C } from '../../../lib/theme';
+import { REMOTE_OPTIONS } from './constants';
 
 interface RemotePreferencePickerProps {
     value: string;
