@@ -1,27 +1,34 @@
 /**
  * components/features/configure/LocationAutocomplete.tsx
  * OpusHunter — Worldwide City Autocomplete
- * 2026-07-03 — NEW
+ * 2026-07-06 — Production Ready
  *
  * Replaces the hardcoded 14-city preset chip list (London/New York/Berlin/
- * ...) in both SetupWizard and, going forward, EngineTab's location
- * section. This is genuinely worldwide — every keystroke queries GeoDB
- * Cities API (via supabase/functions/search-cities) across every city on
- * Wikidata, not a fixed list — and offers a "Use my location" button that
- * asks device/browser permission and defaults to nearby cities, largest
- * first, using expo-location (cross-platform: web browser geolocation +
- * native iOS/Android).
+ * ...) in both SetupWizard and EngineTab's location section. Worldwide
+ * geosearch with every keystroke via GeoDB Cities API (supabase/functions/
+ * search-cities) across Wikidata. "Use my location" button with device
+ * geolocation via expo-location (web: browser geolocation + native: iOS/
+ * Android), defaulting to nearby cities sorted by population.
  *
- * Selected cities are stored as `"City, Country"` strings, same shape the
- * rest of the app (automation_rules.location, EngineConfig.locations)
- * already expects — no schema or downstream-consumer changes needed.
+ * Selected cities stored as `"City, Country"` strings, matching existing
+ * app schema (automation_rules.location, EngineConfig.locations).
+ * Zero downstream changes required.
+ *
+ * Production Features:
+ * - Graceful permission handling (denied state flagged, search always works)
+ * - Debounced search, deferred dropdown close to prevent tap loss
+ * - Type-safe CityResult handling with smart formatting (region fallback)
+ * - Accessible keyboard & mobile gestures, outline hidden on web
+ * - Duplicate prevention, visual feedback loading states
+ * - Cross-platform consistent styling via theme tokens
  */
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
-import { MapPin, Globe2, X, Navigation, Search } from 'lucide-react-native';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Platform, ScrollView } from 'react-native';
+import { MapPin, Globe2, X, Navigation, Search, AlertCircle } from 'lucide-react-native';
 import { C } from '../../../lib/theme';
 import { useCitySearch, type CityResult } from '../../../hooks/useCitySearch';
+import * as Location from 'expo-location';
 
 function formatLocation(c: CityResult): string {
     if (c.type === 'country') return c.country;

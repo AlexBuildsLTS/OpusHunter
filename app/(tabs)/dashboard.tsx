@@ -301,7 +301,9 @@ export default function DashboardScreen() {
         </Animated.View>
 
         {!isPremium && pendingJobs.length >= 18 && (
-          <PremiumGate onUpgrade={() => router.push('/(settings)' as any)} />
+          // FIX (2026-07-06): `(settings)` was renamed to `settings` under
+          // `(tabs)` — this stale route-group reference 404'd every tap.
+          <PremiumGate onUpgrade={() => router.push('/(tabs)/settings' as any)} />
         )}
 
         <Animated.View entering={FadeInDown.delay(80).springify()} style={s.metricsRow}>

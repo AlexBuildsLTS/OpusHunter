@@ -14,11 +14,17 @@ export default function IndexScreen() {
       setSession(session);
       setIsReady(true);
     });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription?.unsubscribe();
   }, []);
 
   if (!isReady) {
     return (
-      <View style={{ flex: 1, backgroundColor: C.obsidian, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: C.core, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={C.cyan} />
       </View>
     );

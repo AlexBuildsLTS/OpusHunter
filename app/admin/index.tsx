@@ -133,8 +133,10 @@ export default function AdminIndexScreen() {
     const keyProviders = Object.keys(keyHealth ?? {});
 
     const MENU = [
-        { label: 'API Key Management', sub: 'Manage RapidAPI & Gemini fallback key pools', icon: Key, color: C.cyan, route: '/(admin)/api-keys' },
-        { label: 'User Management', sub: 'View users, change roles (member \u2192 premium \u2192 admin)', icon: Users, color: C.purple, route: '/(admin)/users' },
+        // FIX (2026-07-06): `(admin)` was renamed to `admin` on disk — these
+        // still pointed at the old route-group path and 404'd every click.
+        { label: 'API Key Management', sub: 'Manage RapidAPI & Gemini fallback key pools', icon: Key, color: C.cyan, route: '/admin/api-keys' },
+        { label: 'User Management', sub: 'View users, change roles (member \u2192 premium \u2192 admin)', icon: Users, color: C.purple, route: '/admin/users' },
     ];
 
     return (

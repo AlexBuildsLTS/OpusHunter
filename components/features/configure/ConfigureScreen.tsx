@@ -29,7 +29,7 @@
  *     Engine/Rules screen as before — nothing removed for them.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, ActivityIndicator, Modal, Text, TouchableOpacity } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
@@ -56,10 +56,13 @@ export function ConfigureScreen() {
     const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
     const [banner, setBanner] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [bannerTimeout, setBannerTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
+        if (bannerTimeout) clearTimeout(bannerTimeout);
         if (banner) {
             const t = setTimeout(() => setBanner(null), 4000);
+            setBannerTimeout(t);
             return () => clearTimeout(t);
         }
     }, [banner]);
@@ -131,10 +134,10 @@ export function ConfigureScreen() {
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['automation_rules'] }),
     });
 
-    const openCreate = () => { setEditingRule(null); setModalVisible(true); };
-    const openEdit = (rule: AutomationRule) => { setEditingRule(rule); setModalVisible(true); };
+    const openCreate = useCallback(() => { setEditingRule(null); setModalVisible(true); }, []);
+    const openEdit = useCallback((rule: AutomationRule) => { setEditingRule(rule); setModalVisible(true); }, []);
 
-    const formInitial: RuleFormState = editingRule
+    const formInitial: RuleFormState = useMemo(() => editingRule
         ? {
             keywords: editingRule.keywords.join(', '),
             location: editingRule.location,
@@ -145,14 +148,14 @@ export function ConfigureScreen() {
             salary_min: editingRule.salary_min,
             is_active: editingRule.is_active ?? true,
         }
-        : DEFAULT_FORM;
+        : DEFAULT_FORM, [editingRule]);
 
-    const activeRulesCount = rules.filter((r: AutomationRule) => r.is_active).length;
+    const activeRulesCount = useMemo(() => rules.filter((r: AutomationRule) => r.is_active).length, [rules]);
 
-    const TABS: { key: TabKey; label: string; icon: any }[] = [
+    const TABS: { key: TabKey; label: string; icon: any }[] = useMemo(() => [
         { key: 'engine', label: 'Engine', icon: Zap },
         { key: 'rules', label: `Rules ${rules.length > 0 ? `(${rules.length})` : ''}`, icon: Tag },
-    ];
+    ], [rules.length]);
 
     // ── First-run gate ───────────────────────────────────────────────────────
     if (!isLoading && rules.length === 0 && !modalVisible) {
@@ -176,17 +179,22 @@ export function ConfigureScreen() {
                             backgroundColor: banner.type === 'success' ? `${C.cyan}0A` : `${C.pink}0A`,
                         },
                     ]}
+                    accessible={true}
+                    accessibilityRole="alert"
+                    accessibilityLabel={`${banner.type === 'success' ? 'Success' : 'Error'}: ${banner.text}`}
                 >
-                    {banner.type === 'success'
-                        ? <CheckCircle2 size={15} color={C.cyan} />
-                        : <AlertCircle size={15} color={C.pink} />}
+                    {banner.type === 'success' ? (
+                        <CheckCircle2 size={15} color={C.cyan} />
+                    ) : (
+                        <AlertCircle size={15} color={C.pink} />
+                    )}
                     <Text style={[st.bannerText, { color: banner.type === 'success' ? C.cyan : C.pink }]}>
                         {banner.text}
                     </Text>
                 </Animated.View>
             )}
 
-            <View style={st.tabBar}>
+            <View style={st.tabBar} accessible={true} accessibilityRole="tablist">
                 {TABS.map(({ key, label, icon: Icon }) => {
                     const active = activeTab === key;
                     return (
@@ -195,9 +203,15 @@ export function ConfigureScreen() {
                             onPress={() => setActiveTab(key)}
                             style={[st.tabBtn, active && st.tabBtnActive]}
                             activeOpacity={0.75}
+                            accessible={true}
+                            accessibilityLabel={`${label} tab`}
+                            accessibilityRole="tab"
+                            accessibilityState={{ selected: active }}
                         >
                             <Icon size={14} color={active ? C.cyan : C.sub} />
-                            <Text style={[st.tabBtnText, { color: active ? C.cyan : C.sub }]}>{label}</Text>
+                            <Text style={[st.tabBtnText, { color: active ? C.cyan : C.sub }]}>
+                                {label}
+                            </Text>
                         </TouchableOpacity>
                     );
                 })}
@@ -211,6 +225,10 @@ export function ConfigureScreen() {
                     isScraping={isScraping}
                     activeRulesCount={activeRulesCount}
                 />
+            ) : isLoading ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator color={C.cyan} size="large" />
+                </View>
             ) : (
                 <RulesTab
                     rules={rules}
@@ -230,26 +248,43 @@ export function ConfigureScreen() {
                 saving={saveMutation.isPending}
             />
 
-            <Modal visible={!!deleteConfirm} transparent animationType="fade">
-                <View style={st.modalOverlay}>
+            <Modal visible={!!deleteConfirm} transparent animationType="fade" accessible={true} accessibilityViewIsModal={true}>
+                <View style={st.modalOverlay} accessible={true} accessibilityRole="alert">
                     <View style={st.confirmCard}>
-                        <Text style={st.confirmTitle}>Delete Rule?</Text>
-                        <Text style={st.confirmBody}>This cannot be undone. Jobs already scraped will remain.</Text>
+                        <Text style={st.confirmTitle} accessible={true}>
+                            Delete Rule?
+                        </Text>
+                        <Text style={st.confirmBody} accessible={true}>
+                            This cannot be undone. Jobs already scraped will remain.
+                        </Text>
                         <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
                             <TouchableOpacity
                                 onPress={() => setDeleteConfirm(null)}
                                 style={[st.confirmBtn, { borderColor: C.border }]}
+                                accessible={true}
+                                accessibilityLabel="Cancel delete"
+                                accessibilityRole="button"
                             >
-                                <Text style={[st.confirmBtnText, { color: C.sub }]}>Cancel</Text>
+                                <Text style={[st.confirmBtnText, { color: C.sub }]}>
+                                    Cancel
+                                </Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={() => deleteConfirm && deleteMutation.mutate(deleteConfirm)}
                                 disabled={deleteMutation.isPending}
                                 style={[st.confirmBtn, { borderColor: `${C.pink}50`, backgroundColor: `${C.pink}12` }]}
+                                accessible={true}
+                                accessibilityLabel="Confirm delete rule"
+                                accessibilityRole="button"
+                                accessibilityState={{ disabled: deleteMutation.isPending }}
                             >
-                                {deleteMutation.isPending
-                                    ? <ActivityIndicator color={C.pink} size="small" />
-                                    : <Text style={[st.confirmBtnText, { color: C.pink }]}>Delete</Text>}
+                                {deleteMutation.isPending ? (
+                                    <ActivityIndicator color={C.pink} size="small" />
+                                ) : (
+                                    <Text style={[st.confirmBtnText, { color: C.pink }]}>
+                                        Delete
+                                    </Text>
+                                )}
                             </TouchableOpacity>
                         </View>
                     </View>

@@ -230,8 +230,11 @@ export default function SettingsScreen() {
                     <View style={s.card}>
                         <SettingRow icon={UserIcon} label="Profile" sub={profile?.full_name ?? profile?.email ?? ''} color={C.cyan} onPress={() => router.push('/(tabs)/settings/profile' as any)} />
                         <View style={s.divider} />
-                        <SettingRow icon={FileText} label="Documents" sub="CV and certifications" color={C.purple} onPress={() => router.push('/settings/documents' as any)} />
-                        <SettingRow icon={Lock} label="Security & Password" sub="Change your password, PIN, biometrics, and API keys" color={C.cyan} onPress={() => router.push('/settings/security' as any)} />
+                        {/* FIX (2026-07-06): missing `(tabs)` prefix — `settings` only
+                            exists nested under the `(tabs)` group, so these two 404'd
+                            while the Profile row above (correctly prefixed) worked. */}
+                        <SettingRow icon={FileText} label="Documents" sub="CV and certifications" color={C.purple} onPress={() => router.push('/(tabs)/settings/documents' as any)} />
+                        <SettingRow icon={Lock} label="Security & Password" sub="Change your password, PIN, biometrics, and API keys" color={C.cyan} onPress={() => router.push('/(tabs)/settings/security' as any)} />
                     </View>
                 </Animated.View>
 
