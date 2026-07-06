@@ -312,6 +312,7 @@ const AccountCard = memo(
         onPress,
         isLoading,
         color,
+        tint = 'frost',
     }: any) => (
         <TouchableOpacity
             onPress={onPress}
@@ -319,7 +320,7 @@ const AccountCard = memo(
             activeOpacity={0.85}
             style={{ flex: 1 }}
         >
-            <GlassCard className="p-6 items-center min-h-[160px] justify-center">
+            <GlassCard tint={tint} hoverable className="p-6 items-center min-h-[160px] justify-center">
                 <View
                     style={[
                         s.iconBg,
@@ -673,7 +674,7 @@ export default function ProfileScreen() {
 
                         <Animated.View entering={FadeInDown.delay(200)} style={{ width: '100%' }}>
                             <View>
-                                <GlassCard className="p-8 mb-8">
+                                <GlassCard tint="cyan" padding="lg" hoverable className="mb-6">
                                     <FormField
                                         icon={Pencil}
                                         label="DISPLAY NAME"
@@ -731,7 +732,7 @@ export default function ProfileScreen() {
                                 <View>
                                     <Text style={s.sectionLabel}>CERTIFICATIONS & CREDENTIALS</Text>
                                 </View>
-                                <GlassCard className="p-8 mb-8">
+                                <GlassCard tint="amber" padding="lg" hoverable className="mb-6">
                                     <View style={s.certRow}>
                                         <View style={[s.certIcon, { backgroundColor: `${C.amber}15` }]}>
                                             <Award size={20} color={C.amber} />
@@ -756,7 +757,7 @@ export default function ProfileScreen() {
                                 <View>
                                     <Text style={s.sectionLabel}>COVER LETTER TEMPLATE</Text>
                                 </View>
-                                <GlassCard className="p-8 mb-8">
+                                <GlassCard tint="purple" padding="lg" hoverable className="mb-6">
                                     <View style={s.coverLetterRow}>
                                         <View style={[s.certIcon, { backgroundColor: `${C.purple}15` }]}>
                                             <FileText size={20} color={C.purple} />
@@ -781,7 +782,7 @@ export default function ProfileScreen() {
                                 <View>
                                     <Text style={s.sectionLabel}>CURRICULUM VITAE</Text>
                                 </View>
-                                <GlassCard className="p-8 mb-8">
+                                <GlassCard tint="green" padding="lg" hoverable className="mb-6">
                                     <TouchableOpacity
                                         onPress={handleCVUpload}
                                         disabled={uploadingCV}
@@ -831,6 +832,7 @@ export default function ProfileScreen() {
                                         onPress={handleConnectGoogle}
                                         isLoading={false}
                                         color={C.cyan}
+                                        tint="cyan"
                                     />
                                     <AccountCard
                                         icon={MailIcon}
@@ -844,6 +846,7 @@ export default function ProfileScreen() {
                                         onPress={handleConnectOutlook}
                                         isLoading={false}
                                         color={C.purple}
+                                        tint="purple"
                                     />
                                 </View>
                             </View>

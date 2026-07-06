@@ -37,6 +37,7 @@ import {
 // ─── UI COMPONENTS & UTILS ───────────────────────────────────────────────────
 import { supabase } from '../../../lib/supabase';
 import { C } from '../../../lib/theme';
+import { GlassCard } from '../../../components/ui/GlassCard';
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 type SettingColor = 'cyan' | 'purple' | 'green' | 'pink' | 'amber';
@@ -227,7 +228,7 @@ export default function SettingsScreen() {
                 {/* ── Account ── */}
                 <Animated.View entering={FadeInDown.delay(60).duration(600).springify().damping(20)}>
                     <SectionLabel>ACCOUNT</SectionLabel>
-                    <View style={s.card}>
+                    <GlassCard tint="frost" padding="none" hoverable>
                         <SettingRow icon={UserIcon} label="Profile" sub={profile?.full_name ?? profile?.email ?? ''} color={C.cyan} onPress={() => router.push('/(tabs)/settings/profile' as any)} />
                         <View style={s.divider} />
                         {/* FIX (2026-07-06): missing `(tabs)` prefix — `settings` only
@@ -235,26 +236,26 @@ export default function SettingsScreen() {
                             while the Profile row above (correctly prefixed) worked. */}
                         <SettingRow icon={FileText} label="Documents" sub="CV and certifications" color={C.purple} onPress={() => router.push('/(tabs)/settings/documents' as any)} />
                         <SettingRow icon={Lock} label="Security & Password" sub="Change your password, PIN, biometrics, and API keys" color={C.cyan} onPress={() => router.push('/(tabs)/settings/security' as any)} />
-                    </View>
+                    </GlassCard>
                 </Animated.View>
 
                 {/* ── Admin — ONLY visible to admins ── */}
                 {isAdmin && (
                     <Animated.View entering={FadeInDown.delay(120).duration(600).springify().damping(20)}>
                         <SectionLabel>ADMINISTRATION</SectionLabel>
-                        <View style={s.card}>
+                        <GlassCard tint="pink" padding="none" hoverable>
                             <SettingRow
                                 icon={Shield} label="Admin Core" sub="Manage users, roles, and system API keys"
                                 color={C.pink} onPress={() => router.push('/admin' as any)}
                             />
-                        </View>
+                        </GlassCard>
                     </Animated.View>
                 )}
 
                 {/* ── Pipeline ── */}
                 <Animated.View entering={FadeInDown.delay(180).duration(600).springify().damping(20)}>
                     <SectionLabel>PIPELINE</SectionLabel>
-                    <View style={s.card}>
+                    <GlassCard tint="frost" padding="none" hoverable>
                         <SettingRow
                             icon={Zap} label="Auto-scrape on open" sub="Run scraper automatically when the app launches"
                             color={C.cyan}
@@ -278,39 +279,41 @@ export default function SettingsScreen() {
                                 />
                             }
                         />
-                    </View>
+                    </GlassCard>
                 </Animated.View>
 
                 {/* ── Premium CTA — hidden for premium/admin ── */}
                 {!isPremium && (
-                    <Animated.View entering={FadeInDown.delay(240).duration(600).springify().damping(20)} style={s.premiumCard}>
-                        <Crown size={22} color={C.amber} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={s.premiumTitle}>Upgrade to Premium</Text>
-                            <Text style={s.premiumSub}>Unlimited applications, BYOK priority, no rate limits.</Text>
-                        </View>
-                        <TouchableOpacity style={s.premiumBtn} activeOpacity={0.85}>
-                            <Text style={s.premiumBtnText}>UPGRADE</Text>
-                        </TouchableOpacity>
+                    <Animated.View entering={FadeInDown.delay(240).duration(600).springify().damping(20)} style={{ marginTop: 20 }}>
+                        <GlassCard tint="amber" padding="md" glow hoverable style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                            <Crown size={22} color={C.amber} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={s.premiumTitle}>Upgrade to Premium</Text>
+                                <Text style={s.premiumSub}>Unlimited applications, BYOK priority, no rate limits.</Text>
+                            </View>
+                            <TouchableOpacity style={s.premiumBtn} activeOpacity={0.85}>
+                                <Text style={s.premiumBtnText}>UPGRADE</Text>
+                            </TouchableOpacity>
+                        </GlassCard>
                     </Animated.View>
                 )}
 
                 {/* ── About ── */}
                 <Animated.View entering={FadeInDown.delay(300).duration(600).springify().damping(20)}>
                     <SectionLabel>ABOUT</SectionLabel>
-                    <View style={s.card}>
+                    <GlassCard tint="amber" padding="none" hoverable>
                         <SettingRow icon={Info} label="OpusHunter" sub="Version 1.0.0 — AI Job Application Engine" color={C.amber} />
-                    </View>
+                    </GlassCard>
 
                     {/* ── Danger Zone ── */}
                     <SectionLabel>DANGER ZONE</SectionLabel>
-                    <View style={s.card}>
+                    <GlassCard tint="pink" padding="none" hoverable>
                         <DangerRow icon={RefreshCw} label="Clear Pipeline" sub="Remove all pending jobs from your queue" onPress={() => setConfirm('pipeline')} />
                         <View style={s.divider} />
                         <DangerRow icon={Trash2} label="Clear Application History" sub="Delete all submitted applications" onPress={() => setConfirm('history')} />
                         <View style={s.divider} />
                         <DangerRow icon={Trash2} label="Delete Account" sub="Permanently remove your account and data" onPress={() => setConfirm('account')} />
-                    </View>
+                    </GlassCard>
 
                     <View style={{ height: 60 }} />
                 </Animated.View>
@@ -366,7 +369,7 @@ const s = StyleSheet.create({
     scroll: { paddingHorizontal: 20, maxWidth: 680, width: '100%', alignSelf: 'center' as any },
     sectionLabel: { fontSize: 11, fontWeight: '800', color: C.sub, letterSpacing: 1.5, marginTop: 20, marginBottom: 10 },
 
-    card: { backgroundColor: 'rgba(8,16,24,0.88)', borderWidth: 1, borderColor: C.border, borderRadius: 18, overflow: 'hidden' },
+    card: { backgroundColor: 'rgba(8,16,24,0.88)', borderWidth: 1, borderColor: C.border, borderRadius: 18, overflow: 'hidden' }, // kept for legacy fallback
     divider: { height: 1, backgroundColor: C.border },
 
     settingRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
@@ -380,7 +383,7 @@ const s = StyleSheet.create({
         flexDirection: 'row', alignItems: 'center', gap: 14,
         backgroundColor: `${C.amber}08`, borderWidth: 1, borderColor: `${C.amber}30`,
         borderRadius: 18, padding: 16, marginTop: 20,
-    },
+    }, // kept for legacy fallback — card now uses GlassCard
     premiumTitle: { fontSize: 14, fontWeight: '800', color: C.text },
     premiumSub: { fontSize: 11, color: C.sub, marginTop: 2 },
     premiumBtn: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, backgroundColor: C.amber },
