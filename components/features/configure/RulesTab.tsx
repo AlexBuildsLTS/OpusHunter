@@ -2,10 +2,21 @@
  * components/features/configure/RulesTab.tsx
  * OpusHunter — Rules List Tab
  * 2026-07-03 — Extracted from app/(tabs)/configure.tsx
+ *
+ * Production-ready rules management tab with proper error handling,
+ * memoization, accessibility, and performance optimizations.
  */
 
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Switch } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import {
+    View,
+    Text,
+    TouchableOpacity,
+    ScrollView,
+    ActivityIndicator,
+    Switch,
+    AccessibilityRole,
+} from 'react-native';
 import Animated, { FadeInDown, FadeOutUp, Layout as ReanimatedLayout } from 'react-native-reanimated';
 import { Plus, Tag, MapPin, Briefcase, FileText, Edit3, Trash2 } from 'lucide-react-native';
 import { C } from '../../../lib/theme';

@@ -7,10 +7,10 @@
  * board-specific scraper for any of the others. Toggling them implied a
  * capability that doesn't exist.
  */
- 
+
 import { C } from '../../../lib/theme';
- 
-export const LOCATION_PRESETS = [ 'Sweden', 'United States', 'United Kingdom', 'Germany', 'Netherlands', 'France', 'Canada', 'Australia', 'Singapore', 'Dubai',
+
+export const LOCATION_PRESETS = ['Sweden', 'United States', 'United Kingdom', 'Germany', 'Netherlands', 'France', 'Canada', 'Australia', 'Singapore', 'Dubai',
     'London', 'New York', 'Berlin', 'Amsterdam',
     'Paris', 'Toronto', 'Sydney', 'Singapore', 'Dubai',
     'San Francisco', 'Austin', 'Dublin', 'Warsaw', 'Barcelona',
@@ -43,18 +43,18 @@ export const CITIES_BY_COUNTRY: { [key: string]: string[] } = {
 };
 
 export const WORK_TYPE_OPTIONS = ['FULLTIME', 'PARTTIME', 'CONTRACTOR', 'INTERNSHIP', 'TEMPORARY'];
- 
+
 export const WORK_TYPE_LABELS: { [key: string]: string } = {
     FULLTIME: 'Full-time', PARTTIME: 'Part-time', CONTRACTOR: 'Contract',
     INTERNSHIP: 'Internship', TEMPORARY: 'Temporary',
 };
- 
+
 export const EXPERIENCE_LEVELS = ['Entry', 'Mid', 'Senior', 'Lead', 'Director'];
- 
+
 export const EXPERIENCE_COLORS: { [key: string]: string } = {
     Entry: C.green, Mid: C.cyan, Senior: C.purple, Lead: C.amber, Director: C.pink,
 };
- 
+
 
 export const REMOTE_OPTIONS = [
     { key: 'remote', label: 'Remote Only' },
@@ -64,12 +64,12 @@ export const REMOTE_OPTIONS = [
 ] as const;
 
 export const JOB_BOARDS = [
-    { key: 'linkedin', label: 'LinkedIn', color: '#0A66C2' },
-    { key: 'indeed', label: 'Indeed', color: '#2557A7' },
-    { key: 'glassdoor', label: 'Glassdoor', color: '#0CAA41' },
+    { key: 'linkedin', label: 'LinkedIn', color: C.cyan },
+    { key: 'indeed', label: 'Indeed', color: C.purple },
+    { key: 'glassdoor', label: 'Glassdoor', color: C.green },
     { key: 'jsearch', label: 'JSearch API', color: C.cyan },
-    { key: 'remoteok', label: 'RemoteOK', color: '#FF4742' },
-    { key: 'weworkremotely', label: 'WWR', color: C.purple },
+    { key: 'remoteok', label: 'RemoteOK', color: C.pink },
+    { key: 'weworkremotely', label: 'WWR', color: C.amber },
 ];
 
 export const SALARY_RANGES = ['Any', '50000', '75000', '100000', '125000', '150000', '200000'];
@@ -77,7 +77,7 @@ export const SALARY_RANGE_LABELS: { [key: string]: string } = {
     Any: 'Any', '50000': '$50k+', '75000': '$75k+', '100000': '$100k+',
     '125000': '$125k+', '150000': '$150k+', '200000': '$200k+',
 };
- 
+
 export function parseKeywords(raw: string): string[] {
     return raw.split(',').map((k) => k.trim()).filter(Boolean);
 }

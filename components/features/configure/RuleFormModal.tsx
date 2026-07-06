@@ -164,14 +164,14 @@ export function RuleFormModal({
                                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                                     <Text style={st.fieldLabel}>
                                         BASE COVER LETTER{' '}
-                                        <Text style={{ color: C.sub, fontWeight: '500' }}>(AI personalises per job)</Text>
+                                        <Text style={{ color: C.sub, fontWeight: '800' }}>( BASED ON APPLICATION )</Text>
                                     </Text>
                                     <TouchableOpacity
                                         onPress={handleGenerateTemplate}
                                         disabled={generating || !form.keywords.trim()}
                                         style={{
                                             flexDirection: 'row', alignItems: 'center', gap: 6,
-                                            paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+                                            paddingHorizontal: 12, paddingVertical: 12, borderRadius: 8,
                                             backgroundColor: `${C.cyan}14`, borderWidth: 1, borderColor: `${C.cyan}30`,
                                             opacity: !form.keywords.trim() ? 0.4 : 1,
                                         }}

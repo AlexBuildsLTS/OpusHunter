@@ -28,46 +28,132 @@
  * it's a manual discipline until someone wires up a token-generation step.
  */
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Base color palette — single source of truth for all color values
+// ─────────────────────────────────────────────────────────────────────────────
+const PALETTE = {
+    // ── PRIMARY BRAND ACCENTS ──
+    CYAN: '#22D3EE',
+    CYAN_LIGHT: '#06B6D4',
+    CYAN_DARK: '#0891B2',
+    PURPLE: '#8B7CF6',
+    PURPLE_LIGHT: '#A78BFA',
+    PURPLE_DARK: '#6366F1',
+    PINK: '#F0466E',
+    PINK_LIGHT: '#FB7185',
+    PINK_DARK: '#EC4899',
+    
+    // ── STATUS & SEMANTIC COLORS ──
+    GREEN: '#34D399',
+    GREEN_LIGHT: '#6EE7B7',
+    GREEN_DARK: '#10B981',
+    RED: '#FF0000',
+    RED_LIGHT: '#FCA5A5',
+    RED_DARK: '#DC2626',
+    ORANGE: '#FF4500',
+    ORANGE_LIGHT: '#FDBA74',
+    ORANGE_DARK: '#D97706',
+    AMBER: '#F5A623',
+    AMBER_LIGHT: '#FCD34D',
+    AMBER_DARK: '#D97706',
+    
+    // ── TERTIARY ACCENT COLORS ──
+    BLUE: '#3B82F6',
+    BLUE_LIGHT: '#60A5FA',
+    BLUE_DARK: '#1D4ED8',
+    TEAL: '#14B8A6',
+    TEAL_LIGHT: '#2DD4BF',
+    TEAL_DARK: '#0D9488',
+    ROSE: '#F43F5E',
+    ROSE_LIGHT: '#FB7185',
+    ROSE_DARK: '#E11D48',
+    INDIGO: '#6366F1',
+    INDIGO_LIGHT: '#818CF8',
+    INDIGO_DARK: '#4F46E5',
+    VIOLET: '#A78BFA',
+    VIOLET_LIGHT: '#C4B5FD',
+    VIOLET_DARK: '#7C3AED',
+    
+    // ── BACKGROUND & SURFACES ──
+    BG: '#0A0714',
+    CORE: '#120D1E',
+    CARD_BG: '#0D0914',
+    SURFACE: '#1A1625',
+    SURFACE_LIGHT: '#261E38',
+    OVERLAY: '#0F0A18',
+    
+    // ── NEUTRAL GRAYS (dark theme) ──
+    GRAY_900: '#0F0A18',
+    GRAY_800: '#1A1625',
+    GRAY_700: '#2B1E3A',
+    GRAY_600: '#3D2E4A',
+    GRAY_500: '#5A4A6E',
+    GRAY_400: '#79708C',
+    GRAY_300: '#9B8FB0',
+    GRAY_200: '#B8ADCF',
+    GRAY_100: '#D5CCE0',
+    GRAY_50: '#EFE9F7',
+    
+    // ── TEXT HIERARCHY (white-on-dark) ──
+    TEXT_BASE: '#EDEAF7',
+    TEXT_RGB: '237,234,247',
+    TEXT_SECONDARY: '#B8ADCF',
+    TEXT_TERTIARY: '#79708C',
+    TEXT_DISABLED: '#5A4A6E',
+    
+    // ── UTILITY COLORS ──
+    WHITE_RGB: '255,255,255',
+    BLACK_RGB: '0,0,0',
+    NAVY_HEX: '#000f2e',
+    OBSIDIAN_HEX: '#010914',
+    
+    // ── SPECIAL GRADIENTS & EFFECTS ──
+    GLOW_CYAN: 'rgba(34,211,238,0.5)',
+    GLOW_PURPLE: 'rgba(139,124,246,0.5)',
+    GLOW_PINK: 'rgba(240,70,110,0.5)',
+} as const;
+
 export const C = {
     // ── Brand accent colors (synced with tailwind.config.js `brand.*`) ──────
-    cyan: '#22D3EE',    // Primary bright cyan — CTAs, active nav, focus rings
-    purple: '#8B7CF6',  // Secondary visible indigo — hover states, secondary accents
-    pink: '#F0466E',    // Destructive / admin badge / error alerts
-    green: '#34D399',   // Success ONLY — checkmarks, status dots, never card bg
-    amber: '#F5A623',   // Premium badge, warnings, BYOK highlights
+    cyan: PALETTE.CYAN,      // Primary bright cyan — CTAs, active nav, focus rings
+    purple: PALETTE.PURPLE,  // Secondary visible indigo — hover states, secondary accents
+    pink: PALETTE.PINK,      // Destructive / admin badge / error alerts
+    green: PALETTE.GREEN,    // Success ONLY — checkmarks, status dots, never card bg
+    amber: PALETTE.AMBER,    // Premium badge, warnings, BYOK highlights
 
     // ── Background layers (synced with tailwind.config.js `surface.*`) ──────
-    bg: '#0A0714',      // Page canvas — outermost container backgrounds
-    core: '#120D1E',    // Elevated surface — headers, modals, sidebars
+    bg: PALETTE.BG,          // Page canvas — outermost container backgrounds
+    core: PALETTE.CORE,      // Elevated surface — headers, modals, sidebars
+    cardBg: PALETTE.CARD_BG, // Glass card background base
 
     // ── Text hierarchy — white-on-dark (synced with `content.*`) ─────────────
-    text: '#EDEAF7',                       // Primary: headings, labels, values
-    sub: 'rgba(237,234,247,0.62)',         // Secondary: captions, meta, descriptions
-    dim: 'rgba(237,234,247,0.36)',         // Tertiary: placeholders, disabled, hints
+    text: PALETTE.TEXT_BASE,                           // Primary: headings, labels, values
+    sub: `rgba(${PALETTE.TEXT_RGB},0.62)`,             // Secondary: captions, meta, descriptions
+    dim: `rgba(${PALETTE.TEXT_RGB},0.36)`,             // Tertiary: placeholders, disabled, hints
 
     // ── Borders ──────────────────────────────────────────────────────────────
-    border: 'rgba(255,255,255,0.10)',      // Default glass card border
-    borderCyan: 'rgba(34,211,238,0.28)',   // Cyan-tinted border for focused/active states
-    card: 'rgba(20,14,32,0.68)',           // Glass card background
+    border: `rgba(${PALETTE.WHITE_RGB},0.10)`,         // Default glass card border
+    borderCyan: `rgba(34,211,238,0.28)`,               // Cyan-tinted border for focused/active states
+    card: `rgba(20,14,32,0.68)`,                       // Glass card background
 
     // ── Legacy nested color map (kept for backward compat with C.colors.*) ──
     colors: {
-        background: '#0A0714',
-        card: 'rgba(20,14,32,0.68)',
-        cardBorder: 'rgba(255,255,255,0.10)',
+        background: PALETTE.BG,
+        card: `rgba(20,14,32,0.68)`,
+        cardBorder: `rgba(${PALETTE.WHITE_RGB},0.10)`,
         neon: {
-            cyan: '#22D3EE',
-            pink: '#F0466E',
-            purple: '#8B7CF6',
-            orange: '#FF4500',
-            navy: '#000f2e',
-            red: '#FF0000',
-            obsidian: '#010914',
-            green: '#34D399',
+            cyan: PALETTE.CYAN,
+            pink: PALETTE.PINK,
+            purple: PALETTE.PURPLE,
+            orange: PALETTE.ORANGE,
+            navy: PALETTE.NAVY_HEX,
+            red: PALETTE.RED,
+            obsidian: PALETTE.OBSIDIAN_HEX,
+            green: PALETTE.GREEN,
         },
         text: {
-            primary: '#EDEAF7',
-            secondary: 'rgba(237,234,247,0.62)',
+            primary: PALETTE.TEXT_BASE,
+            secondary: `rgba(${PALETTE.TEXT_RGB},0.62)`,
         },
     },
 

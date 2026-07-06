@@ -37,7 +37,7 @@ export const st = StyleSheet.create({
     // FIX: capped width + centered, was edge-to-edge with marginHorizontal: 0.
     tabBar: {
         flexDirection: 'row', marginBottom: 14,
-        backgroundColor: 'rgba(255,255,255,0.025)',
+        backgroundColor: `${C.text}07`,
         borderRadius: 14, borderWidth: 1, borderColor: C.border, padding: 3, gap: 3,
         maxWidth: 600, width: '100%', alignSelf: 'center' as any,
     },
