@@ -16,7 +16,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import {
-  Zap, BarChart2, CheckCircle2, Clock, Briefcase,
+  Zap, CheckCircle2, Clock, Briefcase,
   AlertCircle, RefreshCw, TrendingUp, Play, Pause,
   ChevronRight, Lock, Target,
 } from 'lucide-react-native';
@@ -392,8 +392,11 @@ export default function DashboardScreen() {
         <Animated.View entering={FadeInDown.delay(200).springify()} style={s.deckSection}>
           <View style={s.sectionHeader}>
             <Text style={s.sectionTitle}>Job Pipeline</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/vault' as any)} style={s.sectionLink} activeOpacity={0.8}>
-              <Text style={s.sectionLinkText}>View Vault</Text>
+            {/* FIX (2026-07-06): vault.tsx was removed on 2026-07-04 (CV/certs
+                folded into Settings → Documents) but this link was never
+                updated — was a guaranteed 404 on every tap. */}
+            <TouchableOpacity onPress={() => router.push('/(tabs)/settings/documents' as any)} style={s.sectionLink} activeOpacity={0.8}>
+              <Text style={s.sectionLinkText}>View Documents</Text>
               <ChevronRight size={14} color={C.cyan} />
             </TouchableOpacity>
           </View>
@@ -480,9 +483,17 @@ export default function DashboardScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(280).springify()} style={{ gap: 10 }}>
+          {/* REMOVED (2026-07-06): "Cover Letters" quick action used to be here,
+              pointing at the dead /vault route. Unlike the dashboard fix above,
+              there's no honest place to send this — no screen anywhere reads the
+              cover_letters table as a list; the only place a generated letter is
+              visible today is per-job, inside JobDetailModal's Cover Letter tab.
+              A real "Cover Letter history" screen (query cover_letters, join to
+              job_vault for title/company) is genuine new-feature work, not a
+              routing fix — flagging it for the roadmap rather than pointing this
+              at the wrong screen. */}
           {[
             { label: 'Search Parameters', sub: `${metrics?.active_rules ?? 0} active`, route: '/(tabs)/configure', color: C.purple, icon: Briefcase },
-            { label: 'Cover Letters', sub: `${metrics?.cover_letters ?? 0} saved`, route: '/(tabs)/vault', color: C.cyan, icon: BarChart2 },
           ].map(({ label, sub, route, color, icon: Icon }) => (
             <TouchableOpacity key={route} onPress={() => router.push(route as any)} activeOpacity={0.8}>
               <GlassCard tint="frost" padding="sm" hoverable className="flex-row items-center gap-3.5">

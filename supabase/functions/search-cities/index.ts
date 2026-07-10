@@ -27,7 +27,7 @@
  *   GET /v1/geo/locations/{lat}{lon}/nearbyPlaces?radius=50&distanceUnit=KM&limit=8&sort=-population
  */
 // deno-lint-ignore-file no-explicit-any
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { serve } from 'std/http/server.ts';
 import { createAdminClient } from '../_shared/supabaseAdmin.ts';
 import { resolveKeyPool, markKeyUsed } from '../_shared/keyResolver.ts';
 import { verifyUser } from '../_shared/auth.ts';

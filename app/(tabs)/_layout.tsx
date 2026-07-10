@@ -39,11 +39,10 @@ import React from 'react';
 import { View, StyleSheet, Platform, useWindowDimensions, Image, Pressable } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Slot, usePathname, useRouter } from 'expo-router';
-import { LayoutDashboard, Cpu, Cog, ServerCog, CloudCog, FolderCog, Briefcase } from 'lucide-react-native';
-import { LucideIcon } from 'lucide-react-native';
 import { Sidebar } from '../../components/layout/AdaptiveLayout';
 import { ProfileDropdown } from '../../components/ui/ProfileDropdown';
 import { PageContainer } from '../../components/layout/PageContainer';
+import { NAV_ITEMS } from '../../lib/navConfig';
 import { C } from '../../lib/theme';
 
 const LAYOUT = {
@@ -51,14 +50,6 @@ const LAYOUT = {
   sidebarOffset: 104,
   headerHeight: 64,
 };
-
-type NavItem = { name: string; label: string; Icon: LucideIcon };
-
-const NAV_ITEMS: NavItem[] = [
-  { name: 'dashboard', label: '', Icon: ServerCog },
-  { name: 'configure', label: '', Icon: CloudCog },
-  { name: 'settings', label: '', Icon: FolderCog },
-];
 
 const TAB_BAR_STYLE = {
   backgroundColor: 'rgba(18, 13, 30, 0.88)',
@@ -117,8 +108,9 @@ export default function TabsLayout() {
   // is ever mounted. Custom tab bar handles navigation.
   const getActiveTab = () => {
     if (pathname.includes('dashboard')) return 'dashboard';
+    if (pathname.includes('jobs')) return 'jobs';
     if (pathname.includes('configure')) return 'configure';
-    if (pathname.includes('settings') || pathname.includes('(settings)')) return 'settings';
+    if (pathname.includes('settings')) return 'settings';
     return 'dashboard';
   };
 
@@ -214,6 +206,11 @@ const styles = StyleSheet.create({
   },
   mobileContentContainer: {
     flex: 1,
+    // Top padding only — clears the absolutely-positioned logo/ProfileDropdown
+    // that sit above Slot with no reserved space of their own. The bottom
+    // tab bar positioning was already correct; reverted that part of this
+    // fix rather than guess a value you didn't ask for.
+    paddingTop: 64,
   },
   mobileTabBar: {
     position: 'absolute',

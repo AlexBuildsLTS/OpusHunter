@@ -26,20 +26,15 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Image, Platform, useWindowDimensions } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, Briefcase, ArrowLeft, CloudCog, ServerCog, FolderCog  } from 'lucide-react-native';
+import { ArrowLeft } from 'lucide-react-native';
 import { C } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import { ProfileDropdown } from '../ui/ProfileDropdown';
+import { NAV_ITEMS } from '../../lib/navConfig';
 import type { Database as DB } from '../../types/database.types';
 
 
 type ProfileRow = DB['public']['Tables']['profiles']['Row'];
-
-const NAV_ITEMS = [
-  { name: 'dashboard', label: 'HOME', Icon: ServerCog },
-  { name: 'configure', label: 'CONFIGURE', Icon: CloudCog },
-  { name: 'settings', label: 'SETTINGS', Icon: FolderCog },
-] as const;
 
 export function Sidebar({ active }: { active: string }) {
   const router = useRouter();

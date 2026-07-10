@@ -26,6 +26,13 @@ export interface ScrapePayload {
     keywords: string[];
     location: string;
     work_types: string[];
+    /** 2026-07-06 — ADDED: previously captured in the Rules form and saved
+     *  to automation_rules, but never read past that point — scrape-jobs
+     *  had no idea these columns existed. Now forwarded through so the
+     *  scraper can actually filter on them. See scrape-jobs/index.ts. */
+    experience_levels: string[];
+    remote_preference: string;
+    salary_min: number | null;
 }
 
 export interface ScrapeResult {
@@ -71,13 +78,16 @@ export function useEdgeScraper(): UseEdgeScraperReturn {
                     keywords: override.keywords,
                     location: override.location,
                     work_types: override.work_types ?? [],
+                    experience_levels: override.experience_levels ?? [],
+                    remote_preference: override.remote_preference ?? 'any',
+                    salary_min: override.salary_min ?? null,
                 };
             }
 
             // Otherwise read the user's active automation rules
             const { data: rules, error } = await supabase
                 .from('automation_rules')
-                .select('keywords, location, work_types')
+                .select('keywords, location, work_types, experience_levels, remote_preference, salary_min')
                 .eq('is_active', true)
                 .limit(10);
 
@@ -94,10 +104,32 @@ export function useEdgeScraper(): UseEdgeScraperReturn {
             const allWorkTypes = [...new Set(rules.flatMap((r) => r.work_types ?? []))];
             const primaryLocation = override?.location ?? rules[0].location ?? 'Remote';
 
+            // 2026-07-06 — ADDED. Merge strategy across multiple active rules
+            // (documented explicitly rather than left as an implicit guess):
+            //   - experience_levels: union — a job matching ANY selected level
+            //     across ANY active rule should surface, consistent with how
+            //     keywords are already unioned above.
+            //   - remote_preference: only applied if every active rule agrees;
+            //     otherwise default to 'any' rather than arbitrarily picking
+            //     one rule's preference over another's.
+            //   - salary_min: the LOWEST floor among rules that set one. This
+            //     matches the union/OR semantics used for keywords/experience
+            //     above — it's more permissive, not more restrictive, so a
+            //     rule with no salary requirement isn't silently overridden
+            //     by a stricter one it has nothing to do with.
+            const allExperienceLevels = [...new Set(rules.flatMap((r) => r.experience_levels ?? []))];
+            const remotePrefs = new Set(rules.map((r) => r.remote_preference ?? 'any'));
+            const mergedRemotePreference = remotePrefs.size === 1 ? [...remotePrefs][0] : 'any';
+            const salaryFloors = rules.map((r) => r.salary_min).filter((v): v is number => typeof v === 'number');
+            const mergedSalaryMin = salaryFloors.length ? Math.min(...salaryFloors) : null;
+
             return {
                 keywords: allKeywords,
                 location: primaryLocation,
                 work_types: allWorkTypes,
+                experience_levels: allExperienceLevels,
+                remote_preference: mergedRemotePreference,
+                salary_min: mergedSalaryMin,
             };
         },
         [],
@@ -114,15 +146,31 @@ export function useEdgeScraper(): UseEdgeScraperReturn {
             });
 
             if (error) {
-                // Supabase wraps edge function errors — extract the message
-                const message =
-                    (error as unknown as { context?: { message?: string } })?.context?.message ??
-                    error.message ??
-                    'Edge function invocation failed.';
+                // Supabase wraps edge function HTTP errors — the real message
+                // is in the response body, not error.message (which is always
+                // the generic "Edge Function returned a non-2xx status code").
+                let message = error.message ?? 'Edge function invocation failed.';
+                try {
+                    const ctx = (error as unknown as { context?: Response })?.context;
+                    if (ctx && typeof ctx.json === 'function') {
+                        const body = await ctx.json();
+                        message = body?.error ?? body?.message ?? JSON.stringify(body) ?? message;
+                    } else if (ctx && typeof ctx.text === 'function') {
+                        const text = await ctx.text();
+                        if (text) message = text;
+                    }
+                } catch {
+                    // body already consumed or not parseable — fall back to error.message
+                }
                 throw new Error(message);
             }
 
             if (!data) throw new Error('No data returned from scrape-jobs function.');
+
+            // Validate response structure
+            if (typeof data !== 'object' || data === null) {
+                throw new Error(`Unexpected response format: ${JSON.stringify(data)}`);
+            }
 
             return data;
         },

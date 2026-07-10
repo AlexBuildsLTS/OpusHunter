@@ -24,6 +24,15 @@
  * person lands on the existing Configure screen where they can add more
  * rules ("Java Fullstack", "React/Node", etc — multi-rule support) exactly
  * as they could before.
+ *
+ * 2026-07-06 — FIXED: this wizard never asked for the person's name, so
+ * profiles.full_name stayed null for every new account unless someone
+ * separately visited Settings → Profile. generate-cover-letter/index.ts
+ * falls back to the email prefix when full_name is null — meaning every
+ * cover letter for a brand-new user was signed with something like
+ * "johndoe123" instead of their actual name. Step 0 now asks for it and
+ * handleActivate() saves it to profiles alongside the automation_rules
+ * insert.
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
@@ -108,7 +117,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Step 1
+    // Step 0
+    const [fullName, setFullName] = useState('');
     const [role, setRole] = useState('');
     const [keywords, setKeywords] = useState<string[]>([]);
     const [keywordDraft, setKeywordDraft] = useState('');
@@ -140,7 +150,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
     const canAdvance = useMemo(() => {
         switch (step) {
-            case 0: return role.trim().length > 0 || keywords.length > 0;
+            case 0: return fullName.trim().length > 0 && (role.trim().length > 0 || keywords.length > 0);
             case 1: return locations.length > 0;
             case 2: return true;
             case 3: return true; // CV upload is encouraged, not force-gated — a person can add it from Vault later
@@ -200,6 +210,18 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             const finalKeywords = keywords.length > 0 ? keywords : role.trim() ? [role.trim()] : [];
             const finalLocation = locations.join(', ') || 'Remote';
 
+            // 2026-07-06 — FIXED: this wizard never wrote profiles.full_name.
+            // Cover letter generation (generate-cover-letter/index.ts) falls
+            // back to the email prefix ("johndoe123") whenever full_name is
+            // null, and it stayed null for every new account until someone
+            // separately found Settings → Profile and filled it in by hand.
+            // First-run setup is exactly where this belongs.
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .update({ full_name: fullName.trim() })
+                .eq('id', user.id);
+            if (profileError) throw new Error(`Could not save your name: ${profileError.message}`);
+
             const { error: insertError } = await supabase.from('automation_rules').insert({
                 user_id: user.id,
                 keywords: finalKeywords,
@@ -219,7 +241,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         } finally {
             setSaving(false);
         }
-    }, [keywords, role, locations, workTypes, experienceLevels, remoteMode, salaryMin, coverLetterDraft, starterTemplates, onComplete]);
+    }, [fullName, keywords, role, locations, workTypes, experienceLevels, remoteMode, salaryMin, coverLetterDraft, starterTemplates, onComplete]);
 
     return (
         <View className="items-center justify-center flex-1 px-4 py-10">
@@ -251,6 +273,25 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                     <Animated.View key={step} entering={FadeIn.duration(200)} exiting={FadeOut.duration(120)}>
                         {step === 0 && (
                             <View style={{ gap: 14 }}>
+                                <View>
+                                    <Text style={{ color: C.sub, fontSize: 12, fontWeight: '700', marginBottom: 6 }}>
+                                        YOUR NAME
+                                    </Text>
+                                    <TextInput
+                                        value={fullName}
+                                        onChangeText={setFullName}
+                                        placeholder="e.g. Jordan Lindqvist"
+                                        placeholderTextColor={C.dim}
+                                        autoCapitalize="words"
+                                        style={{
+                                            color: C.text, fontSize: 15, borderWidth: 1, borderColor: C.border,
+                                            borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: 'rgba(255,255,255,0.02)',
+                                        }}
+                                    />
+                                    <Text style={{ color: C.dim, fontSize: 11, marginTop: 6, lineHeight: 15 }}>
+                                        This signs every cover letter Gemini generates for you — get it right once, here.
+                                    </Text>
+                                </View>
                                 <View>
                                     <Text style={{ color: C.sub, fontSize: 12, fontWeight: '700', marginBottom: 6 }}>ROLE TITLE</Text>
                                     <TextInput
@@ -475,6 +516,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                                     <Text style={{ color: C.text, fontSize: 13, fontWeight: '800', marginBottom: 8 }}>
                                         Ready to activate
                                     </Text>
+                                    <SummaryLine label="Name" value={fullName || '—'} />
                                     <SummaryLine label="Role" value={role || keywords.join(', ') || '—'} />
                                     <SummaryLine label="Locations" value={locations.join(', ') || '—'} />
                                     <SummaryLine label="Work mode" value={REMOTE_MODES.find((m) => m.key === remoteMode)?.label ?? '—'} />

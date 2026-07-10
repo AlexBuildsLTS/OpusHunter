@@ -46,7 +46,7 @@
  */
 
 // deno-lint-ignore-file no-explicit-any
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { serve } from 'std/http/server.ts';
 import { createAdminClient } from '../_shared/supabaseAdmin.ts';
 import { resolveKey, markKeyUsed } from '../_shared/keyResolver.ts';
 

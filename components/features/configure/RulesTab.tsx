@@ -44,15 +44,22 @@ function RuleCard({
         >
             <View style={[st.ruleActiveLine, { backgroundColor: rule.is_active ? C.cyan : 'transparent' }]} />
             <View style={{ flex: 1 }}>
-                <View style={st.ruleRow}>
-                    <Tag size={12} color={C.cyan} />
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, flexDirection: 'row' }}>
+                <View style={[st.ruleRow, { alignItems: 'flex-start', flexWrap: 'wrap' }]}>
+                    <Tag size={12} color={C.cyan} style={{ marginTop: 4 }} />
+                    {/* FIX (2026-07-09): this was a horizontal ScrollView with no
+                        fade/scroll indicator — keywords past the visible width
+                        just clipped silently ("Software En..." with nothing
+                        showing it was cut off, not that more content existed).
+                        Wrapping onto new lines means every keyword is always
+                        fully visible; the card grows vertically instead of
+                        hiding content horizontally. */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1 }}>
                         {rule.keywords.map((kw) => (
                             <View key={kw} style={st.kwChip}>
                                 <Text style={st.kwChipText}>{kw}</Text>
                             </View>
                         ))}
-                    </ScrollView>
+                    </View>
                 </View>
                 <View style={[st.ruleRow, { marginTop: 7 }]}>
                     <MapPin size={12} color={C.purple} />

@@ -1,18 +1,7 @@
 /**
  * app/(auth)/login.tsx
- * OpusHunter — Authentication Screen
- * 2026-07-01 — Rebuilt for visual excellence and cross-platform parity.
- *
- * Design principles:
- *   - Palette synced with lib/theme.ts (C.cyan = #00D4FF, C.purple = #7B5EA7,
- *     C.pink = #E8436A) — identical to global.css CSS variables and tailwind.config.js tokens.
- *   - Desktop (≥768px web): Left form column (max-w 440px) + Right feature panel
- *   - Mobile / APK / iOS: Single-column, keyboard-aware, no horizontal stretch
- *   - Terms popup: Compact, sleek card — not bulky, scroll-to-accept preserved
- *   - Ambient background: GPU-safe static CSS gradients on web; Reanimated ripple on native
- *   - Feature cards: Constrained width, never stretch on large viewports
- *   - All StyleSheet values, no inline objects except where unavoidable
- *   - Google OAuth on web + native (WebBrowser + AuthSession)
+ * OpusHunter — Authentication Gateway
+ * Restored Architecture: Premium Glassmorphism & Reanimated
  */
 
 import React, {
@@ -76,15 +65,12 @@ import {
     ChevronRight,
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
+import { C, C as T } from '../../lib/theme';
 
 // ── Platform constant ─────────────────────────────────────────────────────────
 
 const IS_WEB = Platform.OS === 'web';
 WebBrowser.maybeCompleteAuthSession();
-
-import { C, C as T } from '../../lib/theme';
-
-
 
 // ── Feature card data ─────────────────────────────────────────────────────────
 
@@ -958,7 +944,7 @@ export default function LoginScreen() {
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
-// All values derived from the T palette above (= lib/theme.ts tokens)
+// Fixed: injected proper backdrop filters for cross-platform premium glass
 
 const s = StyleSheet.create({
     root: {
@@ -1003,15 +989,16 @@ const s = StyleSheet.create({
         textTransform: 'uppercase',
     },
 
-    // ── Form card ──
+    // ── Form card (Fixed true glassmorphism) ──
     formCard: {
         width: '100%',
         padding: 20,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.08)',
-        backgroundColor: 'rgba(8,14,22,0.82)',
+        borderColor: 'rgba(255,255,255,0.12)',
+        backgroundColor: 'rgba(8,14,22,0.65)',
         overflow: 'hidden',
+        ...(Platform.OS === 'web' ? { backdropFilter: 'blur(24px) saturate(180%)', WebkitBackdropFilter: 'blur(24px) saturate(180%)' } : {}) as any,
     },
 
     // ── Tabs ──
@@ -1356,7 +1343,8 @@ const s = StyleSheet.create({
         paddingHorizontal: 14,
         borderRadius: 16,
         borderWidth: 1,
-        backgroundColor: 'rgba(8,14,22,0.70)',
+        backgroundColor: 'rgba(8,14,22,0.6)',
+        ...(Platform.OS === 'web' ? { backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } : {}) as any,
     },
     mobileFeatureRow: {
         flexDirection: 'row',
@@ -1386,7 +1374,7 @@ const s = StyleSheet.create({
         lineHeight: 14,
     },
 
-    // ── Desktop feature panel ──
+    // ── Desktop feature panel (Fixed true glassmorphism) ──
     featurePanelInner: {
         flex: 1,
         justifyContent: 'center',
@@ -1417,8 +1405,9 @@ const s = StyleSheet.create({
         paddingHorizontal: 16,
         borderRadius: 16,
         borderWidth: 1,
-        backgroundColor: 'rgba(8,14,22,0.5)',
+        backgroundColor: 'rgba(8,14,22,0.4)',
         gap: 14,
+        ...(Platform.OS === 'web' ? { backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } : {}) as any,
     },
     featureIconBox: {
         width: 42,
@@ -1495,16 +1484,18 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         padding: 20,
+        ...(Platform.OS === 'web' ? { backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' } : {}) as any,
     },
     termsCard: {
         width: '100%',
         maxWidth: 480,
         maxHeight: '80%',
-        backgroundColor: 'rgba(8,14,22,0.97)',
+        backgroundColor: 'rgba(8,14,22,0.92)',
         borderWidth: 1,
-        borderColor: 'rgba(0,212,255,0.04)',
+        borderColor: 'rgba(0,212,255,0.12)',
         borderRadius: 22,
         overflow: 'hidden',
+        ...(Platform.OS === 'web' ? { backdropFilter: 'blur(32px) saturate(200%)', WebkitBackdropFilter: 'blur(32px) saturate(200%)' } : {}) as any,
     },
     termsHeader: {
         flexDirection: 'row',
@@ -1513,7 +1504,7 @@ const s = StyleSheet.create({
         paddingHorizontal: 18,
         paddingVertical: 14,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(8,16,26,0.05)',
+        borderBottomColor: 'rgba(255,255,255,0.05)',
     },
     termsHeaderLeft: {
         flexDirection: 'row',
@@ -1531,7 +1522,7 @@ const s = StyleSheet.create({
         width: 28,
         height: 28,
         borderRadius: 8,
-        backgroundColor: 'rgba(8,16,26,0.05)',
+        backgroundColor: 'rgba(255,255,255,0.05)',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -1568,7 +1559,7 @@ const s = StyleSheet.create({
         gap: 4,
         paddingLeft: 12,
         borderLeftWidth: 2,
-        borderLeftColor: 'rgba(8,16,26,0.12)',
+        borderLeftColor: 'rgba(255,255,255,0.12)',
     },
     termsItemTitle: {
         fontSize: 12,
@@ -1584,12 +1575,12 @@ const s = StyleSheet.create({
         paddingHorizontal: 18,
         paddingVertical: 14,
         borderTopWidth: 1,
-        borderTopColor: 'rgba(8,16,26,0.05)',
+        borderTopColor: 'rgba(255,255,255,0.05)',
         gap: 8,
     },
     termsScrollHint: {
         fontSize: 10,
-        color: 'rgba(8,16,26,0.28)',
+        color: 'rgba(255,255,255,0.28)',
         textAlign: 'center',
         letterSpacing: 1,
     },
@@ -1603,9 +1594,9 @@ const s = StyleSheet.create({
         backgroundColor: T.cyan,
     },
     termsAcceptDisabled: {
-        backgroundColor: 'rgba(8,16,26,0.04)',
+        backgroundColor: 'rgba(255,255,255,0.04)',
         borderWidth: 1,
-        borderColor: 'rgba(8,16,26,0.06)',
+        borderColor: 'rgba(255,255,255,0.06)',
     },
     termsAcceptText: {
         fontSize: 12,

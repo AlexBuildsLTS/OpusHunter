@@ -42,7 +42,6 @@ import {
     RotateCcw,
     Upload,
     Award,
-    FileText,
     Chrome,
     Mail as MailIcon,
     Copy,
@@ -364,7 +363,6 @@ export default function ProfileScreen() {
     const [googleConnected, setGoogleConnected] = useState(false);
     const [outlookConnected, setOutlookConnected] = useState(false);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
-    const [uploadingCV, setUploadingCV] = useState(false);
 
     const hasChanges = fullName.trim() !== (profile?.full_name || '');
 
@@ -507,58 +505,10 @@ export default function ProfileScreen() {
         }
     }, []);
 
-    // ──── CV UPLOAD ────────────────────────────────────────────────────────────
-    const handleCVUpload = useCallback(async () => {
-        try {
-            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!perm.granted) {
-                Alert.alert('Permission Required', 'File access is needed to upload a CV.');
-                return;
-            }
-
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ['images'],
-                quality: 0.95,
-            });
-
-            if (result.canceled || !result.assets?.[0]) return;
-
-            const asset = result.assets[0];
-            setUploadingCV(true);
-
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Not authenticated.');
-
-            const ext = asset.uri.split('.').pop()?.split('?')[0] || 'pdf';
-            const path = `${user.id}/cv.${ext}`;
-
-            const response = await fetch(asset.uri);
-            const blob = await response.blob();
-
-            const { error: uploadError } = await supabase.storage
-                .from('cv_vault')
-                .upload(path, blob, { upsert: true, contentType: blob.type });
-
-            if (uploadError) throw uploadError;
-
-            const { data: publicUrlData } = supabase.storage.from('cv_vault').getPublicUrl(path);
-            const bustedUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
-
-            const { error: dbError } = await supabase
-                .from('profiles')
-                .update({ cv_url: bustedUrl })
-                .eq('id', user.id);
-
-            if (dbError) throw dbError;
-
-            setProfile((prev) => (prev ? { ...prev, cv_url: bustedUrl } : null));
-            Alert.alert('Success', 'CV updated successfully!');
-        } catch (e: any) {
-            Alert.alert('Error', e.message ?? 'CV upload failed.');
-        } finally {
-            setUploadingCV(false);
-        }
-    }, []);
+    // REMOVED (2026-07-06): handleCVUpload — used ImagePicker (images only, no
+    // PDF/DOC/DOCX) and wrote to profiles.cv_url, a column that doesn't exist
+    // in the schema (only cv_storage_path does). Guaranteed error every call.
+    // Real, correct CV upload lives in Settings → Documents (useCVVault hook).
 
     if (isLoading) {
         return (
@@ -757,26 +707,27 @@ export default function ProfileScreen() {
                                 <View>
                                     <Text style={s.sectionLabel}>COVER LETTER TEMPLATE</Text>
                                 </View>
-                                <GlassCard tint="purple" padding="lg" hoverable className="mb-6">
-                                    <View style={s.coverLetterRow}>
-                                        <View style={[s.certIcon, { backgroundColor: `${C.purple}15` }]}>
-                                            <FileText size={20} color={C.purple} />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={s.certTitle}>Create Template</Text>
-                                            <Text style={s.certSub}>
-                                                Base template for AI-generated cover letters
-                                            </Text>
-                                        </View>
-                                        <TouchableOpacity activeOpacity={0.7}>
-                                            <Pencil size={16} color={C.cyan} />
-                                        </TouchableOpacity>
-                                    </View>
-                                </GlassCard>
+                                {/* REMOVED (2026-07-06): "Create Template" card had no onPress
+                                    handler — dead tap target. It also didn't make architectural
+                                    sense here: base_cover_letter is per-rule (automation_rules
+                                    table), not a single global template, so there's nothing one
+                                    editor on this screen could correctly edit. Real place to set
+                                    a rule's template is Configure → Rules → Edit Rule → Generate
+                                    with AI. */}
                             </View>
                         </Animated.View>
 
                         {/* ─── CV UPLOAD SECTION ────────────────────────────────────────── */}
+                        {/* FIX (2026-07-06): this used to have its own upload handler
+                            (handleCVUpload) that (a) only let you pick images, not a
+                            PDF/DOC/DOCX, and (b) wrote to profiles.cv_url — a column
+                            that doesn't exist in the schema, so it errored every time.
+                            Settings → Documents already has a correct, working CV
+                            uploader (useCVVault: real document picker, correct bucket,
+                            correctly writes profiles.cv_storage_path). Rather than
+                            maintain two upload code paths, this card now just shows
+                            status and routes there — one working implementation
+                            instead of one broken + one working. */}
                         <Animated.View entering={FadeInDown.delay(450)} style={{ width: '100%' }}>
                             <View>
                                 <View>
@@ -784,26 +735,21 @@ export default function ProfileScreen() {
                                 </View>
                                 <GlassCard tint="green" padding="lg" hoverable className="mb-6">
                                     <TouchableOpacity
-                                        onPress={handleCVUpload}
-                                        disabled={uploadingCV}
+                                        onPress={() => router.push('/(tabs)/settings/documents' as any)}
                                         activeOpacity={0.7}
                                     >
                                         <View style={s.cvRow}>
                                             <View style={[s.certIcon, { backgroundColor: `${C.green}15` }]}>
-                                                {uploadingCV ? (
-                                                    <ActivityIndicator color={C.green} size="small" />
-                                                ) : (
-                                                    <Upload size={20} color={C.green} />
-                                                )}
+                                                <Upload size={20} color={C.green} />
                                             </View>
                                             <View style={{ flex: 1 }}>
                                                 <Text style={s.certTitle}>
-                                                    {profile?.cv_storage_path ? 'Update CV' : 'Upload CV'}
+                                                    {profile?.cv_storage_path ? 'CV on file' : 'No CV uploaded yet'}
                                                 </Text>
                                                 <Text style={s.certSub}>
                                                     {profile?.cv_storage_path
-                                                        ? 'Replace your current CV'
-                                                        : 'Upload PDF or image for job applications'}
+                                                        ? 'Manage your CV in Documents'
+                                                        : 'Upload one in Documents for personalised cover letters'}
                                                 </Text>
                                             </View>
                                             <Pencil size={16} color={C.cyan} />

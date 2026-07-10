@@ -30,7 +30,7 @@
  */
 
 // deno-lint-ignore-file no-explicit-any
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { serve } from 'std/http/server.ts';
 import { createAdminClient } from '../_shared/supabaseAdmin.ts';
 import { resolveKeyPool, markKeyUsed, type ResolvedKey } from '../_shared/keyResolver.ts';
 
@@ -155,7 +155,13 @@ async function fetchJSearch(
     keys: ResolvedKey[],
     supabase: any,
 ): Promise<{ jobs: JSearchJob[]; keyUsed: ResolvedKey }> {
-    const url = `https://jsearch.p.rapidapi.com/search?${params.toString()}`;
+    // FIX (2026-07-06): JSearch retired `/search` — confirmed via OpenWeb Ninja
+    // docs and matches the live 404 in your logs ("Endpoint '/search' does
+    // not exist"). Current endpoint is `/search-v2`. Response shape is
+    // unchanged (still `{ data: JSearchJob[] }`), so nothing else here needs
+    // to change — this was never a key/auth problem. The 404 itself proves
+    // RAPIDAPI_KEY authenticated fine; an invalid key gets 401/403, not 404.
+    const url = `https://jsearch.p.rapidapi.com/search-v2?${params.toString()}`;
 
     let lastError = '';
     for (const resolved of keys) {
@@ -186,8 +192,37 @@ async function fetchJSearch(
         }
 
         await markKeyUsed(supabase, resolved);
-        const data: JSearchResponse = await response.json();
-        return { jobs: data?.data ?? [], keyUsed: resolved };
+        const data: any = await response.json();
+
+        // FIX (2026-07-09): confirmed via your own logs — /search-v2 returns
+        // 200 OK (so the endpoint itself is right), but something about its
+        // shape doesn't match the old flat `{ data: JSearchJob[] }` contract
+        // from /search, causing "rawJobs.filter is not a function" downstream.
+        // Rather than guess the new shape a second time, this checks every
+        // shape the JSearch family of endpoints is known to use (flat array,
+        // or nested under .jobs/.results for cursor-paginated responses) and
+        // logs the raw top-level keys when NONE of them match, so the next
+        // failure tells us the exact real shape instead of crashing blind.
+        let safeJobs: JSearchJob[];
+        if (Array.isArray(data?.data)) {
+            safeJobs = data.data;
+        } else if (Array.isArray(data?.data?.jobs)) {
+            safeJobs = data.data.jobs;
+        } else if (Array.isArray(data?.jobs)) {
+            safeJobs = data.jobs;
+        } else if (Array.isArray(data?.results)) {
+            safeJobs = data.results;
+        } else {
+            console.error(
+                '[scrape-jobs] Unrecognised JSearch response shape. Top-level keys:',
+                data && typeof data === 'object' ? Object.keys(data) : typeof data,
+                '\u2014 nested data keys:',
+                data?.data && typeof data.data === 'object' ? Object.keys(data.data) : typeof data?.data,
+            );
+            safeJobs = [];
+        }
+
+        return { jobs: safeJobs, keyUsed: resolved };
     }
 
     throw new Error(lastError || 'All RapidAPI keys exhausted or rejected.');

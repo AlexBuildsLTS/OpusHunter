@@ -93,6 +93,17 @@ export function ConfigureScreen() {
                 keywords: parseKeywords(form.keywords),
                 location: form.location.trim(),
                 work_types: form.work_types,
+                // 2026-07-06 — FIXED: these three fields were captured by the
+                // Edit Rule modal (experience level chips, remote preference,
+                // minimum salary) but never included in the payload sent to
+                // Supabase. A user could pick "Senior + Remote + $100k+",
+                // hit Save Rule, see a success banner, and have all three
+                // silently discarded. They are real columns on
+                // automation_rules (see types/database.types.ts) — this was
+                // pure data loss, not a missing feature.
+                experience_levels: form.experience_levels,
+                remote_preference: form.remote_preference,
+                salary_min: form.salary_min,
                 base_cover_letter: form.base_cover_letter.trim(),
                 is_active: form.is_active,
             };
