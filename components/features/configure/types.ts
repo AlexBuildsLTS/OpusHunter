@@ -4,7 +4,6 @@
  * 2026-07-03 — Extracted from app/(tabs)/configure.tsx
  */
 
-// Enums for type safety
 export enum RemotePreference {
     ANY = 'any',
     REMOTE = 'remote',
@@ -133,6 +132,33 @@ export const DEFAULT_FORM: RuleFormState = {
     base_cover_letter: '',
     is_active: true,
 };
+
+
+export interface AutomationRule {
+    id: string;
+    keywords: string[];
+    location: string;
+    work_types: string[];
+    experience_levels: string[];
+    remote_preference: string;
+    salary_min: number | null;
+    base_cover_letter: string;
+    is_active: boolean | null;
+    created_at: string;
+    user_id?: string;
+}
+
+export interface RuleFormState {
+    keywords: string;
+    location: string;
+    work_types: string[];
+    experience_levels: string[];
+    remote_preference: string;
+    salary_min: number | null;
+    base_cover_letter: string;
+    is_active: boolean;
+}
+
 
 // Tab navigation types
 export type TabKey = 'engine' | 'rules';

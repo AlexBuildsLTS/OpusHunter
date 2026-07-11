@@ -19,7 +19,7 @@
  */
 
 import type { LucideIcon } from 'lucide-react-native';
-import { ServerCog, Briefcase, CloudCog, FolderCog } from 'lucide-react-native';
+import { ServerCog, Briefcase, CloudCog, FolderCog, BrainCog } from 'lucide-react-native';
 
 export interface NavItem {
     name: string;
@@ -29,7 +29,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: readonly NavItem[] = [
     { name: 'dashboard', label: 'HOME', Icon: ServerCog },
-    { name: 'jobs', label: 'JOBS', Icon: Briefcase },
+    { name: 'jobs', label: 'JOBS', Icon: BrainCog },
     { name: 'configure', label: 'CONFIGURE', Icon: CloudCog },
     { name: 'settings', label: 'SETTINGS', Icon: FolderCog },
 ] as const;

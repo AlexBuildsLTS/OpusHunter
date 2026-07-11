@@ -324,7 +324,7 @@ export default function JobsScreen() {
                         <ActivityIndicator color={C.cyan} />
                     </View>
                 ) : isError ? (
-                    <GlassCard tint="pink" padding="lg" className="items-center gap-2">
+                    <GlassCard tint="frost" padding="lg" className="items-center gap-2">
                         <Text style={{ color: C.text, fontWeight: '700' }}>Couldn't load jobs</Text>
                         <TouchableOpacity onPress={() => qc.invalidateQueries({ queryKey: ['all_jobs'] })}>
                             <Text style={{ color: C.cyan, fontWeight: '700' }}>Retry</Text>
@@ -390,8 +390,8 @@ const styles = StyleSheet.create({
     scoreText: { fontSize: 12, fontWeight: '800' },
     salary: { fontSize: 12, color: C.amber, fontWeight: '600', marginBottom: 6 },
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
-    techChip: { backgroundColor: `${C.purple}12`, borderWidth: 1, borderColor: `${C.purple}24`, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-    techChipText: { fontSize: 10, fontWeight: '700', color: C.purple },
+    techChip: { backgroundColor: `${C.core}12`, borderWidth: 1, borderColor: `${C.core}24`, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+    techChipText: { fontSize: 10, fontWeight: '700', color: C.core },
     bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
     statusPill: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4 },
     statusPillText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },

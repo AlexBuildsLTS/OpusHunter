@@ -93,10 +93,10 @@ export default function RootLayout() {
                             screenOptions={{
                                 headerShown: false,
                                 contentStyle: { backgroundColor: 'transparent' },
-                                animation: Platform.OS === 'web' ? 'none' : 'fade',
+                                animation: Platform.OS === 'web' ? 'slide_from_right' : 'fade',
                             }}
                         >
-                            <Stack.Screen name="(auth)" options={{ animation: 'none' }} />
+                            <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
                             <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
                             <Stack.Screen name="admin" options={{ animation: 'slide_from_right' }} />
                             <Stack.Screen name="+not-found" />

@@ -177,7 +177,7 @@ export function EngineTab({
                         ))}
                     </View>
                 ) : (
-                    <View style={{ paddingVertical: 12, alignItems: 'center', backgroundColor: '#0C0D1D', borderRadius: 12, borderWidth: 1, borderColor: '#333' }}>
+                    <View style={{ paddingVertical: 12, alignItems: 'center', backgroundColor: C.cardBg, borderRadius: 12, borderWidth: 1, borderColor: C.border }}>
                         <Text style={{ color: C.dim, fontSize: 12 }}>No locations added yet.</Text>
                     </View>
                 )}
