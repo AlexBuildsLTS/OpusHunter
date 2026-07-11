@@ -1,13 +1,20 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   OpusHunter — Global CSS
-   Stack: Expo 56 · React Native 0.85.3 · NativeWind 4.2.5
-   Date:  2026-07-01 — Repalette: "Obsidian Violet"
+   OpusHunter — Global CSS (web only; RN screens use lib/theme.ts directly)
+   Stack: Expo ~57.0 · React Native 0.86 · NativeWind 4.2.5
+   Synced 2026-07-11 against lib/theme.ts's PALETTE — that file is the single
+   source of truth. Two fixes made in this pass, beyond the color resync:
 
-   FIXED: --bg-core/--bg-deep here previously held DIFFERENT hex values
-   (#001017 / #010107) than tailwind.config.js's surface.core/bg
-   (#0B1018 / #19192A) and lib/theme.ts's C.core/C.bg (#040C14 / #020507)
-   — three different "canonical" background colors for the actual page
-   background. All three files are now numerically identical.
+   1. `.sidebar-nav-item`, `.stamp-apply`, `.stamp-pass` were each defined
+      TWICE in this file (once early, once near the bottom, nearly identical).
+      Deduped to one definition each — dead weight, not a visual bug, but
+      worth removing before it drifts into two different look.
+
+   2. REAL BUG: `.tabs-content { margin-left: 120px }` was correctly fixed
+      once (with a comment explaining the 72px rail-clipping issue), but a
+      second, later `.tabs-content` block at the bottom of the file reset it
+      back to `margin-left: 72px`. Later rule wins in the cascade, so content
+      has been clipping under the sidebar in production despite the "fixed"
+      comment. Corrected — one `.tabs-content` rule, 120px, no do-over.
    ───────────────────────────────────────────────────────────────────────────── */
 
 @tailwind base;
@@ -17,40 +24,46 @@
 /* ── CSS DESIGN TOKENS ──────────────────────────────────────────────────────── */
 @layer base {
   :root {
-    /* Core backgrounds — premium obsidian palette with depth */
-    --bg-deep: #050409;
-    --bg-core: #0d0a14;
-    --bg-mid: #13101d;
+    /* Core backgrounds — numerically identical to lib/theme.ts C.bg/core and
+       tailwind.config.js surface.bg/core/mid. Change in theme.ts first. */
+    --bg-deep: #0a0714;
+    --bg-core: #120d1e;
+    --bg-mid: #1b1430;
 
-    /* Brand neons — refined for cross-platform legibility */
-    --neon-cyan: #00d9ff;
-    --neon-cyan-glow: rgba(0, 217, 255, 0.35);
-    --neon-purple: #8b5cf6;
-    --neon-purple-glow: rgba(139, 92, 246, 0.28);
-    --neon-pink: #ff006e;
-    --neon-pink-glow: rgba(255, 0, 110, 0.25);
-    --neon-green: #00ff88;
-    --neon-amber: #ffa500;
+    /* Brand accents — identical to lib/theme.ts PALETTE */
+    --neon-cyan: #22d3ee;
+    --neon-cyan-glow: rgba(34, 211, 238, 0.35);
+    --neon-purple: #8b7cf6;
+    --neon-purple-glow: rgba(139, 124, 246, 0.28);
+    --neon-pink: #f0466e;
+    --neon-pink-glow: rgba(240, 70, 110, 0.25);
+    --neon-green: #34d399;
+    --neon-amber: #f5a623;
 
-    /* Surfaces — enhanced contrast for accessibility */
-    --surface-card: rgba(8,16,26, 0.42);
+    /* Surfaces */
+    --surface-card: rgba(20, 14, 32, 0.68);
     --surface-sidebar: #0a0812;
-    --surface-border: rgba(255, 255, 255, 0.12);
-    --surface-border-cyan: rgba(0, 217, 255, 0.18);
+    --surface-border: rgba(255, 255, 255, 0.10);
+    --surface-border-cyan: rgba(34, 211, 238, 0.28);
 
     /* Card constraints — responsive with max-width for large displays */
     --card-max-w: min(480px, 90vw);
     --card-max-h: 640px;
 
-    /* Content — enhanced text hierarchy */
-    --text-primary: #f5f3ff;
-    --text-secondary: rgba(245, 243, 255, 0.58);
-    --text-dim: rgba(245, 243, 255, 0.32);
+    /* Text hierarchy — identical to lib/theme.ts C.text/sub/dim */
+    --text-primary: #edeaf7;
+    --text-secondary: rgba(237, 234, 247, 0.62);
+    --text-dim: rgba(237, 234, 247, 0.36);
 
     /* Layout constraints (critical for web) */
     --auth-max-w: 420px;
     --content-max-w: 1200px;
     --panel-max-w: 680px;
+
+    /* Sidebar rail: left:24px + 72px wide + 24px gutter = 120px content offset.
+       Referenced by .tabs-content below — keep numerically equal to
+       AdaptiveLayout.tsx's inline offset if that value ever changes. */
+    --sidebar-content-offset: 120px;
   }
 }
 
@@ -58,47 +71,24 @@
 html,
 body,
 #root {
-  /* Architectural depth gradient — deep navy to obsidian */
   background:
-    radial-gradient(
-      ellipse 120% 80% at 15% 0%,
-      rgba(139, 92, 246, 0.14) 0%,
-      transparent 55%
-    ),
-    radial-gradient(
-      ellipse 80% 60% at 85% 100%,
-      rgba(0, 217, 255, 0.1) 0%,
-      transparent 55%
-    ),
+    radial-gradient(ellipse 120% 80% at 15% 0%, rgba(139, 124, 246, 0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 60% at 85% 100%, rgba(34, 211, 238, 0.10) 0%, transparent 55%),
     radial-gradient(circle at 50% 50%, var(--bg-core) 0%, var(--bg-deep) 100%);
   background-attachment: fixed;
   position: relative;
 }
 
-/* Slow-drifting ambient glow — the "alive background" layer.
-   Subtle by design (per reference mood: near-black, barely-there motion,
-   not a bright animated blob). Sits behind all content via paint order;
+/* Slow-drifting ambient glow — subtle by design, sits behind all content,
    pointer-events: none so it never intercepts touches/clicks. */
 #root::before {
   content: "";
   position: fixed;
   inset: -15%;
   background:
-    radial-gradient(
-      circle at 25% 20%,
-      rgba(139, 92, 246, 0.2) 0%,
-      transparent 48%
-    ),
-    radial-gradient(
-      circle at 78% 85%,
-      rgba(0, 217, 255, 0.15) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      circle at 90% 10%,
-      rgba(255, 0, 110, 0.08) 0%,
-      transparent 40%
-    );
+    radial-gradient(circle at 25% 20%, rgba(139, 124, 246, 0.20) 0%, transparent 48%),
+    radial-gradient(circle at 78% 85%, rgba(34, 211, 238, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 90% 10%, rgba(240, 70, 110, 0.08) 0%, transparent 40%);
   animation: ambientDrift 26s ease-in-out infinite;
   pointer-events: none;
   z-index: 0;
@@ -111,9 +101,7 @@ body,
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 /* ── SCROLLBARS — HIDDEN FOR NATIVE APP FEEL ────────────────────────────────── */
@@ -127,36 +115,26 @@ body,
 }
 
 /* ── WEB LAYOUT CONTAINERS ──────────────────────────────────────────────────── */
-/*
- * CRITICAL: These classes enforce max-width + centering on web.
- * Without these, NativeWind's w-full balloons to 100vw on desktop.
- * Always wrap page content in one of these.
- */
+/* Without these, NativeWind's w-full balloons to 100vw on desktop.
+   Always wrap page content in one of these. */
 
 .web-auth-shell {
-  /* Auth pages: two-column on ≥768px, single-col on mobile */
   display: flex;
   min-height: 100vh;
   width: 100%;
 }
-
 .web-auth-card {
-  /* The sign-in / sign-up card — never wider than 440px */
   width: 100%;
   max-width: var(--auth-max-w);
   margin: 0 auto;
 }
-
 .web-content-shell {
-  /* General authenticated pages */
   width: 100%;
   max-width: var(--content-max-w);
   margin: 0 auto;
   padding: 0 24px;
 }
-
 .web-panel-shell {
-  /* Narrower panels (settings, admin sub-pages) */
   width: 100%;
   max-width: var(--panel-max-w);
   margin: 0 auto;
@@ -165,101 +143,77 @@ body,
 
 /* ── GLASS MORPHISM SYSTEM ───────────────────────────────────────────────────── */
 
-/* Base glass — cards, modals, sidebars */
 .glass {
   background: var(--surface-card);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--surface-border);
 }
-
-/* Elevated glass — popups, drawers */
 .glass-elevated {
-  background: rgba(10, 18, 28, 0.92);
+  background: rgba(18, 13, 30, 0.92);
   backdrop-filter: blur(32px) saturate(200%);
   -webkit-backdrop-filter: blur(32px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.09);
 }
-
-/* Tinted glass variants */
 .glass-cyan {
-  background: rgba(0, 217, 255, 0.06);
+  background: rgba(34, 211, 238, 0.06);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 217, 255, 0.18);
+  border: 1px solid var(--neon-cyan-glow);
 }
 .glass-purple {
-  background: rgba(139, 92, 246, 0.06);
+  background: rgba(139, 124, 246, 0.06);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(139, 92, 246, 0.18);
+  border: 1px solid var(--neon-purple-glow);
 }
 .glass-pink {
-  background: rgba(255, 0, 110, 0.06);
+  background: rgba(240, 70, 110, 0.06);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 0, 110, 0.18);
+  border: 1px solid var(--neon-pink-glow);
 }
 
 /* ── GLOW SYSTEM ─────────────────────────────────────────────────────────────── */
 
 .glow-cyan {
-  box-shadow:
-    0 0 24px var(--neon-cyan-glow),
-    0 0 48px rgba(0, 217, 255, 0.1);
+  box-shadow: 0 0 24px var(--neon-cyan-glow), 0 0 48px rgba(34, 211, 238, 0.10);
 }
 .glow-purple {
-  box-shadow:
-    0 0 24px var(--neon-purple-glow),
-    0 0 48px rgba(139, 92, 246, 0.12);
+  box-shadow: 0 0 24px var(--neon-purple-glow), 0 0 48px rgba(139, 124, 246, 0.12);
 }
 .glow-pink {
-  box-shadow:
-    0 0 24px var(--neon-pink-glow),
-    0 0 48px rgba(255, 0, 110, 0.1);
+  box-shadow: 0 0 24px var(--neon-pink-glow), 0 0 48px rgba(240, 70, 110, 0.10);
 }
 .glow-green {
-  box-shadow:
-    0 0 24px rgba(0, 255, 136, 0.25),
-    0 0 48px rgba(0, 255, 136, 0.08);
+  box-shadow: 0 0 24px rgba(52, 211, 153, 0.25), 0 0 48px rgba(52, 211, 153, 0.08);
 }
 
-/* Button glow */
 .glow-btn-cyan {
   box-shadow:
-    0 0 20px rgba(0, 217, 255, 0.4),
+    0 0 20px rgba(34, 211, 238, 0.4),
     0 4px 16px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 .glow-btn-cyan:hover {
   box-shadow:
-    0 0 32px rgba(0, 217, 255, 0.6),
+    0 0 32px rgba(34, 211, 238, 0.6),
     0 8px 24px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
+
 /* ── AMBIENT BACKGROUND ORBS (web only) ─────────────────────────────────────── */
-/* FIXED 2026-07-02: still held the OLD pre-repalette hex (#00D4FF / #7B5EA7)
-   — the repalette comment at the top of this file said everything was
-   unified, but these two rules were missed. Now match --neon-cyan/--neon-purple. */
 .ambient-orb-cyan {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(0, 217, 255, 0.16) 0%,
-    transparent 70%
-  );
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.16) 0%, transparent 70%);
   pointer-events: none;
   filter: blur(40px);
 }
 .ambient-orb-purple {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(139, 92, 246, 0.2) 0%,
-    transparent 70%
-  );
+  background: radial-gradient(circle, rgba(139, 124, 246, 0.20) 0%, transparent 70%);
   pointer-events: none;
   filter: blur(40px);
 }
@@ -275,22 +229,15 @@ body,
   height: 60px;
   border-radius: 16px;
   cursor: pointer;
-  transition:
-    background 0.2s ease,
-    transform 0.2s ease;
+  transition: background 0.2s ease, transform 0.2s ease;
   text-decoration: none;
 }
 .sidebar-nav-item:hover {
-  background: rgba(0, 217, 255, 0.12);
+  background: rgba(34, 211, 238, 0.12);
   transform: translateY(-1px);
 }
 .sidebar-nav-item.active {
-  background: rgba(
-    139,
-    92,
-    246,
-    0.15
-  ); /* Premium purple active state */
+  background: rgba(139, 124, 246, 0.15);
 }
 .sidebar-nav-item .nav-label {
   font-size: 9px;
@@ -313,7 +260,7 @@ body,
   border-radius: 6px;
   padding: 2px 10px;
   transform: rotate(-12deg);
-  text-shadow: 0 0 12px rgba(0, 217, 255, 0.8);
+  text-shadow: 0 0 12px rgba(34, 211, 238, 0.8);
 }
 .stamp-pass {
   font-size: 22px;
@@ -331,27 +278,21 @@ body,
 /* Companion to GlassCard.tsx's `hoverable` prop — same values, kept here so
    any raw `.glass` usage outside a GlassCard component gets the identical feel. */
 .glass-hoverable {
-  transition:
-    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.3s ease,
-    backdrop-filter 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, backdrop-filter 0.3s ease;
 }
 .glass-hoverable:hover {
   transform: translateY(-2px) scale(1.012);
   backdrop-filter: blur(32px) saturate(200%);
   -webkit-backdrop-filter: blur(32px) saturate(200%);
   box-shadow:
-    0 0 32px rgba(139, 92, 246, 0.35),
+    0 0 32px rgba(139, 124, 246, 0.35),
     0 20px 60px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
-/* ── Tabs layout: sidebar on ≥768px, bottom bar on mobile ───────────────────── */
-/* FIXED 2026-07-02: margin-left was 72px (just the rail width) — the rail
-   sits at left:24px and is 72px wide, so content needs 24+72+24=120px or it
-   clips under the sidebar. This class isn't wired into any component yet
-   (AdaptiveLayout applies the offset inline), but is corrected here so it's
-   no longer a landmine for whoever reaches for it next. */
+/* ── TABS LAYOUT: sidebar on ≥768px, bottom bar on mobile ────────────────────── */
+/* Single definition — do not add a second .tabs-content block. Rail sits at
+   left:24px, is 72px wide; content needs 24+72+24=120px or it clips under it. */
 @media (min-width: 768px) {
   .tabs-sidebar {
     display: flex !important;
@@ -360,7 +301,7 @@ body,
     display: none !important;
   }
   .tabs-content {
-    margin-left: 120px; /* was 72px */
+    margin-left: var(--sidebar-content-offset);
   }
 }
 @media (max-width: 767px) {
@@ -376,7 +317,7 @@ body,
   }
 }
 
-/* ── REDUCED MOTION (2026 baseline a11y) ─────────────────────────────────────── */
+/* ── REDUCED MOTION (a11y) ────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -387,6 +328,7 @@ body,
     scroll-behavior: auto !important;
   }
 }
+
 /* ── TYPOGRAPHY UTILITIES ────────────────────────────────────────────────────── */
 
 .label-caps {
@@ -396,7 +338,6 @@ body,
   text-transform: uppercase;
   color: var(--text-secondary);
 }
-
 .label-caps-cyan {
   font-size: 10px;
   font-weight: 700;
@@ -404,7 +345,6 @@ body,
   text-transform: uppercase;
   color: var(--neon-cyan);
 }
-
 .mono {
   font-family: "Menlo", "Monaco", "Courier New", monospace;
   font-size: 12px;
@@ -414,31 +354,29 @@ body,
 /* ── FORM INPUTS ─────────────────────────────────────────────────────────────── */
 
 .input-field {
-  background: rgba(4, 12, 20, 0.7);
+  background: rgba(10, 7, 20, 0.7);
   border: 1px solid var(--surface-border);
   border-radius: 14px;
   color: var(--text-primary);
   padding: 14px 16px;
   font-size: 15px;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   width: 100%;
   outline: none;
 }
 .input-field:focus {
-  border-color: rgba(0, 217, 255, 0.4);
-  box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.12);
+  border-color: var(--neon-cyan-glow);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
 }
 .input-field::placeholder {
-  color: rgba(216, 228, 236, 0.25);
+  color: rgba(237, 234, 247, 0.25);
 }
 
 /* ── BUTTONS ─────────────────────────────────────────────────────────────────── */
 
 .btn-primary {
-  background: linear-gradient(135deg, #8b5cf6 0%, #00d9ff 100%);
-  color: #050409;
+  background: linear-gradient(135deg, var(--neon-purple) 0%, var(--neon-cyan) 100%);
+  color: var(--bg-deep);
   font-weight: 800;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -446,16 +384,13 @@ body,
   border-radius: 14px;
   padding: 15px 24px;
   cursor: pointer;
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    opacity 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
   width: 100%;
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+  box-shadow: 0 0 20px rgba(139, 124, 246, 0.3);
 }
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 0 28px rgba(139, 92, 246, 0.5), 0 8px 24px rgba(0, 217, 255, 0.2);
+  box-shadow: 0 0 28px rgba(139, 124, 246, 0.5), 0 8px 24px rgba(34, 211, 238, 0.2);
 }
 .btn-primary:active {
   transform: translateY(0);
@@ -469,32 +404,30 @@ body,
   border-radius: 14px;
   padding: 14px 24px;
   cursor: pointer;
-  transition:
-    border-color 0.2s,
-    color 0.2s;
+  transition: border-color 0.2s, color 0.2s;
 }
 .btn-ghost:hover {
-  border-color: rgba(0, 217, 255, 0.4);
+  border-color: var(--neon-cyan-glow);
   color: var(--neon-cyan);
-  box-shadow: 0 0 12px rgba(0, 217, 255, 0.15);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.15);
 }
 
 /* ── BADGES / CHIPS ──────────────────────────────────────────────────────────── */
 
 .badge-member {
-  background: rgba(0, 255, 136, 0.15);
-  border: 1px solid rgba(0, 255, 136, 0.25);
-  color: #00ff88;
+  background: rgba(52, 211, 153, 0.15);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  color: var(--neon-green);
 }
 .badge-premium {
-  background: rgba(255, 165, 0, 0.15);
-  border: 1px solid rgba(255, 165, 0, 0.35);
-  color: #ffa500;
+  background: rgba(245, 166, 35, 0.15);
+  border: 1px solid rgba(245, 166, 35, 0.35);
+  color: var(--neon-amber);
 }
 .badge-admin {
-  background: rgba(255, 0, 110, 0.15);
-  border: 1px solid rgba(255, 0, 110, 0.35);
-  color: #ff006e;
+  background: rgba(240, 70, 110, 0.15);
+  border: 1px solid rgba(240, 70, 110, 0.35);
+  color: var(--neon-pink);
 }
 
 .chip {
@@ -507,32 +440,21 @@ body,
   letter-spacing: 0.5px;
 }
 
-/* ── ANIMATED NEON BORDER (for premium/active elements) ─────────────────────── */
+/* ── KEYFRAMES ────────────────────────────────────────────────────────────────── */
 
 @keyframes ambientDrift {
-  0%,
-  100% {
-    transform: translate(0%, 0%) scale(1);
-  }
-  50% {
-    transform: translate(3%, -4%) scale(1.08);
-  }
+  0%, 100% { transform: translate(0%, 0%) scale(1); }
+  50% { transform: translate(3%, -4%) scale(1.08); }
 }
-
 @keyframes borderPulse {
-  0%,
-  100% {
-    border-color: rgba(0, 217, 255, 0.2);
-  }
-  50% {
-    border-color: rgba(0, 217, 255, 0.5);
-  }
+  0%, 100% { border-color: rgba(34, 211, 238, 0.2); }
+  50% { border-color: rgba(34, 211, 238, 0.5); }
 }
 .border-pulse-cyan {
   animation: borderPulse 3s ease-in-out infinite;
 }
 
-/* ── PROGRESS BAR (for batch apply queue) ───────────────────────────────────── */
+/* ── PROGRESS BAR (batch apply queue) ────────────────────────────────────────── */
 
 .progress-track {
   height: 4px;
@@ -542,34 +464,23 @@ body,
 }
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #050409 0%, #00d9ff 50%, #8b5cf6 100%);
+  background: linear-gradient(90deg, var(--bg-deep) 0%, var(--neon-cyan) 50%, var(--neon-purple) 100%);
   background-size: 200% 100%;
   border-radius: 2px;
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   animation: progressShimmer 2s linear infinite;
 }
 @keyframes progressShimmer {
-  0% {
-    background-position: 0% 50%;
-  }
-  100% {
-    background-position: 200% 50%;
-  }
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
 }
 
 /* ── DIVIDERS ────────────────────────────────────────────────────────────────── */
 
 .divider {
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    var(--surface-border) 20%,
-    var(--surface-border) 80%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg, transparent 0%, var(--surface-border) 20%, var(--surface-border) 80%, transparent 100%);
 }
-
 .divider-with-label {
   display: flex;
   align-items: center;
@@ -593,7 +504,7 @@ body,
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(2, 5, 7, 0.75);
+  background: rgba(5, 3, 10, 0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
@@ -602,7 +513,6 @@ body,
   z-index: 9000;
   padding: 16px;
 }
-
 .modal-card {
   width: 100%;
   max-width: 520px;
@@ -611,80 +521,14 @@ body,
   border-radius: 24px;
 }
 
-/* ── SIDEBAR NAV (web) ───────────────────────────────────────────────────────── */
-
-.sidebar-nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  width: 60px;
-  height: 60px;
-  border-radius: 16px;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  text-decoration: none;
-}
-.sidebar-nav-item:hover {
-  background: rgba(0, 217, 255, 0.12);
-}
-.sidebar-nav-item.active {
-  background: rgba(139, 92, 246, 0.15);
-}
-.sidebar-nav-item .nav-label {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-.sidebar-nav-item.active .nav-label {
-  color: var(--neon-cyan);
-}
-
-/* ── SWIPE CARD STAMPS ───────────────────────────────────────────────────────── */
-
-.stamp-apply {
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: 3px;
-  color: var(--neon-cyan);
-  border: 3px solid var(--neon-cyan);
-  border-radius: 6px;
-  padding: 2px 10px;
-  transform: rotate(-12deg);
-  text-shadow: 0 0 12px rgba(0, 217, 255, 0.8);
-}
-.stamp-pass {
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: 3px;
-  color: var(--neon-pink);
-  border: 3px solid var(--neon-pink);
-  border-radius: 6px;
-  padding: 2px 10px;
-  transform: rotate(12deg);
-  text-shadow: 0 0 12px rgba(240, 70, 110, 0.6);
-}
-
 /* ── SKELETON LOADING ────────────────────────────────────────────────────────── */
 
 @keyframes shimmer {
-  0% {
-    background-position: -400px 0;
-  }
-  100% {
-    background-position: 400px 0;
-  }
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
 }
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.03) 25%,
-    rgba(255, 255, 255, 0.07) 50%,
-    rgba(255, 255, 255, 0.03) 75%
-  );
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 25%, rgba(255, 255, 255, 0.07) 50%, rgba(255, 255, 255, 0.03) 75%);
   background-size: 800px 100%;
   animation: shimmer 1.6s infinite linear;
   border-radius: 8px;
@@ -714,13 +558,8 @@ body,
 /* ── ACCESS GRANTED ANIMATION ────────────────────────────────────────────────── */
 
 @keyframes accessGrantedPulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.6);
-  }
-  50% {
-    box-shadow: 0 0 40px 12px rgba(0, 255, 136, 0.15);
-  }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6); }
+  50% { box-shadow: 0 0 40px 12px rgba(52, 211, 153, 0.15); }
 }
 .access-granted-icon {
   animation: accessGrantedPulse 2s ease-in-out infinite;
@@ -729,16 +568,14 @@ body,
 /* ── MOBILE SAFE AREA OVERRIDES (web only) ───────────────────────────────────── */
 
 @media (min-width: 768px) {
-  /* On web, never render mobile safe-area insets */
   [data-rnw-class*="SafeAreaView"] {
     padding-top: 0 !important;
     padding-bottom: 0 !important;
   }
 }
 
-/* ── RESPONSIVE BREAKPOINTS ──────────────────────────────────────────────────── */
+/* ── RESPONSIVE: AUTH LAYOUT ─────────────────────────────────────────────────── */
 
-/* Web auth layout: side-by-side at 768px+ */
 @media (min-width: 768px) {
   .web-auth-shell {
     flex-direction: row;
@@ -751,7 +588,7 @@ body,
     align-items: center;
     justify-content: center;
     padding: 40px 48px;
-    background: rgba(4, 10, 18, 0.7);
+    background: rgba(10, 7, 20, 0.7);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-right: 1px solid var(--surface-border);
@@ -774,30 +611,5 @@ body,
   }
   .web-auth-features-col {
     display: none; /* hide features on mobile — show only form */
-  }
-}
-
-/* Tabs layout: sidebar on ≥768px, bottom bar on mobile */
-@media (min-width: 768px) {
-  .tabs-sidebar {
-    display: flex !important;
-  }
-  .tabs-bottom-bar {
-    display: none !important;
-  }
-  .tabs-content {
-    margin-left: 72px;
-  }
-}
-@media (max-width: 767px) {
-  .tabs-sidebar {
-    display: none !important;
-  }
-  .tabs-bottom-bar {
-    display: flex !important;
-  }
-  .tabs-content {
-    margin-left: 0;
-    margin-bottom: 80px;
   }
 }

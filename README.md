@@ -361,3 +361,214 @@ opushunter/
 <div align="center">
   <i>Engineered for the future of work. Stop hunting. Let OpusHunter do it for you.</i>
 </div>
+
+
+
+<div align="center">
+  <img src="assets/icon.png" width="120" alt="OpusHunter Logo" />
+  <h1>OpusHunter 🎯</h1>
+  <p><strong>Autonomous Job Hunting & AI Application Engine</strong></p>
+  <p>
+    OpusHunter is a cross-platform, automated job application engine and secure document vault built with React Native (Expo), Supabase, and Google Gemini AI. One codebase targets iOS, Android, and Web, combining a glassmorphic UI with server-side automation to find jobs, score them against your profile, and generate personalized cover letters.
+  </p>
+</div>
+
+---
+
+## 0. Current Stage (2026-07-11)
+
+This section exists so nobody — including a future AI session — has to reverse-engineer project status from file names. It's updated whenever the state changes materially, and it says what's true, not what's planned.
+
+**Shipped and working:**
+
+- Cross-platform shell (desktop sidebar / mobile floating tab bar) driven by a single `lib/navConfig.ts` source of truth
+- Auth (email/password + Google OAuth) via Supabase
+- Five-step onboarding wizard → creates the first automation rule
+- Worldwide location search (GeoDB Cities via RapidAPI, proxied through `search-cities` edge function) with geolocation default
+- Job scraping via **JSearch (RapidAPI)** — a single source today, not the multi-source aggregation earlier drafts of this doc claimed
+- Gemini-powered (`gemini-3.1-flash-lite`) job scoring and cover-letter generation
+- Secure CV/certification vault (Supabase Storage + RLS)
+- BYOK → shared-pool → env-secret key resolution cascade (`supabase/functions/_shared/keyResolver.ts`), used consistently by every function that calls RapidAPI or Gemini
+- Admin panel: user list/role management, shared API-key pool CRUD, server-verified role gate
+- Gmail OAuth token capture (service-role-only storage, zero client read access)
+
+**Known unresolved as of this audit:**
+
+- **No API cost/usage tracking.** The admin panel can add/remove keys but has no visibility into requests served, tokens consumed, or dollars spent per key or per user. See `OPUSHUNTER_ANALYSIS.md` §4 for the concrete migration + UI plan.
+- **`apply-service` (the Playwright-based real-submission engine for Greenhouse/Lever) status needs confirming** — it isn't present in the last full codebase export. If it hasn't been built yet, the auto-apply feature is currently link-to-manual-apply only, regardless of what earlier docs implied.
+- **`components/ui/AmbientBackground.tsx`** is a dead duplicate of `components/layout/AmbientBackground.tsx` (the one actually mounted in `app/_layout.tsx`) — pending deletion.
+- No automated tests, no CI pipeline, no error monitoring yet.
+
+**Recently resolved** (kept here briefly so it's not re-litigated): the `(admin)`/`(settings)` route-group rename is done — routes now live at `app/admin/*` and `app/(tabs)/settings/*`. The duplicate Configure-screen implementation and duplicate Nominatim-based location autocomplete have both been removed; `components/features/configure/*` and the GeoDB `LocationAutocomplete.tsx` are the only survivors.
+
+---
+
+## 1. The Problem
+
+Job hunting at volume is a numbers game with a broken interface. A candidate applying to 30–50 roles a week is, in practice, repeating five actions: find a listing, read it, decide if it fits, write a cover letter that isn't generic, and submit. Most "auto-apply" products either fake the last step (mark it "applied" and just open a tab) or claim access to platforms they were never actually granted. OpusHunter's standard: every claim in this document about what happens automatically is backed by code that does it, and everything that isn't true yet is labeled as such, not glossed over — see §0 above for the current, honest state.
+
+---
+
+## 2. Platform
+
+One codebase, three real targets:
+
+| Target      | Delivery                                          |
+| ----------- | ------------------------------------------------- |
+| **Web**     | Static export via Expo Router, deployed on Vercel |
+| **Android** | Native APK / Play Store build via EAS             |
+| **iOS**     | Native IPA / App Store build via EAS              |
+
+Layout, navigation, and interaction patterns adapt per platform at the component level (desktop gets a persistent sidebar + `Slot`-based content pane; mobile gets a floating bottom tab bar) rather than shipping three separate UIs.
+
+---
+
+## 3. Feature Set
+
+### 3.1 Onboarding — Setup Wizard
+
+Five steps, triggered automatically on zero automation rules: role & keywords → location & work mode → experience & salary → CV & certifications → cover-letter voice & review. Completing it creates the first automation rule; more rules can be added afterward on the full Configure screen.
+
+### 3.2 Worldwide Location Search
+
+Every keystroke queries GeoDB Cities (proxied through `search-cities`), not a fixed list. Geolocation permission is optional and never blocks typed search.
+
+### 3.3 Configure — The Automation Engine
+
+Two tabs: **Engine** (global scraper behavior — locations, work types, experience, remote preference, salary floor, job boards, behavior toggles) and **Rules** (independently toggleable saved searches, each with its own keywords, location, and cover-letter voice).
+
+### 3.4 Secure Document Vault
+
+CV and certifications in Supabase Storage, RLS-scoped to the owning user at the database layer, not just the UI layer. Lives at `app/(tabs)/settings/documents.tsx`.
+
+### 3.5 Gemini-Powered Cover Letters
+
+Generated from the person's actual CV text, the specific scraped job description, and the rule's base template/voice, through the BYOK → shared-pool → env-key cascade.
+
+### 3.6 Job Discovery
+
+Currently sourced from **JSearch (RapidAPI)** only. Adding a second, free-tier source (Adzuna is the strongest candidate) is on the near-term roadmap — see `OPUSHUNTER_ANALYSIS.md`.
+
+### 3.7 Auto-Apply — Real Submission, Honestly Scoped
+
+The intended design: for Greenhouse/Lever-hosted postings, a headless-browser service submits the real public application form and returns a real confirmation or a specific, honest failure reason; everything else gets a generated cover letter and a hard link to the real apply page, labeled `manual` in the data model. **Whether the Playwright submission service is actually deployed needs confirming** (see §0) — until that's verified, treat this as generating-and-linking only, not submitting.
+
+**Not covered, by design:** LinkedIn Easy-Apply automation (LinkedIn actively blocks this pattern and it would put a user's account at risk — JSearch's LinkedIn-sourced listings are surfaced without that exposure), Workable, Ashby, or custom company career-page forms.
+
+### 3.8 Gmail Integration
+
+Optional Gmail send-scope OAuth at login. Refresh token stored server-side with zero client-facing database access — not even the owning user's session can read it back directly.
+
+### 3.9 Admin Panel
+
+Role-gated (`member` / `premium` / `admin`), verified server-side via a `SECURITY DEFINER` Postgres function. Currently covers user/role management and the shared API-key pool. **Cost/usage tracking for that key pool is not yet built** — see §0 and the analysis doc.
+
+### 3.10 Cross-Platform Auth
+
+Email/password and Google OAuth via Supabase Auth, with platform-appropriate flows converging on the same session state.
+
+---
+
+## 4. Design System
+
+`lib/theme.ts` is the single source of truth for every color, spacing, and radius token — no screen defines its own hex values. Visual language: dark glassmorphic "frosted obsidian" — translucent blurred `GlassCard` panels over a slow-drifting ambient background, violet/cyan/emerald accents. Dark mode only, by design.
+
+---
+
+## 5. Technical Architecture
+
+**Client** — Expo SDK ~57.0, Expo Router ~57.0, React 19.2, React Native 0.86, React Native Reanimated 4.5, NativeWind 4.2 on Tailwind CSS 3.4, TanStack Query 5, Zustand, TypeScript 6.0 (strict mode). Path aliases (`@/lib/*` etc.) are configured in `tsconfig.json` but not yet used consistently across the codebase.
+
+**Backend** — Supabase: Postgres with row-level security on every table, Auth, Storage, and Deno-based Edge Functions for all server-side logic. A shared `_shared/` module set (`supabaseAdmin`, `keyResolver`, `auth`, `cors`) keeps credential resolution and auth verification consistent across every function.
+
+**AI** — Google Gemini `gemini-3.1-flash-lite` (verified GA 2026-07-01), called for job scoring, cover-letter generation, and rule-template generation.
+
+**Database migrations** — hand-written, idempotent SQL (`IF NOT EXISTS` / safe `ON CONFLICT` throughout), applied directly against the live project; `types/database.types.ts` is generated output via `npm run supabase:gen-types`, never hand-edited.
+
+---
+
+## 6. Security Posture
+
+- Row-level security enforced at the database layer on every user-owned table.
+- The Gmail refresh token table has no client-reachable policies at all — service-role-only by design.
+- Admin role is verified server-side via `SECURITY DEFINER` RPC on every privileged action, never trusted from client state.
+- BYOK: a user's own Gemini/RapidAPI keys are tried first, falling back to a shared pool and then an environment default — no personal key is ever exposed to another user.
+
+---
+
+## 7. What This Is Not (Yet)
+
+- Not full ATS coverage — Greenhouse and Lever are the design target; whether real submission is currently deployed needs confirming (§0).
+- Not LinkedIn Easy-Apply automation, intentionally, to avoid putting a user's account at risk.
+- Not a guarantee of interviews — the goal is handling the mechanical, repetitive part of applying correctly, honestly, and at volume.
+- Not yet cost-transparent on API usage — see the analysis doc for the concrete plan to fix this.
+- Not yet covered by automated tests or CI.
+
+---
+
+## 8. Project Structure
+
+```
+opushunter/
+├── app/                                  Expo Router — file path IS the route
+│   ├── _layout.tsx                       Root Stack: mounts AmbientBackground, wires (auth)/(tabs)/admin
+│   ├── index.tsx                         Root "/" — session check, redirects to login or dashboard
+│   ├── (auth)/                           Unauthenticated flow — email/password + Google OAuth
+│   ├── (tabs)/                           Authenticated shell
+│   │   ├── dashboard.tsx                 Pipeline view — scraped jobs queue, swipe-to-decide, metrics
+│   │   ├── jobs.tsx                      Job list/detail
+│   │   ├── configure.tsx                 Renders ConfigureScreen (Engine/Rules tabs)
+│   │   └── settings/                     Settings home, security, documents (CV vault), profile
+│   └── admin/                            Server-verified role gate; dashboard, users, api-keys
+├── components/
+│   ├── features/configure/               The single Configure-screen implementation
+│   ├── onboarding/SetupWizard.tsx        First-run five-step guided setup
+│   ├── pipeline/                         SwipeableJobCard, JobDetailModal
+│   ├── layout/                           AdaptiveLayout (Sidebar), AmbientBackground (live), PageContainer
+│   ├── charts/                           BarChart, DonutChart (SVG, no extra dependency)
+│   └── ui/                               GlassCard, AnimatedPressable, ProfileDropdown, etc.
+│       └── ⚠ AmbientBackground.tsx — dead duplicate of layout/AmbientBackground.tsx, pending deletion
+├── hooks/                                useCVVault, useEdgeScraper, useCitySearch
+├── store/usePipelineStore.ts             Zustand — job queue + pipeline metrics, no Supabase calls
+├── lib/
+│   ├── supabase.ts                       Supabase client
+│   ├── theme.ts                          Single source of truth for color/spacing/radius (`C`)
+│   ├── navConfig.ts                      Single source of truth for primary nav, shared by desktop+mobile
+│   └── queryClient.ts / utils.ts
+├── types/
+│   ├── database.types.ts                 Generated — read-only, never hand-edited
+│   └── app.types.ts                      Hand-written app-level types
+├── supabase/
+│   ├── seed.sql / config.toml
+│   └── functions/
+│       ├── _shared/                      supabaseAdmin, auth, cors, keyResolver
+│       ├── scrape-jobs/                  JSearch queries, dedup, insert into job_vault
+│       ├── generate-cover-letter/        Gemini-personalized cover letters
+│       ├── generate-rule-template/       Gemini rule-template generation
+│       ├── auto-apply/                   Orchestrates letter generation + ATS detection
+│       ├── link-gmail-account/           Persists Gmail refresh token, service-role-only
+│       └── search-cities/                Worldwide city autocomplete, proxies GeoDB
+├── app.json / package.json / tsconfig.json / babel.config.cjs / metro.config.cjs
+├── tailwind.config.js / global.css / nativewind-env.d.ts
+└── eslint.config.js / .prettierrc / vercel.json
+```
+
+---
+
+## 9. Roadmap
+
+Full detail and rationale in `OPUSHUNTER_ANALYSIS.md`. Short version, in priority order:
+
+1. Confirm `apply-service` deployment status; correct the UI's auto-apply claims if it isn't live yet.
+2. Delete `components/ui/AmbientBackground.tsx` (dead code).
+3. Ship API cost/usage tracking: new `api_key_usage_logs` table, extend `markKeyUsed()`, surface Gemini's own `usageMetadata` token counts, add a spend view to the admin API-keys screen.
+4. Complete the admin panel: aggregate application/auto-apply outcome stats, per-user `max_daily_applications` editor.
+5. Add a second, free-tier job-search source (Adzuna) as a fallback to JSearch.
+6. Unit tests for `keyResolver.ts` and the scrape/dedup logic, then a minimal CI workflow running `npm run validate` on push.
+7. Error monitoring (Sentry or equivalent) for both the Expo client and the Deno edge functions.
+
+<div align="center">
+  <i>Engineered for the future of work. Stop hunting. Let OpusHunter do it for you.</i>
+</div>
+
+---

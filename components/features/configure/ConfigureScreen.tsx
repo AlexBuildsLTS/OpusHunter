@@ -9,6 +9,23 @@
  * cover letter), and real worldwide location search — in one file, at
  * your explicit request.
  *
+ * 2026-07-11 (later same day) — Commute-distance feature completed:
+ *   - AutomationRule/RuleFormState now carry latitude/longitude/
+ *     max_distance_km — real columns on automation_rules, previously
+ *     added to the schema but never read or written anywhere.
+ *   - LocationAutocomplete now captures the coordinates of whichever
+ *     location is FIRST in the list (the rule's "primary" origin) at the
+ *     moment it's selected from search results, via a new
+ *     onPrimaryCoordsChange callback. Free-typed locations (not chosen
+ *     from the dropdown) can't be verified, so they intentionally carry
+ *     no coordinates rather than a guessed one.
+ *   - New MAX COMMUTE DISTANCE chip row in the rule modal, hidden for
+ *     remote-only rules since distance is meaningless there. scrape-jobs
+ *     already reads these two columns to filter out unreachable onsite
+ *     jobs — this was the missing half that actually populates them.
+ *   - "Global Geographies" renamed to "Search Locations" — clearer for
+ *     production, no functional change.
+ *
  * WHAT'S DIFFERENT FROM THE VERSION YOU PASTED ME, AND WHY:
  *
  *   1. The Rule create/edit modal is now REAL. Your version called
@@ -44,14 +61,21 @@
  *      disabled + dimmed when there are zero active rules, so it's never
  *      a dead click with no explanation.
  *
- * Everything else — section names (Global Geographies, Contract
- * Structures, Seniority Targets, Work Modality, Compensation Floor,
- * Intelligence Sources), the Engine Ready hero card, the INITIALIZE
- * button, the pulse icon treatment — is kept from what you pasted, since
- * that part was genuinely good and not the problem.
+ * Everything else — section names (Contract Structures, Seniority
+ * Targets, Work Modality, Compensation Floor, Intelligence Sources), the
+ * Engine Ready hero card, the INITIALIZE button, the pulse icon treatment
+ * — is kept from what you pasted, since that part was genuinely good and
+ * not the problem.
+ *
+ * NOTE ON DEAD FILES: EngineTab.tsx, RuleFormModal.tsx, RulesTab.tsx,
+ * LocationAutocomplete.tsx, ExperienceLevelPicker.tsx,
+ * RemotePreferencePicker.tsx, SalaryMinPicker.tsx, constants.ts, types.ts,
+ * and styles.ts in this same folder are NOT imported by this file or by
+ * anything else — this single file replaced all of them. They should be
+ * deleted; editing them has zero effect on the running app.
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, ScrollView, Platform,
     Switch, ActivityIndicator, Modal, StyleSheet, KeyboardAvoidingView,
@@ -86,6 +110,9 @@ export interface AutomationRule {
     is_active: boolean | null;
     created_at: string;
     user_id?: string;
+    latitude: number | null;
+    longitude: number | null;
+    max_distance_km: number | null;
 }
 
 export interface RuleFormState {
@@ -97,6 +124,9 @@ export interface RuleFormState {
     salary_min: number | null;
     base_cover_letter: string;
     is_active: boolean;
+    latitude: number | null;
+    longitude: number | null;
+    max_distance_km: number | null;
 }
 
 export interface EngineConfig {
@@ -114,6 +144,7 @@ export interface EngineConfig {
 const DEFAULT_FORM: RuleFormState = {
     keywords: '', location: '', work_types: ['FULLTIME'], experience_levels: [],
     remote_preference: 'any', salary_min: null, base_cover_letter: '', is_active: true,
+    latitude: null, longitude: null, max_distance_km: null,
 };
 
 const DEFAULT_ENGINE: EngineConfig = {
@@ -141,6 +172,13 @@ const SALARY_STEPS: { label: string; value: number | null }[] = [
     { label: 'Any', value: null }, { label: '$50k+', value: 50000 }, { label: '$75k+', value: 75000 },
     { label: '$100k+', value: 100000 }, { label: '$125k+', value: 125000 },
     { label: '$150k+', value: 150000 }, { label: '$200k+', value: 200000 },
+];
+
+// Commute cap for onsite/hybrid rules. "Any" (null) = no distance filtering,
+// matching today's behavior — scrape-jobs never drops a job when this is null.
+const DISTANCE_STEPS: { label: string; value: number | null }[] = [
+    { label: 'Any', value: null }, { label: '10 km', value: 10 }, { label: '25 km', value: 25 },
+    { label: '50 km', value: 50 }, { label: '100 km', value: 100 }, { label: '200 km', value: 200 },
 ];
 
 const JOB_BOARDS = [
@@ -200,10 +238,27 @@ const SectionCard = ({ children, delay }: { children: React.ReactNode; delay: nu
 // 3. LOCATION AUTOCOMPLETE — real search-cities edge function (GeoDB, BYOK)
 // ════════════════════════════════════════════════════════════════════════════
 
-function LocationAutocomplete({ selected, onChange }: { selected: string[]; onChange: (locs: string[]) => void }) {
+type Coords = { latitude: number | null; longitude: number | null };
+
+function LocationAutocomplete({
+    selected, onChange, onPrimaryCoordsChange,
+}: {
+    selected: string[];
+    onChange: (locs: string[]) => void;
+    /** Fires with the coordinates of whichever location is now first in the
+     *  list, whenever that changes. null when the new primary location's
+     *  coordinates aren't known (typed freehand, or removed with nothing
+     *  confirmed to replace it) — callers should clear any stored lat/lng
+     *  in that case rather than leave a stale value describing a different
+     *  place. Optional: EngineTab's global defaults don't persist coordinates. */
+    onPrimaryCoordsChange?: (coords: Coords | null) => void;
+}) {
     const [query, setQuery] = useState('');
     const [showDropdown, setShowDropdown] = useState(false);
     const { results, loading, error, search, requestNearby, permissionDenied } = useCitySearch();
+    // Label → coordinates, populated only as the person actually selects
+    // search results this session. Never assume; only record what's confirmed.
+    const coordsByLabel = useRef<Map<string, Coords>>(new Map());
 
     const handleTextChange = (text: string) => {
         setQuery(text);
@@ -216,17 +271,37 @@ function LocationAutocomplete({ selected, onChange }: { selected: string[]; onCh
             ? place.country
             : [place.city, place.region, place.country].filter(Boolean).join(', ');
 
-    const addLocation = (label: string) => {
-        if (label.trim() && !selected.includes(label.trim())) {
-            onChange([...selected, label.trim()]);
+    const addLocation = (label: string, coords: Coords | null = null) => {
+        const trimmed = label.trim();
+        if (!trimmed || selected.includes(trimmed)) {
+            setQuery('');
+            setShowDropdown(false);
+            return;
         }
+        if (coords) coordsByLabel.current.set(trimmed, coords);
+        const wasEmpty = selected.length === 0;
+        onChange([...selected, trimmed]);
+        if (wasEmpty) onPrimaryCoordsChange?.(coords);
         setQuery('');
         setShowDropdown(false);
     };
 
+    const removeLocation = (loc: string) => {
+        const wasPrimary = selected[0] === loc;
+        const next = selected.filter((l) => l !== loc);
+        onChange(next);
+        if (wasPrimary) {
+            const newPrimary = next[0];
+            onPrimaryCoordsChange?.(newPrimary ? coordsByLabel.current.get(newPrimary) ?? null : null);
+        }
+    };
+
     const handleUseMyLocation = async () => {
         const nearby = await requestNearby();
-        if (nearby.length > 0) addLocation(labelFor(nearby[0]));
+        if (nearby.length > 0) {
+            const place = nearby[0];
+            addLocation(labelFor(place), { latitude: place.latitude, longitude: place.longitude });
+        }
     };
 
     return (
@@ -263,7 +338,7 @@ function LocationAutocomplete({ selected, onChange }: { selected: string[]; onCh
                                     <TouchableOpacity
                                         key={item.id}
                                         style={st.dropdownItem}
-                                        onPress={() => addLocation(labelFor(item))}
+                                        onPress={() => addLocation(labelFor(item), { latitude: item.latitude, longitude: item.longitude })}
                                     >
                                         <MapPin size={14} color={item.type === 'country' ? C.cyan : C.purple} />
                                         <Text style={{ color: C.text, fontSize: 13, flex: 1, marginLeft: 10 }} numberOfLines={1}>
@@ -314,13 +389,15 @@ function LocationAutocomplete({ selected, onChange }: { selected: string[]; onCh
 
             {selected.length > 0 && (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-                    {selected.map((loc) => (
+                    {selected.map((loc, idx) => (
                         <TouchableOpacity
                             key={loc}
-                            onPress={() => onChange(selected.filter((l) => l !== loc))}
+                            onPress={() => removeLocation(loc)}
                             style={[st.chip, { borderColor: `${C.cyan}40`, backgroundColor: `${C.cyan}10` }]}
                         >
-                            <Text style={{ color: C.cyan, fontSize: 12, fontWeight: '700' }}>{loc}</Text>
+                            <Text style={{ color: C.cyan, fontSize: 12, fontWeight: '700' }}>
+                                {loc}{idx === 0 ? '  ·  primary' : ''}
+                            </Text>
                             <X size={12} color={C.cyan} style={{ marginLeft: 6 }} />
                         </TouchableOpacity>
                     ))}
@@ -377,7 +454,7 @@ function EngineTab({ config, setConfig, onScrape, isScraping, activeRulesCount }
             </Animated.View>
 
             <SectionCard delay={100}>
-                <SectionHeader icon={MapPin} title="Global Geographies" sub="Define primary scraping locations" />
+                <SectionHeader icon={MapPin} title="Search Locations" sub="Default cities, regions, or countries — used when creating a new rule" />
                 <LocationAutocomplete
                     selected={config.locations}
                     onChange={(locs) => setConfig({ ...config, locations: locs })}
@@ -523,6 +600,12 @@ function RuleCard({ rule, onEdit, onDelete, onToggle }: {
                             <Text style={st.ruleMetaText}>${(rule.salary_min / 1000).toFixed(0)}k+</Text>
                         </View>
                     )}
+                    {!!rule.max_distance_km && (
+                        <View style={st.ruleMetaBadge}>
+                            <Navigation size={10} color={C.cyan} />
+                            <Text style={st.ruleMetaText}>{rule.max_distance_km}km radius</Text>
+                        </View>
+                    )}
                 </View>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
@@ -633,6 +716,8 @@ function RuleFormModal({ visible, initial, onClose, onSave, saving }: {
     const canSave = form.keywords.trim().length > 0
         && (form.remote_preference === 'remote' || form.location.trim().length > 0);
 
+    const showDistancePicker = form.remote_preference !== 'remote';
+
     return (
         <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
             <View style={st.modalOverlay}>
@@ -665,10 +750,16 @@ function RuleFormModal({ visible, initial, onClose, onSave, saving }: {
                                 <LocationAutocomplete
                                     selected={form.location ? form.location.split(',').map((s) => s.trim()).filter(Boolean) : []}
                                     onChange={(locations) => setForm((f) => ({ ...f, location: locations.join(', ') }))}
+                                    onPrimaryCoordsChange={(coords) => setForm((f) => ({
+                                        ...f,
+                                        latitude: coords?.latitude ?? null,
+                                        longitude: coords?.longitude ?? null,
+                                    }))}
                                 />
                                 <Text style={st.fieldHint}>
                                     Add as many cities or whole countries as you want. Work mode (remote/hybrid/on-site)
-                                    is set separately below — it doesn't need to be typed in here.
+                                    is set separately below — it doesn't need to be typed in here. The first location is
+                                    used as the origin for the commute-distance filter below.
                                 </Text>
                             </View>
 
@@ -714,20 +805,29 @@ function RuleFormModal({ visible, initial, onClose, onSave, saving }: {
                                 </View>
                             </View>
 
-                            <View>
-                                <Text style={st.fieldLabel}>MINIMUM SALARY <Text style={st.fieldLabelSub}>(USD/year)</Text></Text>
-                                <View style={[st.chipGrid, { marginTop: 6 }]}>
-                                    {SALARY_STEPS.map(({ label, value }) => (
-                                        <ToggleChip
-                                            key={label}
-                                            label={label}
-                                            active={form.salary_min === value}
-                                            color={C.amber}
-                                            onPress={() => setForm((f) => ({ ...f, salary_min: value }))}
-                                        />
-                                    ))}
+                            {showDistancePicker && (
+                                <View>
+                                    <Text style={st.fieldLabel}>
+                                        MAX COMMUTE DISTANCE <Text style={st.fieldLabelSub}>(optional — for on-site/hybrid jobs)</Text>
+                                    </Text>
+                                    <View style={[st.chipGrid, { marginTop: 6 }]}>
+                                        {DISTANCE_STEPS.map(({ label, value }) => (
+                                            <ToggleChip
+                                                key={label}
+                                                label={label}
+                                                active={form.max_distance_km === value}
+                                                onPress={() => setForm((f) => ({ ...f, max_distance_km: value }))}
+                                            />
+                                        ))}
+                                    </View>
+                                    {form.max_distance_km != null && form.latitude == null && (
+                                        <Text style={[st.fieldHint, { color: C.amber }]}>
+                                            Pick your first location from the dropdown (not just typed) so distance can
+                                            actually be measured — otherwise this limit won't filter anything.
+                                        </Text>
+                                    )}
                                 </View>
-                            </View>
+                            )}
 
                             <View>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -845,6 +945,9 @@ export function ConfigureScreen() {
                 salary_min: form.salary_min,
                 base_cover_letter: form.base_cover_letter.trim(),
                 is_active: form.is_active,
+                latitude: form.latitude,
+                longitude: form.longitude,
+                max_distance_km: form.max_distance_km,
             };
             if (editingRule) {
                 const { error } = await supabase.from('automation_rules').update(payload).eq('id', editingRule.id);
@@ -896,6 +999,9 @@ export function ConfigureScreen() {
         salary_min: editingRule.salary_min,
         base_cover_letter: editingRule.base_cover_letter,
         is_active: editingRule.is_active ?? true,
+        latitude: editingRule.latitude ?? null,
+        longitude: editingRule.longitude ?? null,
+        max_distance_km: editingRule.max_distance_km ?? null,
     } : DEFAULT_FORM, [editingRule]);
 
     const activeRulesCount = useMemo(() => rules.filter((r) => r.is_active).length, [rules]);

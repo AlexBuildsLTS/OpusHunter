@@ -1,18 +1,21 @@
 /**
  * hooks/useCitySearch.ts
  * OpusHunter — Worldwide City Search + Geolocation Default
- * 2026-07-03 — NEW
+ * 2026-07-11 — FIXED: supabase.functions.invoke() throws a generic
+ * "Edge Function returned a non-2xx status code" on any failure, discarding
+ * the actual error body search-cities sends back (e.g. "GeoDB returned 403"
+ * for an unsubscribed RapidAPI product, or "No RapidAPI key available").
+ * FunctionsHttpError carries the real Response on `.context` — read it and
+ * expose the real message so failures are diagnosable from the UI itself.
  *
- * Cross-platform: `expo-location` (already a dependency — ~56.0.18) wraps
- * the browser Geolocation API on web and native location services on
- * iOS/Android with one call, so `requestNearby()` works identically on
- * all three targets. Permission is asked for explicitly and the person can
- * decline — search-by-typing (`search(query)`) works with zero permissions
- * either way.
+ * Cross-platform: expo-location wraps browser geolocation (web) and native
+ * location services (iOS/Android) with one call, so requestNearby() works
+ * identically on all three targets. Search-by-typing needs zero permissions.
  */
 
 import { useState, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
 export interface CityResult {
@@ -42,6 +45,21 @@ export interface UseCitySearchReturn {
 
 const DEBOUNCE_MS = 350;
 
+/** Pulls the real error message out of a failed edge-function call. Falls
+ *  back to the generic SDK message only if the response body can't be read
+ *  or didn't include one. */
+async function extractFunctionError(err: unknown): Promise<string> {
+    if (err instanceof FunctionsHttpError) {
+        try {
+            const body = await err.context.json();
+            if (body?.error) return String(body.error);
+        } catch {
+            // Response wasn't JSON — fall through to the generic message below.
+        }
+    }
+    return err instanceof Error ? err.message : 'City search failed.';
+}
+
 export function useCitySearch(): UseCitySearchReturn {
     const [results, setResults] = useState<CityResult[]>([]);
     const [loading, setLoading] = useState(false);
@@ -55,19 +73,18 @@ export function useCitySearch(): UseCitySearchReturn {
         setLoading(true);
         setError(null);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
             const { data, error: fnError } = await supabase.functions.invoke(
                 `search-cities?${params.toString()}`,
                 { method: 'GET' as any },
             );
             if (seq !== requestSeq.current) return []; // a newer keystroke superseded this one
-            if (fnError) throw new Error(fnError.message);
+            if (fnError) throw fnError;
             const list: CityResult[] = data?.results ?? [];
             setResults(list);
             return list;
         } catch (e) {
             if (seq !== requestSeq.current) return [];
-            setError(e instanceof Error ? e.message : 'City search failed.');
+            setError(await extractFunctionError(e));
             setResults([]);
             return [];
         } finally {
@@ -80,6 +97,7 @@ export function useCitySearch(): UseCitySearchReturn {
         const trimmed = query.trim();
         if (trimmed.length < 2) {
             setResults([]);
+            setError(null);
             return;
         }
         debounceRef.current = setTimeout(() => {

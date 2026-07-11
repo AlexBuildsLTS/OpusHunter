@@ -1,14 +1,4 @@
 /** @type {import('tailwindcss').Config} */
-/**
- * tailwind.config.js
- * OpusHunter — NativeWind v4 Tailwind Configuration (targets Tailwind CSS v3 —
- * NativeWind v4 does not support Tailwind v4; see OPUSHUNTER_ANALYSIS.md §2)
- * 2026-07-02 — Repalette #2: "Frosted Obsidian Violet"
- *
- * Mirrors lib/theme.ts and global.css exactly. `purple` is true indigo-violet
- * now, not the emerald-green used in the previous pass — do not reintroduce
- * green as a card-background color; it's reserved for small success accents.
- */
 module.exports = {
   content: ["./app/**/*.{js,jsx,ts,tsx}", "./components/**/*.{js,jsx,ts,tsx}"],
   presets: [require("nativewind/preset")],
@@ -17,38 +7,38 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          cyan: "#7B68EE", // primary violet — elevated saturation
-          purple: "#6366F1", // secondary indigo — refined hue
-          pink: "#EC4899", // enhanced vibrancy
-          green: "#10B981", // success — deeper, more professional
-          amber: "#F59E0B", // warmed gold tone
+          cyan: "#22D3EE",
+          purple: "#8B7CF6",
+          pink: "#F0466E",
+          green: "#34D399",
+          amber: "#F5A623",
         },
         surface: {
-          bg: "#0F0318",
-          core: "#1A1225",
-          mid: "#221830",
-          card: "rgba(26,18,37,0.75)",
-          sidebar: "#130A1F",
+          bg: "#0A0714",
+          core: "#120D1E",
+          mid: "#1B1430",
+          card: "rgba(20,14,32,0.68)",
+          sidebar: "#0A0812",
           border: "rgba(255,255,255,0.10)",
-          "border-cyan": "rgba(123,104,238,0.18)",
-          "border-purple": "rgba(99,102,241,0.18)",
-          "border-pink": "rgba(236,72,153,0.16)",
+          "border-cyan": "rgba(34,211,238,0.28)",
+          "border-purple": "rgba(139,124,246,0.22)",
+          "border-pink": "rgba(240,70,110,0.22)",
         },
         content: {
-          primary: "#F3F0FF",
-          secondary: "rgba(243,240,255,0.55)",
-          dim: "rgba(243,240,255,0.48)",
+          primary: "#EDEAF7",
+          secondary: "rgba(237,234,247,0.62)",
+          dim: "rgba(237,234,247,0.36)",
         },
         role: {
-          "member-bg": "rgba(99,102,241,0.14)",
-          "member-border": "rgba(99,102,241,0.40)",
-          "member-text": "#818CF8",
-          "premium-bg": "rgba(245,158,11,0.14)",
-          "premium-border": "rgba(245,158,11,0.40)",
+          "member-bg": "rgba(139,124,246,0.14)",
+          "member-border": "rgba(139,124,246,0.40)",
+          "member-text": "#A78BFA",
+          "premium-bg": "rgba(245,166,35,0.14)",
+          "premium-border": "rgba(245,166,35,0.40)",
           "premium-text": "#FCD34D",
-          "admin-bg": "rgba(236,72,153,0.14)",
-          "admin-border": "rgba(236,72,153,0.40)",
-          "admin-text": "#F472B6",
+          "admin-bg": "rgba(240,70,110,0.14)",
+          "admin-border": "rgba(240,70,110,0.40)",
+          "admin-text": "#FB7185",
         },
       },
 
@@ -90,8 +80,8 @@ module.exports = {
           to: { opacity: 1, transform: "translateY(0)" },
         },
         borderPulse: {
-          "0%,100%": { borderColor: "rgba(155,107,255,0.15)" },
-          "50%": { borderColor: "rgba(155,107,255,0.22)" },
+          "0%,100%": { borderColor: "rgba(34,211,238,0.15)" },
+          "50%": { borderColor: "rgba(34,211,238,0.24)" },
         },
         shimmer: {
           "0%": { backgroundPosition: "-400px 0" },
@@ -113,28 +103,28 @@ module.exports = {
         "glass-lg":
           "0 24px 64px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07)",
         "glow-cyan":
-          "0 0 24px rgba(155,107,255,0.25), 0 0 48px rgba(155,107,255,0.06)",
+          "0 0 24px rgba(34,211,238,0.25), 0 0 48px rgba(34,211,238,0.06)",
         "glow-purple":
-          "0 0 24px rgba(108,92,224,0.25), 0 0 48px rgba(108,92,224,0.06)",
+          "0 0 24px rgba(139,124,246,0.25), 0 0 48px rgba(139,124,246,0.06)",
         "glow-pink":
           "0 0 24px rgba(240,70,110,0.25), 0 0 48px rgba(240,70,110,0.06)",
         "btn-cyan":
-          "0 0 20px rgba(155,107,255,0.30), 0 4px 16px rgba(0,0,0,0.40)",
+          "0 0 20px rgba(34,211,238,0.30), 0 4px 16px rgba(0,0,0,0.40)",
         card: "0 4px 24px rgba(0,0,0,0.35)",
-        "inset-cyan": "inset 0 0 20px rgba(155,107,255,0.04)",
+        "inset-cyan": "inset 0 0 20px rgba(34,211,238,0.04)",
       },
 
       backgroundImage: {
-        "brand-gradient": "linear-gradient(135deg, #1F0D3F 0%, #0A0715 100%)",
-        "cyan-gradient": "linear-gradient(135deg, #1D132C 0%, #14122A 100%)",
+        "brand-gradient": "linear-gradient(135deg, #1B1430 0%, #0A0714 100%)",
+        "cyan-gradient": "linear-gradient(135deg, #120D1E 0%, #0A0714 100%)",
         "dark-gradient":
           "radial-gradient(circle at 50% 50%, #120D1E 0%, #0A0714 100%)",
         "ambient-cyan":
-          "radial-gradient(ellipse 120% 80% at 15% 0%, rgba(155,107,255,0.07) 0%, transparent 55%)",
+          "radial-gradient(ellipse 120% 80% at 15% 0%, rgba(34,211,238,0.07) 0%, transparent 55%)",
         "ambient-purple":
-          "radial-gradient(ellipse 80% 60% at 85% 100%, rgba(108,92,224,0.06) 0%, transparent 55%)",
+          "radial-gradient(ellipse 80% 60% at 85% 100%, rgba(139,124,246,0.06) 0%, transparent 55%)",
         "progress-shimmer":
-          "linear-gradient(90deg, #8629DC 0%, #080E17 50%, #1F0D3F 80%)",
+          "linear-gradient(90deg, #8B7CF6 0%, #0A0714 50%, #1B1430 80%)",
       },
     },
   },

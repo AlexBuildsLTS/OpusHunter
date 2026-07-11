@@ -1,38 +1,22 @@
 /**
  * supabase/functions/scrape-jobs/index.ts
  * OpusHunter — Job Scraping Edge Function
- * 2026-07-01 — BYOK cascade wired in
+ * 2026-07-11 — Coordinates + commute-distance filtering
  *
- * WHAT CHANGED AND WHY:
- *   1. Now uses `_shared/supabaseAdmin.ts::createAdminClient()` instead of
- *      building its own client inline with `?? ''` fallbacks. If
- *      SUPABASE_SERVICE_ROLE_KEY isn't set as an Edge Function secret, you
- *      now get a clear thrown error ("SUPABASE_URL or
- *      SUPABASE_SERVICE_ROLE_KEY env vars are not set") instead of a vague
- *      auth failure three steps later. If your scraper has been failing
- *      with something like "Invalid API key" at the very first step, this
- *      was almost certainly why.
- *   2. Now checks `profiles.rapidapi_key` FIRST via `_shared/keyResolver.ts`
- *      before falling back to the admin-managed api_keys pool, then env.
- *      Previously BYOK keys saved in Profile were never read by this
- *      function at all — only the shared pool / env var were ever tried.
- *   3. IMPORTANT — a separate, non-code issue this file can't fix: Supabase
- *      Edge Function secrets are configured via `supabase secrets set` or
- *      Dashboard → Edge Functions → Secrets. They are NOT the same as
- *      Vercel env vars, a `.env` file, or EAS secrets — none of those are
- *      visible to Deno.env at runtime. If RAPIDAPI_KEY / GEMINI_API_KEY /
- *      SUPABASE_SERVICE_ROLE_KEY were only ever set in Vercel/.env/EAS,
- *      this function has never been able to see them, regardless of how
- *      many places you've added them.
- *   4. Also: after any code change to a Supabase Edge Function, it must be
- *      re-deployed — `supabase functions deploy scrape-jobs` — editing the
- *      file in your repo does not update what's actually running.
+ * WHAT CHANGED:
+ *   JSearch's real response includes job_latitude/job_longitude per listing
+ *   (verified against the provider's own docs — they were simply never in
+ *   the JSearchJob interface, so they were being silently discarded).
+ *   Now: read them, persist them on job_vault, and use them to drop onsite
+ *   jobs outside a rule's max_distance_km. Remote jobs and jobs with unknown
+ *   coordinates are never filtered out — "can't verify" is not "reject".
  */
 
 // deno-lint-ignore-file no-explicit-any
 import { serve } from 'std/http/server.ts';
 import { createAdminClient } from '../_shared/supabaseAdmin.ts';
 import { resolveKeyPool, markKeyUsed, type ResolvedKey } from '../_shared/keyResolver.ts';
+import { withinCommuteDistance } from '../_shared/geo.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -55,7 +39,9 @@ interface JSearchJob {
     job_city?: string;
     job_state?: string;
     job_country?: string;
-    job_is_remote?: boolean;
+    job_latitude?: number | null;
+    job_longitude?: number | null;
+    job_is_remote?: boolean | null;
     job_employment_type?: string;
     job_employment_types?: string[];
     job_required_skills?: string[];
@@ -76,17 +62,13 @@ interface JSearchJob {
     };
 }
 
-interface JSearchResponse {
-    status: string;
-    request_id: string;
-    parameters: Record<string, unknown>;
-    data: JSearchJob[];
-}
-
 interface ScrapeRequest {
     keywords?: string[];
     location?: string;
     work_types?: string[];
+    latitude?: number | null;
+    longitude?: number | null;
+    max_distance_km?: number | null;
 }
 
 // ── Salary normalisation to annual ────────────────────────────────────────────
@@ -155,12 +137,6 @@ async function fetchJSearch(
     keys: ResolvedKey[],
     supabase: any,
 ): Promise<{ jobs: JSearchJob[]; keyUsed: ResolvedKey }> {
-    // FIX (2026-07-06): JSearch retired `/search` — confirmed via OpenWeb Ninja
-    // docs and matches the live 404 in your logs ("Endpoint '/search' does
-    // not exist"). Current endpoint is `/search-v2`. Response shape is
-    // unchanged (still `{ data: JSearchJob[] }`), so nothing else here needs
-    // to change — this was never a key/auth problem. The 404 itself proves
-    // RAPIDAPI_KEY authenticated fine; an invalid key gets 401/403, not 404.
     const url = `https://jsearch.p.rapidapi.com/search-v2?${params.toString()}`;
 
     let lastError = '';
@@ -183,7 +159,6 @@ async function fetchJSearch(
         if (!response.ok) {
             const body = await response.text();
             lastError = `JSearch ${response.status}: ${body.substring(0, 200)}`;
-            // 401/403 usually means a bad/expired key specifically — keep trying others.
             if (response.status === 401 || response.status === 403) {
                 console.warn(`[scrape-jobs] Key rejected (${resolved.source}): ${lastError}`);
                 continue;
@@ -194,15 +169,6 @@ async function fetchJSearch(
         await markKeyUsed(supabase, resolved);
         const data: any = await response.json();
 
-        // FIX (2026-07-09): confirmed via your own logs — /search-v2 returns
-        // 200 OK (so the endpoint itself is right), but something about its
-        // shape doesn't match the old flat `{ data: JSearchJob[] }` contract
-        // from /search, causing "rawJobs.filter is not a function" downstream.
-        // Rather than guess the new shape a second time, this checks every
-        // shape the JSearch family of endpoints is known to use (flat array,
-        // or nested under .jobs/.results for cursor-paginated responses) and
-        // logs the raw top-level keys when NONE of them match, so the next
-        // failure tells us the exact real shape instead of crashing blind.
         let safeJobs: JSearchJob[];
         if (Array.isArray(data?.data)) {
             safeJobs = data.data;
@@ -241,8 +207,6 @@ serve(async (req: Request) => {
             });
         }
 
-        // Throws a CLEAR error if SUPABASE_SERVICE_ROLE_KEY isn't configured,
-        // instead of silently building a broken client.
         const supabase = createAdminClient();
 
         const token = authHeader.replace('Bearer ', '').trim();
@@ -256,7 +220,6 @@ serve(async (req: Request) => {
         let body: ScrapeRequest = {};
         try { body = await req.json(); } catch { /* empty body is fine */ }
 
-        // ── Resolve RapidAPI keys: BYOK → pool → env, in that order ───────────
         const keyPool = await resolveKeyPool(supabase, user.id, 'rapidapi');
 
         if (!keyPool.length) {
@@ -269,16 +232,30 @@ serve(async (req: Request) => {
             );
         }
 
-        // ── Resolve search rules ──────────────────────────────────────────────
-        interface SearchRule { keywords: string[]; location: string; work_types: string[]; }
+        // ── Resolve search rules — now carries origin coordinates + commute cap ──
+        interface SearchRule {
+            keywords: string[];
+            location: string;
+            work_types: string[];
+            latitude: number | null;
+            longitude: number | null;
+            max_distance_km: number | null;
+        }
         let rules: SearchRule[] = [];
 
         if (body.keywords?.length && body.location) {
-            rules = [{ keywords: body.keywords, location: body.location, work_types: body.work_types ?? [] }];
+            rules = [{
+                keywords: body.keywords,
+                location: body.location,
+                work_types: body.work_types ?? [],
+                latitude: body.latitude ?? null,
+                longitude: body.longitude ?? null,
+                max_distance_km: body.max_distance_km ?? null,
+            }];
         } else {
             const { data: dbRules, error: rulesError } = await supabase
                 .from('automation_rules')
-                .select('keywords, location, work_types')
+                .select('keywords, location, work_types, latitude, longitude, max_distance_km')
                 .eq('user_id', user.id)
                 .eq('is_active', true)
                 .limit(10);
@@ -303,10 +280,10 @@ serve(async (req: Request) => {
         const seenIds = new Set((existingJobs ?? []).map((j: any) => j.external_job_id));
 
         const allJobsToUpsert: any[] = [];
-        const scrapeSummary: Array<{ rule: string; fetched: number; new: number; key_source?: string }> = [];
+        const scrapeSummary: Array<{ rule: string; fetched: number; new: number; filtered_by_distance?: number; key_source?: string }> = [];
 
         for (const rule of rules) {
-            const { keywords, location, work_types } = rule;
+            const { keywords, location, work_types, latitude: originLat, longitude: originLon, max_distance_km } = rule;
             const query = keywords.join(' ') + (location && location.toLowerCase() !== 'remote' ? ` in ${location}` : '');
 
             const employmentTypes = work_types.length > 0
@@ -339,7 +316,22 @@ serve(async (req: Request) => {
 
             const newJobs = rawJobs.filter((j) => !seenIds.has(j.job_id));
 
-            const transformed = newJobs.map((job) => {
+            // Drop onsite/hybrid jobs outside the rule's commute cap. Remote
+            // jobs and jobs with no coordinates from JSearch always pass —
+            // this filters out unreachable jobs, it never hides uncertain ones.
+            let filteredByDistance = 0;
+            const withinRange = newJobs.filter((job) => {
+                const isRemote = job.job_is_remote === true;
+                const ok = withinCommuteDistance(
+                    isRemote, originLat, originLon,
+                    job.job_latitude ?? null, job.job_longitude ?? null,
+                    max_distance_km,
+                );
+                if (!ok) filteredByDistance++;
+                return ok;
+            });
+
+            const transformed = withinRange.map((job) => {
                 seenIds.add(job.job_id);
                 return {
                     user_id: user.id,
@@ -351,6 +343,10 @@ serve(async (req: Request) => {
                     location: job.job_is_remote
                         ? 'Remote'
                         : [job.job_city, job.job_state, job.job_country].filter(Boolean).join(', ') || location,
+                    latitude: job.job_latitude ?? null,
+                    longitude: job.job_longitude ?? null,
+                    country_code: job.job_country ?? null,
+                    is_remote: job.job_is_remote === true,
                     tech_stack: extractTechStack(job),
                     source_url: job.job_apply_link ?? '',
                     url: job.employer_website ?? job.job_apply_link ?? '',
@@ -360,13 +356,19 @@ serve(async (req: Request) => {
             });
 
             allJobsToUpsert.push(...transformed);
-            scrapeSummary.push({ rule: keywords.join(', '), fetched: rawJobs.length, new: newJobs.length, key_source: keySource });
+            scrapeSummary.push({
+                rule: keywords.join(', '),
+                fetched: rawJobs.length,
+                new: transformed.length,
+                filtered_by_distance: filteredByDistance,
+                key_source: keySource,
+            });
         }
 
         if (!allJobsToUpsert.length) {
             return new Response(
                 JSON.stringify({
-                    message: 'No new jobs found. All results were already in your pipeline.',
+                    message: 'No new jobs found. All results were already in your pipeline or outside your commute distance.',
                     count: 0,
                     summary: scrapeSummary,
                 }),

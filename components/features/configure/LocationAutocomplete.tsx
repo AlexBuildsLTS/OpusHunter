@@ -1,34 +1,23 @@
 /**
  * components/features/configure/LocationAutocomplete.tsx
  * OpusHunter — Worldwide City Autocomplete
- * 2026-07-06 — Production Ready
+ * 2026-07-11 — FIXED: search errors (e.g. RapidAPI subscription/key issues)
+ * were silently swallowed — the hook tracked `error` but this component
+ * never read it, so a failed search just looked like "nothing happened."
+ * Now rendered as a proper inline banner, replacing the old placeholder
+ * dropdown row in the error case instead of overlapping it.
  *
- * Replaces the hardcoded 14-city preset chip list (London/New York/Berlin/
- * ...) in both SetupWizard and EngineTab's location section. Worldwide
- * geosearch with every keystroke via GeoDB Cities API (supabase/functions/
- * search-cities) across Wikidata. "Use my location" button with device
- * geolocation via expo-location (web: browser geolocation + native: iOS/
- * Android), defaulting to nearby cities sorted by population.
- *
- * Selected cities stored as `"City, Country"` strings, matching existing
- * app schema (automation_rules.location, EngineConfig.locations).
- * Zero downstream changes required.
- *
- * Production Features:
- * - Graceful permission handling (denied state flagged, search always works)
- * - Debounced search, deferred dropdown close to prevent tap loss
- * - Type-safe CityResult handling with smart formatting (region fallback)
- * - Accessible keyboard & mobile gestures, outline hidden on web
- * - Duplicate prevention, visual feedback loading states
- * - Cross-platform consistent styling via theme tokens
+ * Worldwide geosearch with every keystroke via GeoDB Cities API (supabase/
+ * functions/search-cities). "Use my location" via expo-location (web:
+ * browser geolocation, native: iOS/Android). Selected cities stored as
+ * "City, Country" strings, matching automation_rules.location.
  */
 
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Platform, ScrollView } from 'react-native';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { MapPin, Globe2, X, Navigation, Search, AlertCircle } from 'lucide-react-native';
 import { C } from '../../../lib/theme';
 import { useCitySearch, type CityResult } from '../../../hooks/useCitySearch';
-import * as Location from 'expo-location';
 
 function formatLocation(c: CityResult): string {
     if (c.type === 'country') return c.country;
@@ -43,7 +32,7 @@ export function LocationAutocomplete({
 }) {
     const [query, setQuery] = useState('');
     const [focused, setFocused] = useState(false);
-    const { results, loading, search, requestNearby, permissionDenied } = useCitySearch();
+    const { results, loading, error, search, requestNearby, permissionDenied } = useCitySearch();
     const [locating, setLocating] = useState(false);
     const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -107,12 +96,20 @@ export function LocationAutocomplete({
                         <View
                             style={{
                                 position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 6,
-                                backgroundColor: C.core, borderWidth: 1, borderColor: C.borderCyan,
+                                backgroundColor: C.core, borderWidth: 1,
+                                borderColor: error ? `${C.pink}50` : C.borderCyan,
                                 borderRadius: 14, overflow: 'hidden', zIndex: 50, maxHeight: 260,
                                 ...(Platform.OS === 'web' ? ({ boxShadow: '0 12px 32px rgba(0,0,0,0.5)' } as any) : {}),
                             }}
                         >
-                            {results.length === 0 && !loading ? (
+                            {error ? (
+                                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', padding: 14 }}>
+                                    <AlertCircle size={14} color={C.pink} style={{ marginTop: 1 }} />
+                                    <Text style={{ color: C.pink, fontSize: 12, flex: 1, lineHeight: 17 }}>
+                                        {error}
+                                    </Text>
+                                </View>
+                            ) : results.length === 0 && !loading ? (
                                 <Text style={{ color: C.dim, fontSize: 12, padding: 14 }}>
                                     No matches yet — keep typing.
                                 </Text>

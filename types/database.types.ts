@@ -58,7 +58,10 @@ export type Database = {
           id: string
           is_active: boolean | null
           keywords: string[]
+          latitude: number | null
           location: string
+          longitude: number | null
+          max_distance_km: number | null
           remote_preference: string
           salary_min: number | null
           user_id: string
@@ -71,7 +74,10 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           keywords: string[]
+          latitude?: number | null
           location: string
+          longitude?: number | null
+          max_distance_km?: number | null
           remote_preference?: string
           salary_min?: number | null
           user_id: string
@@ -84,7 +90,10 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           keywords?: string[]
+          latitude?: number | null
           location?: string
+          longitude?: number | null
+          max_distance_km?: number | null
           remote_preference?: string
           salary_min?: number | null
           user_id?: string
@@ -264,11 +273,15 @@ export type Database = {
       job_vault: {
         Row: {
           company: string
+          country_code: string | null
           created_at: string
           description: string | null
           external_job_id: string
           id: string
+          is_remote: boolean
+          latitude: number | null
           location: string | null
+          longitude: number | null
           match_score: number | null
           salary: string | null
           source_url: string
@@ -280,11 +293,15 @@ export type Database = {
         }
         Insert: {
           company: string
+          country_code?: string | null
           created_at?: string
           description?: string | null
           external_job_id: string
           id?: string
+          is_remote?: boolean
+          latitude?: number | null
           location?: string | null
+          longitude?: number | null
           match_score?: number | null
           salary?: string | null
           source_url?: string
@@ -296,11 +313,15 @@ export type Database = {
         }
         Update: {
           company?: string
+          country_code?: string | null
           created_at?: string
           description?: string | null
           external_job_id?: string
           id?: string
+          is_remote?: boolean
+          latitude?: number | null
           location?: string | null
+          longitude?: number | null
           match_score?: number | null
           salary?: string | null
           source_url?: string
@@ -315,12 +336,15 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          country_code: string | null
           created_at: string
           cv_storage_path: string | null
           email: string
           full_name: string | null
           gemini_key: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
           max_daily_applications: number
           rapidapi_key: string | null
           role: Database["public"]["Enums"]["user_role"]
@@ -328,12 +352,15 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          country_code?: string | null
           created_at?: string
           cv_storage_path?: string | null
           email: string
           full_name?: string | null
           gemini_key?: string | null
           id: string
+          latitude?: number | null
+          longitude?: number | null
           max_daily_applications?: number
           rapidapi_key?: string | null
           role?: Database["public"]["Enums"]["user_role"]
@@ -341,12 +368,15 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          country_code?: string | null
           created_at?: string
           cv_storage_path?: string | null
           email?: string
           full_name?: string | null
           gemini_key?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           max_daily_applications?: number
           rapidapi_key?: string | null
           role?: Database["public"]["Enums"]["user_role"]
