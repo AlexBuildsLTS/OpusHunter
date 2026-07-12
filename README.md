@@ -100,11 +100,11 @@ Used for the heavy semantic processing, matching, and cover letter writing.
 
 ## 🛠 Future Improvements & Roadmap
 
-OpusHunter is powerful, but there is always room to grow. Here are the planned improvements for contributors:
+ratesOpusHunter is powerful, but there is always room to grow. Here are the planned improvements for contributors:
 
 1. **Auto-Apply Scripts**: Implement a Puppeteer or Playwright engine inside a Docker container (or via specialized APIs) to automatically click "Easy Apply" on LinkedIn and submit the AI-generated cover letter without user intervention.
 2. **Multi-CV Support**: Allow users to upload multiple base CVs (e.g., one for Frontend, one for Backend) and have the AI dynamically select the best one to use for each job.
-3. **Analytics Dashboard**: Add a beautiful chart view tracking jobs scraped, applications sent, and interview conversion rates
+3. **Analytics Dashboard**: Add a beautiful chart view tracking jobs scraped, applications sent, and interview conversion 
 
 ---
 

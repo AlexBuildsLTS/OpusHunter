@@ -48,8 +48,8 @@ import { useCVVault } from '../../hooks/useCVVault';
 import { C } from '../../lib/theme';
 import {
     WORK_TYPE_OPTIONS, WORK_TYPE_LABELS, EXPERIENCE_LEVELS, EXPERIENCE_COLORS,
-} from '../features/configure/constants';
-import { LocationAutocomplete } from '../features/configure/LocationAutocomplete';
+} from '../../lib/jobPreferences';
+import { LocationAutocomplete } from '../../components/shared/LocationAutocomplete';
 
 // ── Wizard-only option set — work-mode framing differs slightly from the
 // Engine tab's REMOTE_OPTIONS (this is 4 short chip labels for a first-run
@@ -377,12 +377,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                                         <Text style={{ color: C.sub, fontSize: 12, fontWeight: '700' }}>EMPLOYMENT TYPE</Text>
                                     </View>
                                     <View className="flex-row flex-wrap gap-2">
-                                        {WORK_TYPE_OPTIONS.map((wt) => (
+                                        {WORK_TYPE_OPTIONS.map((wt: React.Key | null | undefined) => (
                                             <Chip
                                                 key={wt}
-                                                label={WORK_TYPE_LABELS[wt]}
-                                                active={workTypes.includes(wt)}
-                                                onPress={() => setWorkTypes((prev) => toggleInArray(prev, wt))}
+                                                label={WORK_TYPE_LABELS[wt as string]}
+                                                active={workTypes.includes(wt as string)}
+                                                onPress={() => setWorkTypes((prev) => toggleInArray(prev, wt as string))}
                                             />
                                         ))}
                                     </View>
@@ -395,13 +395,13 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                                 <View>
                                     <Text style={{ color: C.sub, fontSize: 12, fontWeight: '700', marginBottom: 8 }}>EXPERIENCE LEVEL</Text>
                                     <View className="flex-row flex-wrap gap-2">
-                                        {EXPERIENCE_LEVELS.map((lvl) => (
+                                        {EXPERIENCE_LEVELS.map((lvl: React.Key | null | undefined) => (
                                             <Chip
                                                 key={lvl}
-                                                label={lvl}
-                                                color={EXPERIENCE_COLORS[lvl]}
-                                                active={experienceLevels.includes(lvl)}
-                                                onPress={() => setExperienceLevels((prev) => toggleInArray(prev, lvl))}
+                                                label={lvl as string}
+                                                color={EXPERIENCE_COLORS[lvl as string]}
+                                                active={experienceLevels.includes(lvl as string)}
+                                                onPress={() => setExperienceLevels((prev) => toggleInArray(prev, lvl as string))}
                                             />
                                         ))}
                                     </View>
@@ -442,7 +442,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                                     }}
                                 >
                                     {uploadState.status === 'uploading' ? (
-                                        <ActivityIndicator size="small" color={C.cyan} />
+                                        <><ActivityIndicator size="small" color={C.cyan} /><Text style={{ color: C.cyan, fontWeight: '800', fontSize: 14 }}>Uploading...</Text></>
                                     ) : (
                                         <Upload size={16} color={C.cyan} />
                                     )}
