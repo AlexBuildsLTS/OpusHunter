@@ -19,7 +19,7 @@
  */
 
 import type { LucideIcon } from 'lucide-react-native';
-import { ServerCog, Briefcase, CloudCog, FolderCog, BrainCog } from 'lucide-react-native';
+import { ServerCog, CloudCog, FolderCog, BrainCog } from 'lucide-react-native';
 
 export interface NavItem {
     name: string;

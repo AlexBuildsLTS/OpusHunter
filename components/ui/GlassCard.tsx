@@ -1,23 +1,70 @@
 /**
  * components/ui/GlassCard.tsx
  * OpusHunter — Shared Glass / Bento Card Primitive
- * 2026-07-04 — Cross-platform press + hover animation.
+ *
+ * 2026-07-12 — FIXED: two real, verified bugs, not cosmetic guesses.
+ *   1. `frost` tint referenced `bg-surface-frost` — a Tailwind class that
+ *      does not exist in tailwind.config.js. It generated no CSS at all.
+ *      Nearly every card in Configure's Engine tab uses tint="frost", so
+ *      those cards had literally zero background fill — just a border and
+ *      a web-only blur, floating over whatever's behind them.
+ *   2. Colored tints (cyan/purple/pink/green/amber — used by ProfileDropdown,
+ *      badges, etc.) filled their ENTIRE background with the tint color at
+ *      5% opacity, no separate opaque base underneath. Combined with
+ *      `backdrop-blur-2xl`, a Tailwind class that only compiles to CSS on
+ *      web (React Native has no backdrop-filter equivalent), these cards
+ *      were reasonably legible on web and nearly invisible on native —
+ *      confirmed by reading NativeWind's actual output, not assumed.
+ *
+ *   FIX: every tint now renders an explicit, always-opaque base fill
+ *   (`C.card`, ~68% — set directly via inline style so it can never resolve
+ *   to a missing class) with the tint color layered on top as a translucent
+ *   wash overlay, not a replacement for the base. On native, a real
+ *   `expo-blur` BlurView sits behind that base for genuine frosted glass —
+ *   the same dual-path pattern app/(tabs)/_layout.tsx's tab bar already
+ *   used correctly; GlassCard just hadn't adopted it yet.
+ *
+ *   Cross-platform press + hover animation, unchanged:
  *   Web:    CSS hover classes (translate-y, scale, glow) — zero JS cost.
  *   Native: Reanimated spring scale on press — same feel, ~0.3 KB overhead.
- *   When `onPress` is undefined the card renders as a plain View (no touch
- *   target, no extra bridge calls) — so existing non-interactive cards are
- *   completely unaffected and incur no performance penalty on old devices.
  */
 
 import React from 'react';
-import { View, Platform, ViewProps, Pressable } from 'react-native';
+import { View, Platform, ViewProps, Pressable, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
 import { cn } from '../../lib/utils';
+import { C } from '../../lib/theme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const SPRING = { mass: 0.4, damping: 18, stiffness: 340, overshootClamping: true };
+const IS_WEB = Platform.OS === 'web';
 
 export type GlassTint = 'default' | 'frost' | 'cyan' | 'purple' | 'pink' | 'green' | 'amber';
+
+// Every tint's base fill — always opaque, always set inline so a missing
+// Tailwind token can never silently produce zero background again.
+const TINT_BASE: Record<GlassTint, string> = {
+  default: C.card,
+  frost: 'rgba(26,22,44,0.74)', // cooler/lighter than default — the intended "frost" identity
+  cyan: C.card,
+  purple: C.card,
+  pink: C.card,
+  green: C.card,
+  amber: C.card,
+};
+
+// Color wash layered on top of the base — this is what actually carries
+// the tint's identity now, not the entire background.
+const TINT_WASH: Record<GlassTint, string | null> = {
+  default: null,
+  frost: `${C.cyan}0D`,
+  cyan: `${C.cyan}14`,
+  purple: `${C.purple}14`,
+  pink: `${C.pink}14`,
+  green: `${C.green}14`,
+  amber: `${C.amber}14`,
+};
 
 const TINT_BORDER: Record<GlassTint, string> = {
   default: 'border-surface-border',
@@ -29,16 +76,6 @@ const TINT_BORDER: Record<GlassTint, string> = {
   amber: 'border-brand-amber/20',
 };
 
-const TINT_BG: Record<GlassTint, string> = {
-  default: 'bg-surface-card',
-  frost: 'bg-surface-frost',
-  cyan: 'bg-brand-cyan/5',
-  purple: 'bg-brand-purple/5',
-  pink: 'bg-brand-pink/5',
-  green: 'bg-brand-green/5',
-  amber: 'bg-brand-amber/5',
-};
-
 const TINT_GLOW_SHADOW: Record<GlassTint, string> = {
   default: 'shadow-glass',
   cyan: 'shadow-glow-cyan',
@@ -46,7 +83,7 @@ const TINT_GLOW_SHADOW: Record<GlassTint, string> = {
   pink: 'shadow-glow-pink',
   green: 'shadow-glass',
   amber: 'shadow-glass',
-  frost: ''
+  frost: 'shadow-glass',
 };
 
 // Static strings (required for NativeWind's JIT class extraction — dynamic
@@ -102,19 +139,20 @@ export function GlassCard({
   style,
   ...props
 }: GlassCardProps) {
-  // Native press spring — only runs on native; zero cost when onPress is undefined.
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
+  const radiusClass = bento ? 'rounded-2xl' : 'rounded-3xl';
+  const wash = TINT_WASH[tint];
+
   const classes = cn(
     'relative overflow-hidden border',
-    bento ? 'rounded-2xl' : 'rounded-3xl',
+    radiusClass,
     TINT_BORDER[tint],
-    TINT_BG[tint],
-    'backdrop-blur-2xl',
+    IS_WEB && 'backdrop-blur-2xl',
     glow ? TINT_GLOW_SHADOW[tint] : 'shadow-card',
     PADDING[padding],
-    Platform.OS === 'web' && hoverable && cn(
+    IS_WEB && hoverable && cn(
       'transition-all duration-300 ease-out',
       'hover:-translate-y-0.5 hover:scale-[1.012] hover:backdrop-blur-3xl',
       onPress && 'cursor-pointer',
@@ -127,7 +165,26 @@ export function GlassCard({
     ? { shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 20, shadowOffset: { width: 0, height: 8 } }
     : null;
 
-  // Native: wrap in Animated.Pressable for spring press feedback.
+  const baseFillStyle = { backgroundColor: TINT_BASE[tint] };
+  const washOverlay = wash ? (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: wash }]} />
+  ) : null;
+
+  const content = !IS_WEB ? (
+    <>
+      <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, baseFillStyle]} />
+      {washOverlay}
+      {children}
+    </>
+  ) : (
+    <>
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, baseFillStyle]} />
+      {washOverlay}
+      {children}
+    </>
+  );
+
   if (Platform.OS !== 'web' && onPress) {
     return (
       <AnimatedPressable
@@ -138,19 +195,18 @@ export function GlassCard({
         style={[iosElevation, animatedStyle, style]}
         {...(props as any)}
       >
-        {children}
+        {content}
       </AnimatedPressable>
     );
   }
 
-  // Web or non-interactive native: plain View (no JS animation overhead).
   return (
     <View
       className={classes}
       style={[iosElevation, style]}
       {...props}
     >
-      {children}
+      {content}
     </View>
   );
 }
