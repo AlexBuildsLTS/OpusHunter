@@ -1,17 +1,29 @@
 /**
- * app/(tabs)/jobs.tsx
- * OpusHunter — Jobs Tab
- * 2026-07-09 — New screen.
+ * app / (tabs) / jobs.tsx
+    * OpusHunter — Jobs Tab
+        *
+ * 2026-07 - 13 — FIXED: two real, confirmed gaps.
+ * 1. No max - width / centering — every other screen(Dashboard, Configure)
+    * caps content at 1100px and centers it; this screen had no cap at
+        * all, so rows stretched edge - to - edge on wide desktop displays,
+ * leaving titles pinned far - left and badges far - right with a huge
+    * dead gap between them.Now uses the same maxWidth: 1100 constant.
+ * 2. Pending rows had approve / reject as small icon buttons only — no
+    * swipe gesture, unlike Dashboard's SwipeableJobCard. Added real
+        * swipe - right - to - approve / swipe - left - to - reject via
+            * react - native - gesture - handler's Pan gesture, with a colored reveal
+                * panel underneath during drag.Buttons are kept(not everyone
+                    * swipes, and it's the more discoverable/accessible affordance) —
+                * swipe is an addition, not a replacement.
  *
- * WHY THIS EXISTS: Dashboard's swipe-deck only ever shows 3 cards at a time
- * — it's a triage tool, not a browsing tool. There was no screen anywhere
- * that showed the full scraped pipeline: every job, filterable by status,
- * searchable, sortable. This is that screen. Reuses the exact same
- * job_vault query shape and approve/reject mutation pattern as
- * dashboard.tsx (same query keys, so both screens stay in sync via
- * TanStack Query's cache), and the same JobDetailModal for the
- * description/cover-letter flow — no new modal, no duplicated logic.
- */
+ * WHY THIS SCREEN EXISTS: Dashboard's swipe-deck only ever shows 3 cards
+                * at a time — it's a triage tool, not a browsing tool. This is the full
+                * scraped pipeline: every job, filterable by status, searchable, sortable.
+ * Reuses the exact same job_vault query shape and approve / reject mutation
+                * pattern as dashboard.tsx (same query keys, so both screens stay in sync
+                * via TanStack Query's cache), and the same JobDetailModal — no duplicated
+                * modal logic.
+ **/
 
 import React, { useState, useMemo, useCallback } from 'react';
 import {
@@ -19,10 +31,14 @@ import {
     StyleSheet, ActivityIndicator, RefreshControl, Platform,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+    FadeInDown, useSharedValue, useAnimatedStyle, withSpring, withTiming,
+    runOnJS, interpolate, Extrapolation,
+} from 'react-native-reanimated';
 import {
-    Search, SlidersHorizontal, Check, X, ExternalLink,
-    MapPin, Building2, Inbox,
+    Search, Check, X, ExternalLink, MapPin, Building2, Inbox,
+    ThumbsUp, ThumbsDown,
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { C } from '../../lib/theme';
@@ -31,6 +47,11 @@ import { PageContainer } from '../../components/layout/PageContainer';
 import { JobDetailModal } from '../../components/pipeline/JobDetailModal';
 import type { JobData } from '../../components/pipeline/SwipeableJobCard';
 import type { Job, VaultJobStatus } from '../../types/app.types';
+
+// Matches Dashboard/Configure's content cap — one constant, kept
+// numerically identical across screens rather than redefined per-file.
+const CONTENT_MAX_WIDTH = 1100;
+const SWIPE_THRESHOLD = 90;
 
 // ── Filter chips ──────────────────────────────────────────────────────────────
 
@@ -49,101 +70,6 @@ const scoreColor = (s: number | null) => {
     return s >= 85 ? C.cyan : s >= 65 ? C.purple : s >= 45 ? C.amber : C.pink;
 };
 
-// ── Job row ───────────────────────────────────────────────────────────────────
-
-const JobRow = ({
-    job, onPress, onApprove, onReject, busy,
-}: {
-    job: Job;
-    onPress: () => void;
-    onApprove: () => void;
-    onReject: () => void;
-    busy: boolean;
-}) => {
-    const sColor = scoreColor(job.match_score);
-    const isPending = job.status === 'pending';
-
-    return (
-        <GlassCard tint="frost" padding="md" hoverable className="mb-3">
-            <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
-                <View style={styles.rowTop}>
-                    <View style={{ flex: 1, gap: 3 }}>
-                        <Text style={styles.title} numberOfLines={1}>{job.title}</Text>
-                        <View style={styles.metaRow}>
-                            <Building2 size={12} color={C.sub} />
-                            <Text style={styles.metaText} numberOfLines={1}>{job.company}</Text>
-                            {job.location && (
-                                <>
-                                    <Text style={styles.metaDot}>·</Text>
-                                    <MapPin size={12} color={C.sub} />
-                                    <Text style={styles.metaText} numberOfLines={1}>{job.location}</Text>
-                                </>
-                            )}
-                        </View>
-                    </View>
-
-                    {job.match_score != null && (
-                        <View style={[styles.scoreBadge, { borderColor: `${sColor}40`, backgroundColor: `${sColor}12` }]}>
-                            <Text style={[styles.scoreText, { color: sColor }]}>{job.match_score}%</Text>
-                        </View>
-                    )}
-                </View>
-
-                {job.salary && <Text style={styles.salary}>{job.salary}</Text>}
-
-                {!!job.tech_stack?.length && (
-                    <View style={styles.chipRow}>
-                        {job.tech_stack.slice(0, 5).map((t) => (
-                            <View key={t} style={styles.techChip}>
-                                <Text style={styles.techChipText}>{t}</Text>
-                            </View>
-                        ))}
-                    </View>
-                )}
-
-                <View style={styles.bottomRow}>
-                    <View style={[styles.statusPill, statusPillStyle(job.status)]}>
-                        <Text style={[styles.statusPillText, { color: statusColor(job.status) }]}>
-                            {statusLabel(job.status)}
-                        </Text>
-                    </View>
-
-                    {isPending && (
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TouchableOpacity
-                                onPress={onReject}
-                                disabled={busy}
-                                style={[styles.iconBtn, { borderColor: `${C.pink}30`, backgroundColor: `${C.pink}10` }]}
-                                activeOpacity={0.8}
-                            >
-                                <X size={15} color={C.pink} />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={onApprove}
-                                disabled={busy}
-                                style={[styles.iconBtn, { borderColor: `${C.cyan}30`, backgroundColor: `${C.cyan}10` }]}
-                                activeOpacity={0.8}
-                            >
-                                <Check size={15} color={C.cyan} />
-                            </TouchableOpacity>
-                        </View>
-                    )}
-
-                    {job.source_url && (
-                        <TouchableOpacity
-                            onPress={() => Platform.OS === 'web' ? window.open(job.source_url, '_blank') : undefined}
-                            style={styles.linkBtn}
-                            activeOpacity={0.7}
-                        >
-                            <ExternalLink size={13} color={C.sub} />
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </TouchableOpacity>
-        </GlassCard>
-    );
-};
-
 function statusLabel(s: VaultJobStatus): string {
     return { pending: 'Pending', approved: 'Approved', applied: 'Applied', rejected: 'Passed' }[s] ?? s;
 }
@@ -153,6 +79,186 @@ function statusColor(s: VaultJobStatus): string {
 function statusPillStyle(s: VaultJobStatus) {
     const c = statusColor(s);
     return { borderColor: `${c}30`, backgroundColor: `${c}12` };
+}
+
+// ── Job row content (shared between swipeable and static rendering) ──────────
+
+function JobRowContent({
+    job, onPress, onApprove, onReject, busy, showActions,
+}: {
+    job: Job;
+    onPress: () => void;
+    onApprove: () => void;
+    onReject: () => void;
+    busy: boolean;
+    showActions: boolean;
+}) {
+    const sColor = scoreColor(job.match_score);
+
+    return (
+        <TouchableOpacity onPress={onPress} activeOpacity={0.85}>
+            <View style={styles.rowTop}>
+                <View style={{ flex: 1, gap: 3 }}>
+                    <Text style={styles.title} numberOfLines={1}>{job.title}</Text>
+                    <View style={styles.metaRow}>
+                        <Building2 size={12} color={C.sub} />
+                        <Text style={styles.metaText} numberOfLines={1}>{job.company}</Text>
+                        {job.location && (
+                            <>
+                                <Text style={styles.metaDot}>·</Text>
+                                <MapPin size={12} color={C.sub} />
+                                <Text style={styles.metaText} numberOfLines={1}>{job.location}</Text>
+                            </>
+                        )}
+                    </View>
+                </View>
+
+                {job.match_score != null && (
+                    <View style={[styles.scoreBadge, { borderColor: `${sColor}40`, backgroundColor: `${sColor}12` }]}>
+                        <Text style={[styles.scoreText, { color: sColor }]}>{job.match_score}%</Text>
+                    </View>
+                )}
+            </View>
+
+            {job.salary && <Text style={styles.salary}>{job.salary}</Text>}
+
+            {!!job.tech_stack?.length && (
+                <View style={styles.chipRow}>
+                    {job.tech_stack.slice(0, 5).map((t) => (
+                        <View key={t} style={styles.techChip}>
+                            <Text style={styles.techChipText}>{t}</Text>
+                        </View>
+                    ))}
+                </View>
+            )}
+
+            <View style={styles.bottomRow}>
+                <View style={[styles.statusPill, statusPillStyle(job.status)]}>
+                    <Text style={[styles.statusPillText, { color: statusColor(job.status) }]}>
+                        {statusLabel(job.status)}
+                    </Text>
+                </View>
+
+                {showActions && (
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity
+                            onPress={onReject}
+                            disabled={busy}
+                            style={[styles.iconBtn, { borderColor: `${C.pink}30`, backgroundColor: `${C.pink}10` }]}
+                            activeOpacity={0.8}
+                        >
+                            <X size={15} color={C.pink} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={onApprove}
+                            disabled={busy}
+                            style={[styles.iconBtn, { borderColor: `${C.cyan}30`, backgroundColor: `${C.cyan}10` }]}
+                            activeOpacity={0.8}
+                        >
+                            <Check size={15} color={C.cyan} />
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {job.source_url && (
+                    <TouchableOpacity
+                        onPress={() => Platform.OS === 'web' ? window.open(job.source_url, '_blank') : undefined}
+                        style={styles.linkBtn}
+                        activeOpacity={0.7}
+                    >
+                        <ExternalLink size={13} color={C.sub} />
+                    </TouchableOpacity>
+                )}
+            </View>
+        </TouchableOpacity>
+    );
+}
+
+// ── Swipeable wrapper — pending rows only. Swipe right = approve, swipe
+// left = reject, with a colored reveal panel underneath during drag.
+// Buttons in JobRowContent remain fully functional — this adds a gesture,
+// it doesn't replace the discoverable tap targets. ─────────────────────────
+
+function SwipeableJobRow({
+    job, onPress, onApprove, onReject, busy,
+}: {
+    job: Job;
+    onPress: () => void;
+    onApprove: () => void;
+    onReject: () => void;
+    busy: boolean;
+}) {
+    const tx = useSharedValue(0);
+    const rowHeight = useSharedValue<number | null>(null);
+    const collapsed = useSharedValue(0); // 0 = full height, 1 = collapsed
+
+    const finishApprove = useCallback(() => onApprove(), [onApprove]);
+    const finishReject = useCallback(() => onReject(), [onReject]);
+
+    const pan = Gesture.Pan()
+        .activeOffsetX([-10, 10])
+        .failOffsetY([-12, 12])
+        .onUpdate((e) => { tx.value = e.translationX; })
+        .onEnd((e) => {
+            const goRight = e.translationX > SWIPE_THRESHOLD;
+            const goLeft = e.translationX < -SWIPE_THRESHOLD;
+
+            if (goRight) {
+                tx.value = withTiming(500, { duration: 220 });
+                collapsed.value = withTiming(1, { duration: 220 });
+                runOnJS(finishApprove)();
+            } else if (goLeft) {
+                tx.value = withTiming(-500, { duration: 220 });
+                collapsed.value = withTiming(1, { duration: 220 });
+                runOnJS(finishReject)();
+            } else {
+                tx.value = withSpring(0, { damping: 18, stiffness: 220 });
+            }
+        });
+
+    const cardStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: tx.value }],
+        opacity: interpolate(collapsed.value, [0, 1], [1, 0]),
+    }));
+
+    const collapseStyle = useAnimatedStyle(() => ({
+        maxHeight: interpolate(collapsed.value, [0, 1], [rowHeight.value ?? 400, 0], Extrapolation.CLAMP),
+        marginBottom: interpolate(collapsed.value, [0, 1], [12, 0], Extrapolation.CLAMP),
+    }));
+
+    const approveRevealStyle = useAnimatedStyle(() => ({
+        opacity: interpolate(tx.value, [10, SWIPE_THRESHOLD], [0, 1], Extrapolation.CLAMP),
+    }));
+    const rejectRevealStyle = useAnimatedStyle(() => ({
+        opacity: interpolate(tx.value, [-SWIPE_THRESHOLD, -10], [1, 0], Extrapolation.CLAMP),
+    }));
+
+    return (
+        <Animated.View style={collapseStyle}>
+            <View
+                onLayout={(e) => { if (rowHeight.value == null) rowHeight.value = e.nativeEvent.layout.height; }}
+                style={{ position: 'relative' }}
+            >
+                {/* Reveal panels — sit behind the card, shown as it's dragged */}
+                <Animated.View style={[styles.swipeReveal, styles.swipeRevealLeft, approveRevealStyle]}>
+                    <ThumbsUp size={20} color={C.cyan} />
+                    <Text style={[styles.swipeRevealText, { color: C.cyan }]}>Approve</Text>
+                </Animated.View>
+                <Animated.View style={[styles.swipeReveal, styles.swipeRevealRight, rejectRevealStyle]}>
+                    <Text style={[styles.swipeRevealText, { color: C.pink }]}>Reject</Text>
+                    <ThumbsDown size={20} color={C.pink} />
+                </Animated.View>
+
+                <GestureDetector gesture={pan}>
+                    <Animated.View style={cardStyle}>
+                        <GlassCard tint="frost" padding="md" hoverable className="mb-3">
+                            <JobRowContent job={job} onPress={onPress} onApprove={onApprove} onReject={onReject} busy={busy} showActions />
+                        </GlassCard>
+                    </Animated.View>
+                </GestureDetector>
+            </View>
+        </Animated.View>
+    );
 }
 
 // ── Main screen ───────────────────────────────────────────────────────────────
@@ -265,7 +371,7 @@ export default function JobsScreen() {
     return (
         <PageContainer>
             <ScrollView
-                contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+                contentContainerStyle={styles.scrollContent}
                 refreshControl={
                     Platform.OS !== 'web'
                         ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.cyan} />
@@ -318,6 +424,10 @@ export default function JobsScreen() {
                     </View>
                 </ScrollView>
 
+                {filter === 'pending' && filtered.length > 0 && (
+                    <Text style={styles.swipeHint}>Swipe a card right to approve, left to reject — or use the buttons.</Text>
+                )}
+
                 {/* List */}
                 {isLoading ? (
                     <View style={{ paddingVertical: 60, alignItems: 'center' }}>
@@ -340,17 +450,24 @@ export default function JobsScreen() {
                         </Text>
                     </View>
                 ) : (
-                    filtered.map((job, i) => (
-                        <Animated.View key={job.id} entering={FadeInDown.delay(Math.min(i, 8) * 30)}>
-                            <JobRow
-                                job={job}
-                                busy={approveMutation.isPending || rejectMutation.isPending}
-                                onPress={() => setDetailJob(job as JobData)}
-                                onApprove={() => approveMutation.mutate(job.id)}
-                                onReject={() => rejectMutation.mutate(job.id)}
-                            />
-                        </Animated.View>
-                    ))
+                    filtered.map((job, i) => {
+                        const busy = approveMutation.isPending || rejectMutation.isPending;
+                        const onPress = () => setDetailJob(job as JobData);
+                        const onApprove = () => approveMutation.mutate(job.id);
+                        const onReject = () => rejectMutation.mutate(job.id);
+
+                        return (
+                            <Animated.View key={job.id} entering={FadeInDown.delay(Math.min(i, 8) * 30)}>
+                                {job.status === 'pending' ? (
+                                    <SwipeableJobRow job={job} onPress={onPress} onApprove={onApprove} onReject={onReject} busy={busy} />
+                                ) : (
+                                    <GlassCard tint="frost" padding="md" hoverable className="mb-3">
+                                        <JobRowContent job={job} onPress={onPress} onApprove={onApprove} onReject={onReject} busy={busy} showActions={false} />
+                                    </GlassCard>
+                                )}
+                            </Animated.View>
+                        );
+                    })
                 )}
             </ScrollView>
 
@@ -368,8 +485,13 @@ export default function JobsScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+    scrollContent: {
+        padding: 20, paddingBottom: 120,
+        maxWidth: CONTENT_MAX_WIDTH, width: '100%', alignSelf: 'center' as any,
+    },
     screenTitle: { fontSize: 24, fontWeight: '800', color: C.text, marginBottom: 2 },
     screenSub: { fontSize: 13, color: C.sub, marginBottom: 16 },
+    swipeHint: { fontSize: 11, color: C.dim, marginBottom: 12, marginTop: -4 },
     searchBar: {
         flexDirection: 'row', alignItems: 'center', gap: 8,
         backgroundColor: C.cardBg, borderWidth: 1, borderColor: C.border,
@@ -397,4 +519,13 @@ const styles = StyleSheet.create({
     statusPillText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
     iconBtn: { width: 30, height: 30, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     linkBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+
+    swipeReveal: {
+        position: 'absolute', top: 0, bottom: 0, width: '50%',
+        flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20,
+        borderRadius: 20,
+    },
+    swipeRevealLeft: { left: 0, justifyContent: 'flex-start', backgroundColor: `${C.cyan}12` },
+    swipeRevealRight: { right: 0, justifyContent: 'flex-end', backgroundColor: `${C.pink}12` },
+    swipeRevealText: { fontSize: 13, fontWeight: '800' },
 });

@@ -1,137 +1,107 @@
 /**
- * app/(tabs)/(settings)/index.tsx
- * OpusHunter — Settings Dashboard
- * ══════════════════════════════════════════════════════════════════════════════
- * PROTOCOL:
- * 1. MODULE-DRIVEN ARCHITECTURE: Settings cards defined in SETTING_MODULES array
- *    for maintainability and scalability. Role-based filtering via useMemo.
- * 2. GESTURE DELEGATION: ScrollView utilizes `keyboardShouldPersistTaps="handled"`
- *    to ensure taps on cards execute instantly without dropping frames.
- * 3. EVENT ISOLATION: Ambient background strictly enforces `pointerEvents="none"`
- *    to prevent gesture hijacking on the Z-axis.
- * 4. ADMIN GATING: "Admin Core" row ONLY rendered when role === 'admin'.
- *    Server-side check in app/(admin)/_layout.tsx provides additional protection.
- * ══════════════════════════════════════════════════════════════════════════════
+ * app/(tabs)/settings/index.tsx
+ * OpusHunter — Settings Hub
+ *
+ * 2026-07-13 — Redesigned as a proper navigation hub: large icon+title+
+ * subtitle+chevron cards instead of a flat grouped list, matching the
+ * pattern used elsewhere for high-density option screens. Every card here
+ * routes to a real, already-built screen, or expands a section with real
+ * data — no placeholder destinations.
+ *
+ * NOT added: a "Billing & Usage" card showing per-provider token counts.
+ * That would require the api_key_usage_logs table and markKeyUsed()
+ * extension outlined in the original project audit — neither exists yet.
+ * Adding a nav card that leads to fabricated numbers would be worse than
+ * not having the feature; it stays off this screen until the real data
+ * exists to back it.
  */
 
-// ─── CORE REACT & NATIVE ─────────────────────────────────────────────────────
-import React, { useState, useCallback, useEffect, useMemo, memo } from 'react';
-import {
-    View, Text, TouchableOpacity, ScrollView, Switch,
-    Platform, StyleSheet, ActivityIndicator, Modal, Dimensions,
-} from 'react-native';
-
-// ─── STATE & QUERY ───────────────────────────────────────────────────────────
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Switch, Platform, StyleSheet, ActivityIndicator, Modal } from 'react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter, Href } from 'expo-router';
-
-// ─── ANIMATIONS ──────────────────────────────────────────────────────────────
-import Animated, { FadeInDown, FadeOutUp, useSharedValue, useAnimatedStyle, withRepeat, withTiming, interpolateColor, Easing } from 'react-native-reanimated';
-
-// ─── ICONOGRAPHY ─────────────────────────────────────────────────────────────
+import { useRouter } from 'expo-router';
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import {
     Zap, Bell, Shield, Trash2, RefreshCw, CheckCircle2, AlertTriangle,
-    Crown, ChevronRight, Lock, User as UserIcon, Info, LucideIcon, FileText,
+    Crown, ChevronRight, Lock, User as UserIcon, Info, FileText, LucideIcon,
 } from 'lucide-react-native';
-
-// ─── UI COMPONENTS & UTILS ───────────────────────────────────────────────────
 import { supabase } from '../../../lib/supabase';
 import { C } from '../../../lib/theme';
 import { GlassCard } from '../../../components/ui/GlassCard';
 
-// ─── TYPES ───────────────────────────────────────────────────────────────────
-type SettingColor = 'cyan' | 'purple' | 'green' | 'pink' | 'amber';
+// ── Hub nav card — the primary building block of this screen ─────────────────
 
-interface SettingsCardItem {
-    id: string;
-    label: string;
-    sub: string;
-    icon: LucideIcon;
-    color: SettingColor;
-    onPress?: () => void;
-    isDanger?: boolean;
+function HubCard({
+    icon: Icon, title, sub, color, onPress, tint = 'frost',
+}: {
+    icon: LucideIcon; title: string; sub: string; color: string;
+    onPress: () => void; tint?: 'frost' | 'pink' | 'amber';
+}) {
+    return (
+        <GlassCard tint={tint} padding="none" hoverable onPress={onPress}>
+            <View style={s.hubRow}>
+                <View style={[s.hubIcon, { backgroundColor: `${color}14`, borderColor: `${color}28` }]}>
+                    <Icon size={19} color={color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={s.hubTitle}>{title}</Text>
+                    <Text style={s.hubSub}>{sub}</Text>
+                </View>
+                <ChevronRight size={17} color={C.dim} />
+            </View>
+        </GlassCard>
+    );
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// MODULE 2: SUB-COMPONENTS
-// ══════════════════════════════════════════════════════════════════════════════
+function SectionLabel({ children }: { children: string }) {
+    return <Text style={s.sectionLabel}>{children}</Text>;
+}
 
-const SectionLabel = memo(({ children }: { children: string }) => (
-    <Text style={s.sectionLabel}>{children}</Text>
-));
-SectionLabel.displayName = 'SectionLabel';
-
-const SettingRow = memo(({
-    icon: Icon, label, sub, right, color = C.cyan, onPress,
-}: {
-    icon: React.ElementType; label: string; sub?: string;
-    right?: React.ReactNode; color?: string; onPress?: () => void;
-}) => {
-    const content = (
-        <View style={s.settingRow}>
-            <View style={[s.settingIcon, { backgroundColor: `${color}10`, borderColor: `${color}20` }]}>
-                <Icon size={15} color={color} />
+function DangerRow({
+    icon: Icon, label, sub, onPress, loading,
+}: { icon: LucideIcon; label: string; sub: string; onPress: () => void; loading?: boolean }) {
+    return (
+        <TouchableOpacity onPress={onPress} style={s.dangerRow} activeOpacity={0.75} disabled={loading}>
+            <View style={[s.hubIcon, { backgroundColor: `${C.pink}14`, borderColor: `${C.pink}28` }]}>
+                <Icon size={16} color={C.pink} />
             </View>
             <View style={{ flex: 1 }}>
-                <Text style={s.settingLabel}>{label}</Text>
-                {!!sub && <Text style={s.settingSub}>{sub}</Text>}
+                <Text style={[s.hubTitle, { color: C.pink, fontSize: 13 }]}>{label}</Text>
+                <Text style={s.hubSub}>{sub}</Text>
             </View>
-            {right ?? (onPress ? <ChevronRight size={15} color={C.sub} /> : null)}
-        </View>
+            {loading ? <ActivityIndicator size="small" color={C.pink} /> : <ChevronRight size={16} color={C.pink} />}
+        </TouchableOpacity>
     );
-    if (onPress) return <TouchableOpacity onPress={onPress} activeOpacity={0.7}>{content}</TouchableOpacity>;
-    return content;
-});
-SettingRow.displayName = 'SettingRow';
+}
 
-const DangerRow = memo(({
-    icon: Icon, label, sub, onPress, loading,
-}: {
-    icon: React.ElementType; label: string; sub: string; onPress: () => void; loading?: boolean;
-}) => (
-    <TouchableOpacity onPress={onPress} style={s.dangerRow} activeOpacity={0.75} disabled={loading}>
-        <View style={[s.settingIcon, { backgroundColor: `${C.pink}10`, borderColor: `${C.pink}20` }]}>
-            <Icon size={15} color={C.pink} />
-        </View>
-        <View style={{ flex: 1 }}>
-            <Text style={[s.settingLabel, { color: C.pink }]}>{label}</Text>
-            <Text style={s.settingSub}>{sub}</Text>
-        </View>
-        {loading ? <ActivityIndicator size="small" color={C.pink} /> : <ChevronRight size={15} color={C.pink} />}
-    </TouchableOpacity>
-));
-DangerRow.displayName = 'DangerRow';
-
-const ConfirmModal = memo(({
-    visible, title, body, confirmLabel, onConfirm, onCancel, loading, destructive = true,
+function ConfirmModal({
+    visible, title, body, confirmLabel, onConfirm, onCancel, loading,
 }: {
     visible: boolean; title: string; body: string; confirmLabel: string;
-    onConfirm: () => void; onCancel: () => void; loading: boolean; destructive?: boolean;
-}) => (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-        <View style={s.modalOverlay}>
-            <Animated.View entering={FadeInDown.springify()} style={s.modalCard}>
-                <View style={[s.modalIconWrap, { backgroundColor: destructive ? `${C.pink}14` : `${C.amber}14` }]}>
-                    <AlertTriangle size={26} color={destructive ? C.pink : C.amber} />
-                </View>
-                <Text style={s.modalTitle}>{title}</Text>
-                <Text style={s.modalBody}>{body}</Text>
-                <View style={s.modalBtns}>
-                    <TouchableOpacity onPress={onCancel} style={s.modalCancelBtn}>
-                        <Text style={s.modalCancelText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        onPress={onConfirm} disabled={loading}
-                        style={[s.modalConfirmBtn, { backgroundColor: destructive ? C.pink : C.amber }]}
-                    >
-                        {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalConfirmText}>{confirmLabel}</Text>}
-                    </TouchableOpacity>
-                </View>
-            </Animated.View>
-        </View>
-    </Modal>
-));
-ConfirmModal.displayName = 'ConfirmModal';
+    onConfirm: () => void; onCancel: () => void; loading: boolean;
+}) {
+    return (
+        <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+            <View style={s.modalOverlay}>
+                <Animated.View entering={FadeInDown.springify()} style={s.modalCard}>
+                    <View style={[s.modalIconWrap, { backgroundColor: `${C.pink}14` }]}>
+                        <AlertTriangle size={26} color={C.pink} />
+                    </View>
+                    <Text style={s.modalTitle}>{title}</Text>
+                    <Text style={s.modalBody}>{body}</Text>
+                    <View style={s.modalBtns}>
+                        <TouchableOpacity onPress={onCancel} style={s.modalCancelBtn}>
+                            <Text style={s.modalCancelText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={onConfirm} disabled={loading} style={[s.modalConfirmBtn, { backgroundColor: C.pink }]}>
+                            {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={s.modalConfirmText}>{confirmLabel}</Text>}
+                        </TouchableOpacity>
+                    </View>
+                </Animated.View>
+            </View>
+        </Modal>
+    );
+}
 
 export default function SettingsScreen() {
     const router = useRouter();
@@ -142,7 +112,6 @@ export default function SettingsScreen() {
     const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
     const [confirm, setConfirm] = useState<null | 'pipeline' | 'history' | 'account'>(null);
 
-    // ── Role — drives the Admin row visibility ──────────────────────────────
     const { data: profile } = useQuery({
         queryKey: ['my_profile'],
         queryFn: async () => {
@@ -159,7 +128,6 @@ export default function SettingsScreen() {
     useEffect(() => {
         if (banner) { const t = setTimeout(() => setBanner(null), 3500); return () => clearTimeout(t); }
     }, [banner]);
-
     const flash = (text: string, ok = true) => setBanner({ ok, text });
 
     const clearPipelineMutation = useMutation({
@@ -219,72 +187,66 @@ export default function SettingsScreen() {
                 </Animated.View>
             )}
 
-            <ScrollView
-                style={{ flex: 1 }}
-                contentContainerStyle={s.scroll}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-            >
-                {/* ── Account ── */}
-                <Animated.View entering={FadeInDown.delay(60).duration(600).springify().damping(20)}>
-                    <SectionLabel>ACCOUNT</SectionLabel>
-                    <GlassCard tint="frost" padding="none" hoverable>
-                        <SettingRow icon={UserIcon} label="Profile" sub={profile?.full_name ?? profile?.email ?? ''} color={C.cyan} onPress={() => router.push('/(tabs)/settings/profile' as any)} />
-                        <View style={s.divider} />
-                        {/* FIX (2026-07-06): missing `(tabs)` prefix — `settings` only
-                            exists nested under the `(tabs)` group, so these two 404'd
-                            while the Profile row above (correctly prefixed) worked. */}
-                        <SettingRow icon={FileText} label="Documents" sub="CV and certifications" color={C.purple} onPress={() => router.push('/(tabs)/settings/documents' as any)} />
-                        <SettingRow icon={Lock} label="Security & Password" sub="Change your password, PIN, biometrics, and API keys" color={C.cyan} onPress={() => router.push('/(tabs)/settings/security' as any)} />
-                    </GlassCard>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Animated.View entering={FadeInDown.delay(20).springify().damping(20)} style={s.hero}>
+                    <View style={s.heroPill}><Text style={s.heroPillText}>SETTINGS</Text></View>
+                    <View style={s.heroIconWrap}>
+                        <UserIcon size={26} color={C.cyan} />
+                    </View>
+                    <Text style={s.heroName}>{profile?.full_name ?? profile?.email ?? 'Your account'}</Text>
                 </Animated.View>
 
-                {/* ── Admin — ONLY visible to admins ── */}
+                <Animated.View entering={FadeInDown.delay(80).springify().damping(20)} style={{ gap: 10 }}>
+                    <SectionLabel>ACCOUNT</SectionLabel>
+                    <HubCard icon={UserIcon} title="Profile" sub="Name, avatar, and contact details" color={C.cyan}
+                        onPress={() => router.push('/(tabs)/settings/profile' as any)} />
+                    <HubCard icon={Lock} title="Security" sub="Password, PIN, biometrics, and API keys" color={C.cyan}
+                        onPress={() => router.push('/(tabs)/settings/security' as any)} />
+                    <HubCard icon={FileText} title="Documents" sub="CV and certifications" color={C.purple}
+                        onPress={() => router.push('/(tabs)/settings/documents' as any)} />
+                </Animated.View>
+
                 {isAdmin && (
-                    <Animated.View entering={FadeInDown.delay(120).duration(600).springify().damping(20)}>
+                    <Animated.View entering={FadeInDown.delay(140).springify().damping(20)} style={{ gap: 10, marginTop: 22 }}>
                         <SectionLabel>ADMINISTRATION</SectionLabel>
-                        <GlassCard tint="pink" padding="none" hoverable>
-                            <SettingRow
-                                icon={Shield} label="Admin Core" sub="Manage users, roles, and system API keys"
-                                color={C.pink} onPress={() => router.push('/admin' as any)}
-                            />
-                        </GlassCard>
+                        <HubCard icon={Shield} title="Admin Core" sub="Users, roles, and the shared API key pool" color={C.pink} tint="pink"
+                            onPress={() => router.push('/admin' as any)} />
                     </Animated.View>
                 )}
 
-                {/* ── Pipeline ── */}
-                <Animated.View entering={FadeInDown.delay(180).duration(600).springify().damping(20)}>
+                <Animated.View entering={FadeInDown.delay(200).springify().damping(20)} style={{ marginTop: 22 }}>
                     <SectionLabel>PIPELINE</SectionLabel>
                     <GlassCard tint="frost" padding="none" hoverable>
-                        <SettingRow
-                            icon={Zap} label="Auto-scrape on open" sub="Run scraper automatically when the app launches"
-                            color={C.cyan}
-                            right={
-                                <Switch
-                                    value={autoScrape} onValueChange={setAutoScrape}
-                                    trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.cyan}50` }}
-                                    thumbColor={autoScrape ? C.cyan : 'rgba(255,255,255,0.3)'}
-                                />
-                            }
-                        />
+                        <View style={s.hubRow}>
+                            <View style={[s.hubIcon, { backgroundColor: `${C.cyan}14`, borderColor: `${C.cyan}28` }]}>
+                                <Zap size={17} color={C.cyan} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={s.hubTitle}>Auto-scrape on open</Text>
+                                <Text style={s.hubSub}>Run the scraper automatically when the app launches</Text>
+                            </View>
+                            <Switch value={autoScrape} onValueChange={setAutoScrape}
+                                trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.cyan}50` }}
+                                thumbColor={autoScrape ? C.cyan : 'rgba(255,255,255,0.3)'} />
+                        </View>
                         <View style={s.divider} />
-                        <SettingRow
-                            icon={Bell} label="Push Notifications" sub="Get notified on interview replies"
-                            color={C.purple}
-                            right={
-                                <Switch
-                                    value={notifs} onValueChange={setNotifs}
-                                    trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.purple}50` }}
-                                    thumbColor={notifs ? C.purple : 'rgba(255,255,255,0.3)'}
-                                />
-                            }
-                        />
+                        <View style={s.hubRow}>
+                            <View style={[s.hubIcon, { backgroundColor: `${C.purple}14`, borderColor: `${C.purple}28` }]}>
+                                <Bell size={17} color={C.purple} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={s.hubTitle}>Push Notifications</Text>
+                                <Text style={s.hubSub}>Get notified on interview replies</Text>
+                            </View>
+                            <Switch value={notifs} onValueChange={setNotifs}
+                                trackColor={{ false: 'rgba(255,255,255,0.1)', true: `${C.purple}50` }}
+                                thumbColor={notifs ? C.purple : 'rgba(255,255,255,0.3)'} />
+                        </View>
                     </GlassCard>
                 </Animated.View>
 
-                {/* ── Premium CTA — hidden for premium/admin ── */}
                 {!isPremium && (
-                    <Animated.View entering={FadeInDown.delay(240).duration(600).springify().damping(20)} style={{ marginTop: 20 }}>
+                    <Animated.View entering={FadeInDown.delay(260).springify().damping(20)} style={{ marginTop: 22 }}>
                         <GlassCard tint="amber" padding="md" glow hoverable style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                             <Crown size={22} color={C.amber} />
                             <View style={{ flex: 1 }}>
@@ -298,92 +260,82 @@ export default function SettingsScreen() {
                     </Animated.View>
                 )}
 
-                {/* ── About ── */}
-                <Animated.View entering={FadeInDown.delay(300).duration(600).springify().damping(20)}>
+                <Animated.View entering={FadeInDown.delay(320).springify().damping(20)} style={{ marginTop: 22 }}>
                     <SectionLabel>ABOUT</SectionLabel>
-                    <GlassCard tint="amber" padding="none" hoverable>
-                        <SettingRow icon={Info} label="OpusHunter" sub="Version 1.0.0 — AI Job Application Engine" color={C.amber} />
-                    </GlassCard>
+                    <HubCard icon={Info} title="OpusHunter" sub="Version 1.0.0 — AI Job Application Engine" color={C.amber} tint="amber" onPress={() => { }} />
 
-                    {/* ── Danger Zone ── */}
-                    <SectionLabel>DANGER ZONE</SectionLabel>
-                    <GlassCard tint="pink" padding="none" hoverable>
-                        <DangerRow icon={RefreshCw} label="Clear Pipeline" sub="Remove all pending jobs from your queue" onPress={() => setConfirm('pipeline')} />
-                        <View style={s.divider} />
-                        <DangerRow icon={Trash2} label="Clear Application History" sub="Delete all submitted applications" onPress={() => setConfirm('history')} />
-                        <View style={s.divider} />
-                        <DangerRow icon={Trash2} label="Delete Account" sub="Permanently remove your account and data" onPress={() => setConfirm('account')} />
-                    </GlassCard>
+                    <View style={{ marginTop: 22 }}>
+                        <SectionLabel>DANGER ZONE</SectionLabel>
+                        <GlassCard tint="pink" padding="none" hoverable>
+                            <DangerRow icon={RefreshCw} label="Clear Pipeline" sub="Remove all pending jobs from your queue" onPress={() => setConfirm('pipeline')} />
+                            <View style={s.divider} />
+                            <DangerRow icon={Trash2} label="Clear Application History" sub="Delete all submitted applications" onPress={() => setConfirm('history')} />
+                            <View style={s.divider} />
+                            <DangerRow icon={Trash2} label="Delete Account" sub="Permanently remove your account and data" onPress={() => setConfirm('account')} />
+                        </GlassCard>
+                    </View>
 
                     <View style={{ height: 60 }} />
                 </Animated.View>
             </ScrollView>
 
             <ConfirmModal
-                visible={confirm === 'pipeline'}
-                title="Clear Pipeline?"
+                visible={confirm === 'pipeline'} title="Clear Pipeline?"
                 body="All pending jobs will be removed. Already-applied jobs are unaffected."
-                confirmLabel="Clear Pipeline"
-                onConfirm={() => clearPipelineMutation.mutate()}
-                onCancel={() => setConfirm(null)}
-                loading={clearPipelineMutation.isPending}
+                confirmLabel="Clear Pipeline" onConfirm={() => clearPipelineMutation.mutate()}
+                onCancel={() => setConfirm(null)} loading={clearPipelineMutation.isPending}
             />
             <ConfirmModal
-                visible={confirm === 'history'}
-                title="Clear History?"
+                visible={confirm === 'history'} title="Clear History?"
                 body="All application history will be permanently deleted."
-                confirmLabel="Clear History"
-                onConfirm={() => clearHistoryMutation.mutate()}
-                onCancel={() => setConfirm(null)}
-                loading={clearHistoryMutation.isPending}
+                confirmLabel="Clear History" onConfirm={() => clearHistoryMutation.mutate()}
+                onCancel={() => setConfirm(null)} loading={clearHistoryMutation.isPending}
             />
             <ConfirmModal
-                visible={confirm === 'account'}
-                title="Delete Account?"
+                visible={confirm === 'account'} title="Delete Account?"
                 body="This is permanent. All your data, applications, and CVs will be erased."
-                confirmLabel="Delete Forever"
-                onConfirm={() => deleteAccountMutation.mutate()}
-                onCancel={() => setConfirm(null)}
-                loading={deleteAccountMutation.isPending}
+                confirmLabel="Delete Forever" onConfirm={() => deleteAccountMutation.mutate()}
+                onCancel={() => setConfirm(null)} loading={deleteAccountMutation.isPending}
             />
         </View>
     );
 }
 
 const s = StyleSheet.create({
-    root: { flex: 1 },
     banner: {
         position: 'absolute', top: 56, left: 16, right: 16, zIndex: 100,
         flexDirection: 'row', alignItems: 'center', gap: 8,
         paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1,
     },
     bannerText: { fontSize: 13, fontWeight: '600', flex: 1 },
-    header: {
-        flexDirection: 'row', alignItems: 'center', gap: 14,
-        paddingTop: Platform.OS === 'ios' ? 56 : Platform.OS === 'web' ? 32 : 16,
-        paddingHorizontal: 20, paddingBottom: 16,
+
+    scroll: {
+        paddingHorizontal: 20, maxWidth: 680, width: '100%', alignSelf: 'center' as any,
+        paddingTop: Platform.OS === 'ios' ? 24 : Platform.OS === 'web' ? 16 : 12,
     },
-    backBtn: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: `${C.cyan}10`, borderWidth: 1, borderColor: `${C.cyan}25` },
-    headerTitle: { fontSize: 22, fontWeight: '800', color: C.text, letterSpacing: -0.5 },
 
-    scroll: { paddingHorizontal: 20, maxWidth: 680, width: '100%', alignSelf: 'center' as any },
-    sectionLabel: { fontSize: 11, fontWeight: '800', color: C.sub, letterSpacing: 1.5, marginTop: 20, marginBottom: 10 },
+    hero: { alignItems: 'center', marginBottom: 28 },
+    heroPill: {
+        paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999,
+        backgroundColor: `${C.cyan}12`, borderWidth: 1, borderColor: `${C.cyan}30`, marginBottom: 16,
+    },
+    heroPillText: { fontSize: 10, fontWeight: '900', color: C.cyan, letterSpacing: 2 },
+    heroIconWrap: {
+        width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center',
+        backgroundColor: `${C.cyan}12`, borderWidth: 1, borderColor: `${C.cyan}30`, marginBottom: 10,
+    },
+    heroName: { fontSize: 14, fontWeight: '700', color: C.sub },
 
-    card: { backgroundColor: 'rgba(8,16,24,0.88)', borderWidth: 1, borderColor: C.border, borderRadius: 18, overflow: 'hidden' }, // kept for legacy fallback
+    sectionLabel: { fontSize: 11, fontWeight: '800', color: C.sub, letterSpacing: 1.5, marginBottom: 10 },
     divider: { height: 1, backgroundColor: C.border },
 
-    settingRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
-    settingIcon: { width: 38, height: 38, borderRadius: 11, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    settingLabel: { fontSize: 14, fontWeight: '700', color: C.text },
-    settingSub: { fontSize: 11, color: C.sub, marginTop: 2 },
+    hubRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
+    hubIcon: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    hubTitle: { fontSize: 14, fontWeight: '700', color: C.text },
+    hubSub: { fontSize: 11, color: C.sub, marginTop: 2, lineHeight: 15 },
 
     dangerRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
 
-    premiumCard: {
-        flexDirection: 'row', alignItems: 'center', gap: 14,
-        backgroundColor: `${C.amber}08`, borderWidth: 1, borderColor: `${C.amber}30`,
-        borderRadius: 18, padding: 16, marginTop: 20,
-    }, // kept for legacy fallback — card now uses GlassCard
     premiumTitle: { fontSize: 14, fontWeight: '800', color: C.text },
     premiumSub: { fontSize: 11, color: C.sub, marginTop: 2 },
     premiumBtn: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10, backgroundColor: C.amber },
