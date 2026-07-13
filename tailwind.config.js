@@ -1,4 +1,3 @@
-/** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ["./app/**/*.{js,jsx,ts,tsx}", "./components/**/*.{js,jsx,ts,tsx}"],
   presets: [require("nativewind/preset")],
@@ -18,6 +17,7 @@ module.exports = {
           core: "#120D1E",
           mid: "#1B1430",
           card: "rgba(20,14,32,0.68)",
+          frost: "rgba(26,22,44,0.74)",
           sidebar: "#0A0812",
           border: "rgba(255,255,255,0.10)",
           "border-cyan": "rgba(34,211,238,0.28)",
