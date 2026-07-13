@@ -26,7 +26,6 @@
  *   GET /v1/geo/countries?namePrefix={q}&limit=5
  *   GET /v1/geo/locations/{lat}{lon}/nearbyPlaces?radius=50&distanceUnit=KM&limit=8&sort=-population
  */
-// deno-lint-ignore-file no-explicit-any
 import { serve } from 'std/http/server.ts';
 import { createAdminClient } from '../_shared/supabaseAdmin.ts';
 import { resolveKeyPool, markKeyUsed } from '../_shared/keyResolver.ts';
@@ -34,6 +33,35 @@ import { verifyUser } from '../_shared/auth.ts';
 import { getCorsHeaders } from '../_shared/cors.ts';
 
 const GEODB_HOST = 'wft-geo-db.p.rapidapi.com';
+const FETCH_TIMEOUT_MS = 10000;
+const CITIES_LIMIT = 8;
+const COUNTRIES_LIMIT = 5;
+const NEARBY_LIMIT = 8;
+const NEARBY_RADIUS_KM = 75;
+const MIN_POPULATION = 1000;
+const COORD_DIGITS = 4;
+
+interface RawGeoDbCity {
+	id: number;
+	city?: string;
+	name?: string;
+	region?: string | null;
+	country: string;
+	countryCode: string;
+	latitude: number | null;
+	longitude: number | null;
+	population?: number | null;
+}
+
+interface RawGeoDbCountry {
+	wikiDataId?: string | number;
+	code: string;
+	name: string;
+}
+
+interface GeoDbResponse<T> {
+	data?: T[];
+}
 
 interface CityResult {
     id: number;

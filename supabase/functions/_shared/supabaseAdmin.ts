@@ -17,7 +17,7 @@
  */
 
 // deno-lint-ignore-file
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'supabase';
 import type { Database } from '../../../types/database.types.ts';
 
 declare const Deno: {

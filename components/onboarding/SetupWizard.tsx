@@ -1,38 +1,25 @@
 /**
  * components/onboarding/SetupWizard.tsx
  * OpusHunter — First-Run Setup Wizard
- * 2026-07-03 — NEW
- * 2026-07-03 (later same day) — Now imports LOCATION_PRESETS /
- * WORK_TYPE_OPTIONS / WORK_TYPE_LABELS / EXPERIENCE_LEVELS /
- * EXPERIENCE_COLORS from components/features/configure/constants.ts
- * instead of keeping a second copy — that duplication was flagged the same
- * day this file was written and is fixed now, one message later, not left
- * to drift.
+ * 2026-07-12 — FIXED: imported from components/features/configure/constants
+ * and .../LocationAutocomplete, both deleted as orphaned duplicates of
+ * ConfigureScreen.tsx's inline versions — broke this file's build, since it
+ * genuinely needed them. Now imports the real shared versions instead:
+ * lib/jobPreferences.ts and components/shared/LocationAutocomplete.tsx.
+ * ConfigureScreen.tsx has been updated to use these same two, so there is
+ * exactly one copy of each from here on, not a third.
  *
- * WHERE THIS FITS: `components/features/configure/ConfigureScreen.tsx`
- * (moved there from app/(tabs)/configure.tsx — see that file's header) is
+ * WHERE THIS FITS: `components/features/configure/ConfigureScreen.tsx` is
  * wired to render this component instead of the empty Rules-tab state when
  * `rules.length === 0`. Someone who just confirmed their email lands on a
  * guided 5-step flow instead of a blank list. This wraps the SAME
  * `automation_rules` insert the existing "New Rule" modal does, and folds
- * in CV/certification upload (previously only reachable from a separate
- * Vault screen) so setup is genuinely one flow, once.
+ * in CV/certification upload so setup is genuinely one flow, once.
  *
  * SCOPE, STATED PLAINLY: this creates ONE automation_rules row and
  * uploads CV + certifications via the existing useCVVault hook — it does
  * not touch job_vault, scraping, or auto-apply. After finishing, the
- * person lands on the existing Configure screen where they can add more
- * rules ("Java Fullstack", "React/Node", etc — multi-rule support) exactly
- * as they could before.
- *
- * 2026-07-06 — FIXED: this wizard never asked for the person's name, so
- * profiles.full_name stayed null for every new account unless someone
- * separately visited Settings → Profile. generate-cover-letter/index.ts
- * falls back to the email prefix when full_name is null — meaning every
- * cover letter for a brand-new user was signed with something like
- * "johndoe123" instead of their actual name. Step 0 now asks for it and
- * handleActivate() saves it to profiles alongside the automation_rules
- * insert.
+ * person lands on Configure where they can add more rules.
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
@@ -49,7 +36,7 @@ import { C } from '../../lib/theme';
 import {
     WORK_TYPE_OPTIONS, WORK_TYPE_LABELS, EXPERIENCE_LEVELS, EXPERIENCE_COLORS,
 } from '../../lib/jobPreferences';
-import { LocationAutocomplete } from '../../components/shared/LocationAutocomplete';
+import { LocationAutocomplete } from '../shared/LocationAutocomplete';
 
 // ── Wizard-only option set — work-mode framing differs slightly from the
 // Engine tab's REMOTE_OPTIONS (this is 4 short chip labels for a first-run
@@ -123,10 +110,13 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     const [keywords, setKeywords] = useState<string[]>([]);
     const [keywordDraft, setKeywordDraft] = useState('');
 
-    // Step 2
-    const [locations, setLocations] = useState<string[]>(['Remote']);
+    // Step 2 — locations are real geocoded places only, never 'Remote' (that's
+    // remoteMode below — the two are unrelated and must never mix).
+    const [locations, setLocations] = useState<string[]>([]);
     const [remoteMode, setRemoteMode] = useState<typeof REMOTE_MODES[number]['key']>('any');
     const [workTypes, setWorkTypes] = useState<string[]>(['FULLTIME']);
+    const [latitude, setLatitude] = useState<number | null>(null);
+    const [longitude, setLongitude] = useState<number | null>(null);
 
     // Step 3
     const [experienceLevels, setExperienceLevels] = useState<string[]>(['Mid', 'Senior']);
@@ -151,27 +141,16 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
     const canAdvance = useMemo(() => {
         switch (step) {
             case 0: return fullName.trim().length > 0 && (role.trim().length > 0 || keywords.length > 0);
-            case 1: return locations.length > 0;
+            case 1: return remoteMode === 'remote' || locations.length > 0;
             case 2: return true;
             case 3: return true; // CV upload is encouraged, not force-gated — a person can add it from Vault later
             case 4: return true;
             default: return true;
         }
-    }, [step, role, keywords, locations]);
+    }, [step, role, keywords, locations, remoteMode]);
 
     const starterTemplates: Record<'formal' | 'direct' | 'enthusiastic', string> = useMemo(() => {
         const roleLabel = role.trim() || keywords[0] || 'this role';
-        // Ensure starterTemplates are always available, even if role/keywords are empty
-        if (!role.trim() && keywords.length === 0) {
-            return {
-                formal: `Dear Hiring Team,\n\nI am writing to express my interest in a software engineering position at [COMPANY]. With a strong background in various technologies, I am confident I can contribute meaningfully to your team.\n\nI would welcome the opportunity to discuss how my experience aligns with your needs.\n\nSincerely,\n[NAME]`,
-                direct: `Hi [COMPANY] team,\n\nI'm looking for a software engineering role. I work with various technologies and I'm looking for my next opportunity to build things that matter.\n\nHappy to walk through my background whenever's useful.\n\n[NAME]`,
-                enthusiastic: `Hello!\n\nI just saw an opening at [COMPANY] and had to reach out — this looks like exactly the kind of role I've been hoping to find. I bring hands-on experience in various technologies and I'd love the chance to bring that energy to your team.\n\nLooking forward to hearing from you!\n\n[NAME]`,
-            };
-        }
-
-        // If role or keywords are present, generate more specific templates
-
         if (!role.trim() && keywords.length === 0) {
             return {
                 formal: `Dear Hiring Team,\n\nI am writing to express my interest in a software engineering position at [COMPANY]. With a strong background in various technologies, I am confident I can contribute meaningfully to your team.\n\nI would welcome the opportunity to discuss how my experience aligns with your needs.\n\nSincerely,\n[NAME]`,
@@ -186,14 +165,10 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
 
         return {
             formal: `Dear Hiring Team,\n\nI am writing to express my keen interest in the ${targetRole} position at [COMPANY]. With a robust background in ${baseRole ? ` and ` : ''}${keywords.slice(0, 2).join(', ')}${keywords.length > 2 ? ', etc.' : ''}, I am confident in my ability to contribute significantly to your team's success.\n\nMy experience aligns well with the requirements for this role, and I am eager to discuss how my skills can benefit your organization. Thank you for your time and consideration.\n\nSincerely,\n[NAME]`,
-            direct: `Hi [COMPANY] team,\n\nI'm reaching out regarding the  role. My background includes ${baseRole ? ` and ` : ''}${keywords.slice(0, 2).join(', ')}${keywords.length > 2 ? ', etc.' : ''}, and I'm looking for a challenging opportunity where I can make an immediate impact.\n\nLet me know if my profile seems like a good fit for what you're building. Happy to connect.\n\n[NAME]`,
-            enthusiastic: `Hello!\n\nI was so excited to see the  opening at [COMPANY]! This role perfectly aligns with my passion for ${baseRole || primaryKeyword || 'innovative technology'} and my expertise in ${keywords.slice(0, 2).join(', ')}${keywords.length > 2 ? ', etc.' : ''}. I thrive in dynamic environments and am eager to bring my energy and skills to your team.\n\nI'm genuinely enthusiastic about the possibility of contributing to [COMPANY]'s mission and would love to chat more!\n\n[NAME]`,
+            direct: `Hi [COMPANY] team,\n\nI'm reaching out regarding the ${targetRole} role. My background includes ${baseRole ? ` and ` : ''}${keywords.slice(0, 2).join(', ')}${keywords.length > 2 ? ', etc.' : ''}, and I'm looking for a challenging opportunity where I can make an immediate impact.\n\nLet me know if my profile seems like a good fit for what you're building. Happy to connect.\n\n[NAME]`,
+            enthusiastic: `Hello!\n\nI was so excited to see the ${targetRole} opening at [COMPANY]! This role perfectly aligns with my passion for ${baseRole || primaryKeyword || 'innovative technology'} and my expertise in ${keywords.slice(0, 2).join(', ')}${keywords.length > 2 ? ', etc.' : ''}. I thrive in dynamic environments and am eager to bring my energy and skills to your team.\n\nI'm genuinely enthusiastic about the possibility of contributing to [COMPANY]'s mission and would love to chat more!\n\n[NAME]`,
         };
     }, [role, keywords]);
-
-
-
-
 
     const handleSelectVoice = (voice: 'formal' | 'direct' | 'enthusiastic') => {
         setCoverLetterVoice(voice);
@@ -210,12 +185,6 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             const finalKeywords = keywords.length > 0 ? keywords : role.trim() ? [role.trim()] : [];
             const finalLocation = locations.join(', ') || 'Remote';
 
-            // 2026-07-06 — FIXED: this wizard never wrote profiles.full_name.
-            // Cover letter generation (generate-cover-letter/index.ts) falls
-            // back to the email prefix ("johndoe123") whenever full_name is
-            // null, and it stayed null for every new account until someone
-            // separately found Settings → Profile and filled it in by hand.
-            // First-run setup is exactly where this belongs.
             const { error: profileError } = await supabase
                 .from('profiles')
                 .update({ full_name: fullName.trim() })
@@ -232,6 +201,8 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 salary_min: salaryMin.trim() ? Number(salaryMin.trim()) : null,
                 base_cover_letter: coverLetterDraft.trim() || starterTemplates.formal,
                 is_active: true,
+                latitude,
+                longitude,
             });
 
             if (insertError) throw new Error(insertError.message);
@@ -241,7 +212,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
         } finally {
             setSaving(false);
         }
-    }, [fullName, keywords, role, locations, workTypes, experienceLevels, remoteMode, salaryMin, coverLetterDraft, starterTemplates, onComplete]);
+    }, [fullName, keywords, role, locations, workTypes, experienceLevels, remoteMode, salaryMin, coverLetterDraft, starterTemplates, latitude, longitude, onComplete]);
 
     return (
         <View className="items-center justify-center flex-1 px-4 py-10">
@@ -353,7 +324,14 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                                         <MapPin size={13} color={C.sub} />
                                         <Text style={{ color: C.sub, fontSize: 12, fontWeight: '700' }}>LOCATIONS</Text>
                                     </View>
-                                    <LocationAutocomplete selected={locations} onChange={setLocations} />
+                                    <LocationAutocomplete
+                                        selected={locations}
+                                        onChange={setLocations}
+                                        onPrimaryCoordsChange={(coords) => {
+                                            setLatitude(coords?.latitude ?? null);
+                                            setLongitude(coords?.longitude ?? null);
+                                        }}
+                                    />
                                 </View>
 
                                 <View>
@@ -377,12 +355,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                                         <Text style={{ color: C.sub, fontSize: 12, fontWeight: '700' }}>EMPLOYMENT TYPE</Text>
                                     </View>
                                     <View className="flex-row flex-wrap gap-2">
-                                        {WORK_TYPE_OPTIONS.map((wt: React.Key | null | undefined) => (
+                                        {WORK_TYPE_OPTIONS.map((wt) => (
                                             <Chip
                                                 key={wt}
-                                                label={WORK_TYPE_LABELS[wt as string]}
-                                                active={workTypes.includes(wt as string)}
-                                                onPress={() => setWorkTypes((prev) => toggleInArray(prev, wt as string))}
+                                                label={WORK_TYPE_LABELS[wt]}
+                                                active={workTypes.includes(wt)}
+                                                onPress={() => setWorkTypes((prev) => toggleInArray(prev, wt))}
                                             />
                                         ))}
                                     </View>
@@ -395,13 +373,13 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                                 <View>
                                     <Text style={{ color: C.sub, fontSize: 12, fontWeight: '700', marginBottom: 8 }}>EXPERIENCE LEVEL</Text>
                                     <View className="flex-row flex-wrap gap-2">
-                                        {EXPERIENCE_LEVELS.map((lvl: React.Key | null | undefined) => (
+                                        {EXPERIENCE_LEVELS.map((lvl) => (
                                             <Chip
                                                 key={lvl}
-                                                label={lvl as string}
-                                                color={EXPERIENCE_COLORS[lvl as string]}
-                                                active={experienceLevels.includes(lvl as string)}
-                                                onPress={() => setExperienceLevels((prev) => toggleInArray(prev, lvl as string))}
+                                                label={lvl}
+                                                color={EXPERIENCE_COLORS[lvl]}
+                                                active={experienceLevels.includes(lvl)}
+                                                onPress={() => setExperienceLevels((prev) => toggleInArray(prev, lvl))}
                                             />
                                         ))}
                                     </View>
@@ -442,7 +420,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                                     }}
                                 >
                                     {uploadState.status === 'uploading' ? (
-                                        <><ActivityIndicator size="small" color={C.cyan} /><Text style={{ color: C.cyan, fontWeight: '800', fontSize: 14 }}>Uploading...</Text></>
+                                        <ActivityIndicator size="small" color={C.cyan} />
                                     ) : (
                                         <Upload size={16} color={C.cyan} />
                                     )}

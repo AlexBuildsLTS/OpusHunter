@@ -22,7 +22,6 @@
  * POST body: { keywords: string[], location: string, work_types: string[],
  *              experience_levels: string[], remote_preference: string }
  */
-// deno-lint-ignore-file no-explicit-any
 import { serve } from 'std/http/server.ts';
 import { createAdminClient } from '../_shared/supabaseAdmin.ts';
 import { resolveKey, markKeyUsed } from '../_shared/keyResolver.ts';

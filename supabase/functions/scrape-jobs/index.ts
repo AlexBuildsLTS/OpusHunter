@@ -3,13 +3,13 @@
  * OpusHunter — Job Scraping Edge Function
  * 2026-07-11 — Coordinates + commute-distance filtering
  *
- * WHAT CHANGED:
- *   JSearch's real response includes job_latitude/job_longitude per listing
- *   (verified against the provider's own docs — they were simply never in
- *   the JSearchJob interface, so they were being silently discarded).
- *   Now: read them, persist them on job_vault, and use them to drop onsite
- *   jobs outside a rule's max_distance_km. Remote jobs and jobs with unknown
- *   coordinates are never filtered out — "can't verify" is not "reject".
+ * PERFORMANCE OPTIMIZATIONS:
+ *   • Memoized regex patterns (tech stack detection)
+ *   • Reused number formatter (salary normalization)
+ *   • Efficient duplicate tracking (Set-based filtering)
+ *   • Graceful degradation for partial data
+ *   • Better retry + key rotation strategy
+ *   • Reduced memory allocations in hot loops
  */
 
 // deno-lint-ignore-file no-explicit-any
@@ -23,6 +23,13 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+
+// ── Memoized patterns & formatters ───────────────────────────────────────────
+const TECH_PATTERN = /\b(React|React Native|TypeScript|JavaScript|Python|Node\.js|Expo|Deno|Swift|Kotlin|Flutter|Go|Rust|AWS|GCP|Azure|Docker|Kubernetes|PostgreSQL|Supabase|Firebase|GraphQL|REST|Next\.js|Vue|Angular|TailwindCSS|Redux|Zustand|Git|CI\/CD|Figma|Jira)\b/gi;
+const SALARY_MULTIPLIER: Record<string, number> = {
+    YEAR: 1, ANNUAL: 1, MONTH: 12, WEEK: 52, DAY: 260, HOUR: 2080,
+};
+const NUMBER_FORMATTER = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
 // ── JSearch v2 response shape (June 2026) ─────────────────────────────────────
 

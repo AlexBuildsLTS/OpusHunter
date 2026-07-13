@@ -25,7 +25,7 @@ export default function IndexScreen() {
   if (!isReady) {
     return (
       <View style={{ flex: 1, backgroundColor: C.core, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={C.cyan} />
+        <ActivityIndicator size="large" color={C.cyan} animating={true} />
       </View>
     );
   }

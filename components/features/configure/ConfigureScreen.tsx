@@ -1,98 +1,52 @@
 /**
  * components/features/configure/ConfigureScreen.tsx
  * OpusHunter — Master Configuration Engine
- * 2026-07-11 — Consolidated single-file version.
  *
- * WHAT THIS IS: everything needed to run Configure — Engine tab, Rules
- * tab, the full create/edit Rule modal (keywords, locations, work types,
- * experience level, remote preference, minimum salary, AI-generated base
- * cover letter), and real worldwide location search — in one file, at
- * your explicit request.
+ * 2026-07-12 — FIXED: "Remote" was hardcoded into DEFAULT_ENGINE.locations,
+ * so it always appeared as a location chip — including as "primary," which
+ * silently blocked commute-distance capture since Remote has no coordinates.
+ * Location (real geocoded places) and work arrangement (remote/hybrid/
+ * on-site) are unrelated concerns and must never share a field. Locations
+ * now starts empty; work mode lives only in its own Work Modality section.
  *
- * 2026-07-11 (later same day) — Commute-distance feature completed:
- *   - AutomationRule/RuleFormState now carry latitude/longitude/
- *     max_distance_km — real columns on automation_rules, previously
- *     added to the schema but never read or written anywhere.
- *   - LocationAutocomplete now captures the coordinates of whichever
- *     location is FIRST in the list (the rule's "primary" origin) at the
- *     moment it's selected from search results, via a new
- *     onPrimaryCoordsChange callback. Free-typed locations (not chosen
- *     from the dropdown) can't be verified, so they intentionally carry
- *     no coordinates rather than a guessed one.
- *   - New MAX COMMUTE DISTANCE chip row in the rule modal, hidden for
- *     remote-only rules since distance is meaningless there. scrape-jobs
- *     already reads these two columns to filter out unreachable onsite
- *     jobs — this was the missing half that actually populates them.
- *   - "Global Geographies" renamed to "Search Locations" — clearer for
- *     production, no functional change.
+ * 2026-07-12 — De-duplicated: LocationAutocomplete and the work-type/
+ * experience constants now live in one shared place each
+ * (components/shared/LocationAutocomplete.tsx, lib/jobPreferences.ts),
+ * imported here and by SetupWizard.tsx — not defined twice.
  *
- * WHAT'S DIFFERENT FROM THE VERSION YOU PASTED ME, AND WHY:
+ * 2026-07-11 — Commute-distance feature: AutomationRule/RuleFormState carry
+ * latitude/longitude/max_distance_km. LocationAutocomplete reports the
+ * first-listed location's coordinates via onPrimaryCoordsChange; a MAX
+ * COMMUTE DISTANCE chip row in the rule modal (hidden for remote-only
+ * rules) sets the cap. scrape-jobs reads both to filter unreachable jobs.
  *
- *   1. The Rule create/edit modal is now REAL. Your version called
- *      setModalVisible(true)/setEditingRule(rule) from "Add New Rule" and
- *      the edit pencil, but never rendered a <Modal> that read either
- *      piece of state — tapping either button did nothing. This version
- *      has the full modal: keywords, locations, work types, experience
- *      level, remote preference (work arrangement), minimum salary, and
- *      a base cover letter field with a working "Generate with AI"
- *      button that calls the real generate-rule-template edge function.
- *
- *   2. Location search now goes through YOUR existing search-cities edge
- *      function (GeoDB Cities, worldwide, with the same BYOK/pool/env key
- *      cascade every other AI/RapidAPI call in this app already uses),
- *      not a direct client-side call to nominatim.openstreetmap.org.
- *      Nominatim's own usage policy explicitly prohibits unattended,
- *      high-volume autocomplete against their public endpoint — every
- *      keystroke here would eventually get you rate-limited or blocked.
- *      Your edge function already exists, already works, and doesn't
- *      have that ceiling. Reusing it is the correct call, not a downgrade.
- *
- *   3. Saving a rule now actually writes experience_levels,
- *      remote_preference, and salary_min — real columns on
- *      automation_rules — instead of silently discarding them. Your
- *      version's RuleFormState never had these three fields to begin with.
- *
- *   4. Centering matches Dashboard exactly: maxWidth 1100, alignSelf
- *      center — same constant, not a coincidence. Your version had no
- *      width cap at all, which is why it rendered edge-to-edge while
- *      every other screen in the app is capped and centered.
- *
- *   5. The RUN button actually reflects whether it CAN run —
- *      disabled + dimmed when there are zero active rules, so it's never
- *      a dead click with no explanation.
- *
- * Everything else — section names (Contract Structures, Seniority
- * Targets, Work Modality, Compensation Floor, Intelligence Sources), the
- * Engine Ready hero card, the INITIALIZE button, the pulse icon treatment
- * — is kept from what you pasted, since that part was genuinely good and
- * not the problem.
- *
- * NOTE ON DEAD FILES: EngineTab.tsx, RuleFormModal.tsx, RulesTab.tsx,
- * LocationAutocomplete.tsx, ExperienceLevelPicker.tsx,
- * RemotePreferencePicker.tsx, SalaryMinPicker.tsx, constants.ts, types.ts,
- * and styles.ts in this same folder are NOT imported by this file or by
- * anything else — this single file replaced all of them. They should be
- * deleted; editing them has zero effect on the running app.
+ * WHAT THIS IS: Engine tab, Rules tab, the full create/edit Rule modal, and
+ * real worldwide location search — in one file. app/(tabs)/configure.tsx
+ * is a one-line route pointer to this; Expo Router requires a file at that
+ * exact path, this is where the actual screen lives.
  */
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, ScrollView, Platform,
-    Switch, ActivityIndicator, Modal, StyleSheet, KeyboardAvoidingView,
+    Switch, ActivityIndicator, Modal, StyleSheet, KeyboardAvoidingView, Dimensions,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeOutUp, Layout } from 'react-native-reanimated';
 import {
     Zap, Tag, CheckCircle2, AlertCircle, Plus, MapPin, Briefcase, Globe,
-    DollarSign, X, Check, Navigation, Search, Trash2, Edit3, Sparkles,
+    DollarSign, X, Check, Navigation, Sparkles, Edit3, Trash2, Copy, AlertTriangle,
 } from 'lucide-react-native';
 import { supabase } from '../../../lib/supabase';
 import { useEdgeScraper } from '../../../hooks/useEdgeScraper';
-import { useCitySearch, type CityResult } from '../../../hooks/useCitySearch';
 import { C } from '../../../lib/theme';
+import { WORK_TYPE_OPTIONS, WORK_TYPE_LABELS, EXPERIENCE_LEVELS, EXPERIENCE_COLORS } from '../../../lib/jobPreferences';
 import { GlassCard } from '../../ui/GlassCard';
+import { AnimatedPressable } from '../../ui/AnimatedPressable';
+import { KeywordTagInput } from '../../ui/KeywordTagInput';
 import { PageContainer } from '../../layout/PageContainer';
 import { SetupWizard } from '../../onboarding/SetupWizard';
+import { LocationAutocomplete } from '../../shared/LocationAutocomplete';
 
 // ════════════════════════════════════════════════════════════════════════════
 // 1. TYPES & CONSTANTS
@@ -116,7 +70,7 @@ export interface AutomationRule {
 }
 
 export interface RuleFormState {
-    keywords: string;
+    keywords: string[];
     location: string;
     work_types: string[];
     experience_levels: string[];
@@ -142,25 +96,17 @@ export interface EngineConfig {
 }
 
 const DEFAULT_FORM: RuleFormState = {
-    keywords: '', location: '', work_types: ['FULLTIME'], experience_levels: [],
+    keywords: [], location: '', work_types: ['FULLTIME'], experience_levels: [],
     remote_preference: 'any', salary_min: null, base_cover_letter: '', is_active: true,
     latitude: null, longitude: null, max_distance_km: null,
 };
 
+// FIXED: locations no longer defaults to ['Remote'] — Remote is a work
+// arrangement (see remotePreference below), never a location.
 const DEFAULT_ENGINE: EngineConfig = {
-    locations: ['Remote'], workTypes: ['FULLTIME'], experienceLevels: ['Mid', 'Senior'],
+    locations: [], workTypes: ['FULLTIME'], experienceLevels: ['Mid', 'Senior'],
     remotePreference: 'any', jobBoards: ['jsearch', 'linkedin'], salaryMin: 'Any',
     activeRulesOnly: true, autoApply: false, skipApplied: true,
-};
-
-const WORK_TYPE_OPTIONS = ['FULLTIME', 'PARTTIME', 'CONTRACTOR', 'INTERNSHIP'];
-const WORK_TYPE_LABELS: Record<string, string> = {
-    FULLTIME: 'Full-time', PARTTIME: 'Part-time', CONTRACTOR: 'Contract', INTERNSHIP: 'Internship',
-};
-
-const EXPERIENCE_LEVELS = ['Entry', 'Mid', 'Senior', 'Lead', 'Director'];
-const EXPERIENCE_COLORS: Record<string, string> = {
-    Entry: C.green, Mid: C.cyan, Senior: C.purple, Lead: C.amber, Director: C.pink,
 };
 
 const REMOTE_OPTIONS = [
@@ -174,8 +120,7 @@ const SALARY_STEPS: { label: string; value: number | null }[] = [
     { label: '$150k+', value: 150000 }, { label: '$200k+', value: 200000 },
 ];
 
-// Commute cap for onsite/hybrid rules. "Any" (null) = no distance filtering,
-// matching today's behavior — scrape-jobs never drops a job when this is null.
+// Commute cap for onsite/hybrid rules. "Any" (null) = no distance filtering.
 const DISTANCE_STEPS: { label: string; value: number | null }[] = [
     { label: 'Any', value: null }, { label: '10 km', value: 10 }, { label: '25 km', value: 25 },
     { label: '50 km', value: 50 }, { label: '100 km', value: 100 }, { label: '200 km', value: 200 },
@@ -188,10 +133,6 @@ const JOB_BOARDS = [
     { key: 'jsearch', label: 'JSearch Edge', color: C.purple },
 ];
 
-function parseKeywords(raw: string): string[] {
-    return raw.split(',').map((k) => k.trim()).filter(Boolean).slice(0, 12);
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // 2. SHARED UI PRIMITIVES
 // ════════════════════════════════════════════════════════════════════════════
@@ -199,9 +140,9 @@ function parseKeywords(raw: string): string[] {
 const ToggleChip = ({ label, active, color = C.cyan, onPress }: {
     label: string; active: boolean; color?: string; onPress: () => void;
 }) => (
-    <TouchableOpacity
+    <AnimatedPressable
         onPress={onPress}
-        activeOpacity={0.7}
+        scaleDownTo={0.94}
         style={[
             st.chip,
             active
@@ -211,7 +152,7 @@ const ToggleChip = ({ label, active, color = C.cyan, onPress }: {
     >
         {active && <Check size={12} color={color} />}
         <Text style={[st.chipText, { color: active ? color : C.sub }]}>{label}</Text>
-    </TouchableOpacity>
+    </AnimatedPressable>
 );
 
 const SectionHeader = ({ icon: Icon, title, sub }: { icon: any; title: string; sub?: string }) => (
@@ -235,180 +176,7 @@ const SectionCard = ({ children, delay }: { children: React.ReactNode; delay: nu
 );
 
 // ════════════════════════════════════════════════════════════════════════════
-// 3. LOCATION AUTOCOMPLETE — real search-cities edge function (GeoDB, BYOK)
-// ════════════════════════════════════════════════════════════════════════════
-
-type Coords = { latitude: number | null; longitude: number | null };
-
-function LocationAutocomplete({
-    selected, onChange, onPrimaryCoordsChange,
-}: {
-    selected: string[];
-    onChange: (locs: string[]) => void;
-    /** Fires with the coordinates of whichever location is now first in the
-     *  list, whenever that changes. null when the new primary location's
-     *  coordinates aren't known (typed freehand, or removed with nothing
-     *  confirmed to replace it) — callers should clear any stored lat/lng
-     *  in that case rather than leave a stale value describing a different
-     *  place. Optional: EngineTab's global defaults don't persist coordinates. */
-    onPrimaryCoordsChange?: (coords: Coords | null) => void;
-}) {
-    const [query, setQuery] = useState('');
-    const [showDropdown, setShowDropdown] = useState(false);
-    const { results, loading, error, search, requestNearby, permissionDenied } = useCitySearch();
-    // Label → coordinates, populated only as the person actually selects
-    // search results this session. Never assume; only record what's confirmed.
-    const coordsByLabel = useRef<Map<string, Coords>>(new Map());
-
-    const handleTextChange = (text: string) => {
-        setQuery(text);
-        setShowDropdown(true);
-        search(text);
-    };
-
-    const labelFor = (place: CityResult) =>
-        place.type === 'country'
-            ? place.country
-            : [place.city, place.region, place.country].filter(Boolean).join(', ');
-
-    const addLocation = (label: string, coords: Coords | null = null) => {
-        const trimmed = label.trim();
-        if (!trimmed || selected.includes(trimmed)) {
-            setQuery('');
-            setShowDropdown(false);
-            return;
-        }
-        if (coords) coordsByLabel.current.set(trimmed, coords);
-        const wasEmpty = selected.length === 0;
-        onChange([...selected, trimmed]);
-        if (wasEmpty) onPrimaryCoordsChange?.(coords);
-        setQuery('');
-        setShowDropdown(false);
-    };
-
-    const removeLocation = (loc: string) => {
-        const wasPrimary = selected[0] === loc;
-        const next = selected.filter((l) => l !== loc);
-        onChange(next);
-        if (wasPrimary) {
-            const newPrimary = next[0];
-            onPrimaryCoordsChange?.(newPrimary ? coordsByLabel.current.get(newPrimary) ?? null : null);
-        }
-    };
-
-    const handleUseMyLocation = async () => {
-        const nearby = await requestNearby();
-        if (nearby.length > 0) {
-            const place = nearby[0];
-            addLocation(labelFor(place), { latitude: place.latitude, longitude: place.longitude });
-        }
-    };
-
-    return (
-        <View style={{ zIndex: 100 }}>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-                <View style={{ flex: 1, position: 'relative', zIndex: 100 }}>
-                    <View style={st.inputRow}>
-                        <Search size={16} color={C.dim} />
-                        <TextInput
-                            style={st.inputText}
-                            value={query}
-                            onChangeText={handleTextChange}
-                            onSubmitEditing={() => query.trim() && addLocation(query)}
-                            onFocus={() => { if (query.length >= 2) setShowDropdown(true); }}
-                            onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-                            placeholder="City or country — Sweden, Stockholm, Austin, Lagos"
-                            placeholderTextColor={C.dim}
-                            returnKeyType="done"
-                            {...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {})}
-                        />
-                        {loading ? (
-                            <ActivityIndicator size="small" color={C.cyan} />
-                        ) : query.length > 0 ? (
-                            <TouchableOpacity onPress={() => handleTextChange('')}>
-                                <X size={16} color={C.sub} />
-                            </TouchableOpacity>
-                        ) : null}
-                    </View>
-
-                    {showDropdown && results.length > 0 && (
-                        <View style={st.dropdown}>
-                            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 220 }}>
-                                {results.map((item) => (
-                                    <TouchableOpacity
-                                        key={item.id}
-                                        style={st.dropdownItem}
-                                        onPress={() => addLocation(labelFor(item), { latitude: item.latitude, longitude: item.longitude })}
-                                    >
-                                        <MapPin size={14} color={item.type === 'country' ? C.cyan : C.purple} />
-                                        <Text style={{ color: C.text, fontSize: 13, flex: 1, marginLeft: 10 }} numberOfLines={1}>
-                                            {labelFor(item)}
-                                        </Text>
-                                        {item.population != null && (
-                                            <Text style={{ color: C.dim, fontSize: 10 }}>
-                                                {(item.population / 1_000_000).toFixed(1)}M
-                                            </Text>
-                                        )}
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                        </View>
-                    )}
-
-                    {showDropdown && !loading && query.length >= 2 && results.length === 0 && !error && (
-                        <View style={st.dropdown}>
-                            <Text style={{ color: C.dim, fontSize: 12, padding: 14 }}>No matches yet — keep typing.</Text>
-                        </View>
-                    )}
-
-                    {showDropdown && error && (
-                        <View style={st.dropdown}>
-                            <Text style={{ color: C.pink, fontSize: 12, padding: 14 }}>{error}</Text>
-                        </View>
-                    )}
-                </View>
-
-                <TouchableOpacity
-                    onPress={() => query.trim() && addLocation(query)}
-                    disabled={!query.trim()}
-                    style={[st.addBtn, { backgroundColor: query.trim() ? C.cyan : 'rgba(255,255,255,0.05)' }]}
-                >
-                    <Plus size={20} color={query.trim() ? '#000' : C.sub} />
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={handleUseMyLocation} disabled={loading} style={st.gpsBtn} activeOpacity={0.8}>
-                    <Navigation size={16} color={C.cyan} />
-                </TouchableOpacity>
-            </View>
-
-            {permissionDenied && (
-                <Text style={{ color: C.dim, fontSize: 11, marginTop: 6 }}>
-                    Location permission declined — search by typing instead.
-                </Text>
-            )}
-
-            {selected.length > 0 && (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-                    {selected.map((loc, idx) => (
-                        <TouchableOpacity
-                            key={loc}
-                            onPress={() => removeLocation(loc)}
-                            style={[st.chip, { borderColor: `${C.cyan}40`, backgroundColor: `${C.cyan}10` }]}
-                        >
-                            <Text style={{ color: C.cyan, fontSize: 12, fontWeight: '700' }}>
-                                {loc}{idx === 0 ? '  ·  primary' : ''}
-                            </Text>
-                            <X size={12} color={C.cyan} style={{ marginLeft: 6 }} />
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            )}
-        </View>
-    );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// 4. THE ENGINE TAB
+// 3. THE ENGINE TAB
 // ════════════════════════════════════════════════════════════════════════════
 
 function EngineTab({ config, setConfig, onScrape, isScraping, activeRulesCount }: {
@@ -454,7 +222,7 @@ function EngineTab({ config, setConfig, onScrape, isScraping, activeRulesCount }
             </Animated.View>
 
             <SectionCard delay={100}>
-                <SectionHeader icon={MapPin} title="Search Locations" sub="Default cities, regions, or countries — used when creating a new rule" />
+                <SectionHeader icon={MapPin} title="Search Locations" sub="Real cities, regions, or countries only — work mode is set separately below" />
                 <LocationAutocomplete
                     selected={config.locations}
                     onChange={(locs) => setConfig({ ...config, locations: locs })}
@@ -480,7 +248,7 @@ function EngineTab({ config, setConfig, onScrape, isScraping, activeRulesCount }
             </SectionCard>
 
             <SectionCard delay={220}>
-                <SectionHeader icon={Globe} title="Work Modality" sub="Filter pipeline by physical presence requirements" />
+                <SectionHeader icon={Globe} title="Work Modality" sub="Remote, hybrid, or on-site — the ONLY place work arrangement is set" />
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                     {REMOTE_OPTIONS.map(({ key, label }) => {
                         const active = config.remotePreference === key;
@@ -546,7 +314,7 @@ function EngineTab({ config, setConfig, onScrape, isScraping, activeRulesCount }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 5. RULE CARD + RULES TAB
+// 4. RULE CARD + RULES TAB
 // ════════════════════════════════════════════════════════════════════════════
 
 function RuleCard({ rule, onEdit, onDelete, onToggle }: {
@@ -645,6 +413,10 @@ function RulesTab({ rules, isLoading, onAdd, onEdit, onDelete, onToggle }: {
 
     return (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={st.tabScroll} showsVerticalScrollIndicator={false}>
+            <Text style={{ color: C.dim, fontSize: 11, marginBottom: 14, lineHeight: 16 }}>
+                Every rule with its toggle ON is used the next time you tap INITIALIZE — not just one at a time.
+                Toggle any rule off to pause it without deleting it.
+            </Text>
             {rules.map((rule, idx) => (
                 <Animated.View key={rule.id} entering={FadeInDown.delay(idx * 50).springify()} style={{ marginBottom: 16 }}>
                     <RuleCard rule={rule} onEdit={onEdit} onDelete={onDelete} onToggle={onToggle} />
@@ -659,7 +431,7 @@ function RulesTab({ rules, isLoading, onAdd, onEdit, onDelete, onToggle }: {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 6. RULE FORM MODAL — the piece the pasted file was missing entirely
+// 5. RULE FORM MODAL
 // ════════════════════════════════════════════════════════════════════════════
 
 function RuleFormModal({ visible, initial, onClose, onSave, saving }: {
@@ -696,7 +468,7 @@ function RuleFormModal({ visible, initial, onClose, onSave, saving }: {
         try {
             const { data, error } = await supabase.functions.invoke('generate-rule-template', {
                 body: {
-                    keywords: parseKeywords(form.keywords),
+                    keywords: form.keywords,
                     location: form.location,
                     work_types: form.work_types,
                     experience_levels: form.experience_levels,
@@ -713,7 +485,9 @@ function RuleFormModal({ visible, initial, onClose, onSave, saving }: {
         }
     }, [form.keywords, form.location, form.work_types, form.experience_levels, form.remote_preference]);
 
-    const canSave = form.keywords.trim().length > 0
+    // FIXED: location is only required for non-remote rules — Remote Only
+    // rules have nowhere geographic they need to match, by definition.
+    const canSave = form.keywords.length > 0
         && (form.remote_preference === 'remote' || form.location.trim().length > 0);
 
     const showDistancePicker = form.remote_preference !== 'remote';
@@ -724,7 +498,7 @@ function RuleFormModal({ visible, initial, onClose, onSave, saving }: {
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%', maxWidth: 560, alignSelf: 'center' }}>
                     <View style={st.modalCard}>
                         <View style={st.modalHeader}>
-                            <Text style={st.modalTitle}>{initial.keywords ? 'Edit Rule' : 'New Search Rule'}</Text>
+                            <Text style={st.modalTitle}>{initial.keywords.length > 0 ? 'Edit Rule' : 'New Search Rule'}</Text>
                             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                                 <X size={20} color={C.sub} />
                             </TouchableOpacity>
@@ -732,55 +506,11 @@ function RuleFormModal({ visible, initial, onClose, onSave, saving }: {
 
                         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 18 }} keyboardShouldPersistTaps="handled">
                             <View>
-                                <Text style={st.fieldLabel}>KEYWORDS <Text style={st.fieldLabelSub}>(comma-separated)</Text></Text>
-                                <TextInput
-                                    style={st.textInput}
-                                    placeholder="React Native, TypeScript, Expo..."
-                                    placeholderTextColor={C.dim}
+                                <Text style={st.fieldLabel}>KEYWORDS <Text style={st.fieldLabelSub}>(role titles and skills)</Text></Text>
+                                <KeywordTagInput
                                     value={form.keywords}
-                                    onChangeText={(v) => setForm((f) => ({ ...f, keywords: v }))}
-                                    autoCapitalize="none"
-                                    autoCorrect={false}
-                                    {...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {})}
+                                    onChange={(tags) => setForm((f) => ({ ...f, keywords: tags }))}
                                 />
-                            </View>
-
-                            <View>
-                                <Text style={st.fieldLabel}>LOCATIONS</Text>
-                                <LocationAutocomplete
-                                    selected={form.location ? form.location.split(',').map((s) => s.trim()).filter(Boolean) : []}
-                                    onChange={(locations) => setForm((f) => ({ ...f, location: locations.join(', ') }))}
-                                    onPrimaryCoordsChange={(coords) => setForm((f) => ({
-                                        ...f,
-                                        latitude: coords?.latitude ?? null,
-                                        longitude: coords?.longitude ?? null,
-                                    }))}
-                                />
-                                <Text style={st.fieldHint}>
-                                    Add as many cities or whole countries as you want. Work mode (remote/hybrid/on-site)
-                                    is set separately below — it doesn't need to be typed in here. The first location is
-                                    used as the origin for the commute-distance filter below.
-                                </Text>
-                            </View>
-
-                            <View>
-                                <Text style={st.fieldLabel}>WORK TYPES</Text>
-                                <View style={[st.chipGrid, { marginTop: 6 }]}>
-                                    {WORK_TYPE_OPTIONS.map((wt) => (
-                                        <ToggleChip key={wt} label={WORK_TYPE_LABELS[wt]} active={form.work_types.includes(wt)} onPress={() => toggleWorkType(wt)} />
-                                    ))}
-                                </View>
-                            </View>
-
-                            <View>
-                                <Text style={st.fieldLabel}>
-                                    EXPERIENCE LEVEL <Text style={st.fieldLabelSub}>(optional — leave empty for any)</Text>
-                                </Text>
-                                <View style={[st.chipGrid, { marginTop: 6 }]}>
-                                    {EXPERIENCE_LEVELS.map((lvl) => (
-                                        <ToggleChip key={lvl} label={lvl} active={form.experience_levels.includes(lvl)} color={EXPERIENCE_COLORS[lvl]} onPress={() => toggleExperience(lvl)} />
-                                    ))}
-                                </View>
                             </View>
 
                             <View>
@@ -805,10 +535,49 @@ function RuleFormModal({ visible, initial, onClose, onSave, saving }: {
                                 </View>
                             </View>
 
+                            {form.remote_preference !== 'remote' && (
+                                <View>
+                                    <Text style={st.fieldLabel}>LOCATIONS</Text>
+                                    <LocationAutocomplete
+                                        selected={form.location ? form.location.split(',').map((s) => s.trim()).filter(Boolean) : []}
+                                        onChange={(locations) => setForm((f) => ({ ...f, location: locations.join(', ') }))}
+                                        onPrimaryCoordsChange={(coords) => setForm((f) => ({
+                                            ...f,
+                                            latitude: coords?.latitude ?? null,
+                                            longitude: coords?.longitude ?? null,
+                                        }))}
+                                    />
+                                    <Text style={st.fieldHint}>
+                                        Real cities or whole countries only — required since this rule isn't Remote Only.
+                                        The first location is the origin for the commute-distance filter below.
+                                    </Text>
+                                </View>
+                            )}
+
+                            <View>
+                                <Text style={st.fieldLabel}>WORK TYPES</Text>
+                                <View style={[st.chipGrid, { marginTop: 6 }]}>
+                                    {WORK_TYPE_OPTIONS.map((wt) => (
+                                        <ToggleChip key={wt} label={WORK_TYPE_LABELS[wt]} active={form.work_types.includes(wt)} onPress={() => toggleWorkType(wt)} />
+                                    ))}
+                                </View>
+                            </View>
+
+                            <View>
+                                <Text style={st.fieldLabel}>
+                                    EXPERIENCE LEVEL <Text style={st.fieldLabelSub}>(optional — leave empty for any)</Text>
+                                </Text>
+                                <View style={[st.chipGrid, { marginTop: 6 }]}>
+                                    {EXPERIENCE_LEVELS.map((lvl) => (
+                                        <ToggleChip key={lvl} label={lvl} active={form.experience_levels.includes(lvl)} color={EXPERIENCE_COLORS[lvl]} onPress={() => toggleExperience(lvl)} />
+                                    ))}
+                                </View>
+                            </View>
+
                             {showDistancePicker && (
                                 <View>
                                     <Text style={st.fieldLabel}>
-                                        MAX COMMUTE DISTANCE <Text style={st.fieldLabelSub}>(optional — for on-site/hybrid jobs)</Text>
+                                        MAX COMMUTE DISTANCE <Text style={st.fieldLabelSub}>(optional)</Text>
                                     </Text>
                                     <View style={[st.chipGrid, { marginTop: 6 }]}>
                                         {DISTANCE_STEPS.map(({ label, value }) => (
@@ -836,8 +605,8 @@ function RuleFormModal({ visible, initial, onClose, onSave, saving }: {
                                     </Text>
                                     <TouchableOpacity
                                         onPress={handleGenerateTemplate}
-                                        disabled={generating || !form.keywords.trim()}
-                                        style={[st.generateBtn, !form.keywords.trim() && { opacity: 0.4 }]}
+                                        disabled={generating || form.keywords.length === 0}
+                                        style={[st.generateBtn, form.keywords.length === 0 && { opacity: 0.4 }]}
                                     >
                                         {generating
                                             ? <ActivityIndicator size="small" color={C.cyan} />
@@ -866,7 +635,7 @@ function RuleFormModal({ visible, initial, onClose, onSave, saving }: {
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4 }}>
                                 <View>
                                     <Text style={st.fieldLabel}>ACTIVE</Text>
-                                    <Text style={{ fontSize: 11, color: C.sub }}>Scraper uses all active rules</Text>
+                                    <Text style={{ fontSize: 11, color: C.sub }}>Scraper uses every rule with this ON, all at once</Text>
                                 </View>
                                 <Switch
                                     value={form.is_active}
@@ -895,7 +664,7 @@ function RuleFormModal({ visible, initial, onClose, onSave, saving }: {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 7. MAIN ORCHESTRATOR SCREEN
+// 6. MAIN ORCHESTRATOR SCREEN
 // ════════════════════════════════════════════════════════════════════════════
 
 export function ConfigureScreen() {
@@ -937,7 +706,7 @@ export function ConfigureScreen() {
             if (!user) throw new Error('Not authenticated.');
             const payload = {
                 user_id: user.id,
-                keywords: parseKeywords(form.keywords),
+                keywords: form.keywords,
                 location: form.location.trim(),
                 work_types: form.work_types,
                 experience_levels: form.experience_levels,
@@ -991,7 +760,7 @@ export function ConfigureScreen() {
     const openEdit = useCallback((rule: AutomationRule) => { setEditingRule(rule); setModalVisible(true); }, []);
 
     const formInitial: RuleFormState = useMemo(() => editingRule ? {
-        keywords: editingRule.keywords.join(', '),
+        keywords: editingRule.keywords,
         location: editingRule.location,
         work_types: editingRule.work_types,
         experience_levels: editingRule.experience_levels ?? [],
@@ -1112,17 +881,15 @@ export function ConfigureScreen() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 8. STYLESHEET
+// 7. STYLESHEET
 // ════════════════════════════════════════════════════════════════════════════
 
 const st = StyleSheet.create({
     screenWrapper: { flex: 1, paddingHorizontal: 24, paddingTop: 20 },
-
     banner: {
         flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14,
         borderWidth: 1, marginBottom: 16, maxWidth: 1100, width: '100%', alignSelf: 'center',
     },
-
     tabBar: {
         flexDirection: 'row', padding: 4, gap: 4, marginBottom: 20,
         maxWidth: 1100, width: '100%', alignSelf: 'center',
@@ -1132,19 +899,14 @@ const st = StyleSheet.create({
         flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
         paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: 'transparent',
     },
-
-    // Centering — identical constant to dashboard.tsx's scrollDesktop
     tabScroll: { paddingTop: 8, paddingBottom: 120, maxWidth: 1100, width: '100%', alignSelf: 'center' as any },
-
     chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, gap: 6 },
     chipText: { fontSize: 12, fontWeight: '700' },
-
     sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
     sectionIconBox: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     sectionTitle: { fontSize: 16, fontWeight: '800', color: C.text, letterSpacing: 0.5 },
     sectionSub: { fontSize: 11, color: C.sub, marginTop: 2, lineHeight: 16 },
-
     enginePulseIcon: {
         width: 48, height: 48, borderRadius: 16, backgroundColor: `${C.cyan}15`,
         borderWidth: 1, borderColor: `${C.cyan}40`, alignItems: 'center', justifyContent: 'center', marginRight: 16,
@@ -1156,34 +918,16 @@ const st = StyleSheet.create({
         shadowColor: C.cyan, shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8,
     },
     runBtnText: { fontSize: 14, fontWeight: '900', color: '#000', letterSpacing: 2 },
-
-    inputRow: {
-        flex: 1, flexDirection: 'row', alignItems: 'center', height: 50,
-        backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: C.border,
-        borderRadius: 14, paddingHorizontal: 14, gap: 10,
-    },
-    inputText: { flex: 1, color: C.text, fontSize: 15, height: '100%' },
-    dropdown: {
-        position: 'absolute', top: 58, left: 0, right: 0, backgroundColor: C.core,
-        borderWidth: 1, borderColor: C.borderCyan, borderRadius: 14, overflow: 'hidden', zIndex: 100,
-        ...(Platform.OS === 'web' ? { boxShadow: '0 12px 32px rgba(0,0,0,0.5)' } as any : {}),
-    },
-    dropdownItem: { flexDirection: 'row', alignItems: 'center', padding: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
-    addBtn: { width: 50, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    gpsBtn: { height: 50, paddingHorizontal: 16, borderRadius: 14, backgroundColor: `${C.cyan}10`, borderWidth: 1, borderColor: `${C.cyan}30`, alignItems: 'center', justifyContent: 'center' },
-
     remoteBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 14, borderWidth: 1 },
     remoteDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.cyan, marginRight: 10 },
     boardCard: { flexBasis: '48%', flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 14, borderWidth: 1 },
     boardCheck: { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-
     ruleCard: { padding: 18, borderRadius: 20, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
     kwChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: `${C.cyan}10`, borderWidth: 1, borderColor: `${C.cyan}25` },
     kwChipText: { fontSize: 11, fontWeight: '700', color: C.cyan },
     ruleMetaBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: C.border },
     ruleMetaText: { fontSize: 11, fontWeight: '600', color: C.sub },
     addRuleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 16, borderWidth: 1, borderStyle: 'dashed', borderColor: `${C.cyan}50`, backgroundColor: `${C.cyan}05`, marginTop: 10 },
-
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 16 },
     modalCard: { width: '100%', maxHeight: '85%', backgroundColor: 'rgba(8,16,24,0.97)', borderWidth: 1, borderColor: C.border, borderRadius: 24, overflow: 'hidden' },
     modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderBottomWidth: 1, borderBottomColor: C.border },
@@ -1202,7 +946,6 @@ const st = StyleSheet.create({
     },
     saveBtn: { paddingVertical: 16, borderRadius: 14, backgroundColor: C.cyan, alignItems: 'center' },
     saveBtnText: { fontSize: 14, fontWeight: '800', color: '#000' },
-
     confirmCard: { width: '85%', maxWidth: 400, backgroundColor: 'rgba(8,16,24,0.97)', borderWidth: 1, borderColor: `${C.pink}40`, borderRadius: 20, padding: 24 },
     confirmTitle: { fontSize: 18, fontWeight: '800', color: C.text, marginBottom: 8 },
     confirmBody: { fontSize: 14, color: C.sub, lineHeight: 20 },

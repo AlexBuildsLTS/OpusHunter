@@ -24,16 +24,31 @@
  *   { job_application_id: string }              ← confirmed apply (saves to cover_letters)
  */
 
-// deno-lint-ignore-file no-explicit-any
-import { serve } from 'std/http/server.ts';
 import { createAdminClient } from '../_shared/supabaseAdmin.ts';
 import { resolveKey, markKeyUsed } from '../_shared/keyResolver.ts';
+import { serve } from "std/http/server.ts";
+
+interface RequestBody {
+    job_id?: string;
+    job_application_id?: string;
+    preview?: boolean;
+}
+
+interface CoverLetterResponse {
+    cover_letter: string;
+    cover_letter_id: string | null;
+    generated_by: string;
+}
+
+interface ErrorResponse {
+    error: string;
+}
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+} as const;
 
 // ── Model ─────────────────────────────────────────────────────────────────────
 const GEMINI_MODEL = 'gemini-3.1-flash-lite';

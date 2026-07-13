@@ -11,16 +11,19 @@
 // ─── JOB VAULT ───────────────────────────────────────────────────────────────
 // Matches DB enum exactly: "pending" | "approved" | "rejected" | "applied"
 
-export type VaultJobStatus = 'pending' | 'approved' | 'rejected' | 'applied';
+export const VAULT_JOB_STATUSES = ['pending', 'approved', 'rejected', 'applied'] as const;
+export type VaultJobStatus = typeof VAULT_JOB_STATUSES[number];
 
 // Status used for job_applications table (not DB enum — free text)
-export type ApplicationStatus =
-    | 'pending_auto_apply'
-    | 'applied'
-    | 'passed'
-    | 'interview'
-    | 'rejected'
-    | 'offer';
+export const APPLICATION_STATUSES = [
+    'pending_auto_apply',
+    'applied',
+    'passed',
+    'interview',
+    'rejected',
+    'offer',
+] as const;
+export type ApplicationStatus = typeof APPLICATION_STATUSES[number];
 
 export interface Job {
     id: string;
