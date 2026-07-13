@@ -177,3 +177,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 
 [experimental.pgdelta]
 enabled = true
+
+[docker]
+podman_enabled = true
+rootless_mode = true

@@ -6,7 +6,8 @@
 // deno-lint-ignore-file
 
 import { createAdminClient } from './supabaseAdmin.ts';
-import type { User } from '@supabase/supabase-js';
+import type { User } from 'npm:@supabase/supabase-js';
+import { createClient } from 'npm:@supabase/supabase-js';
 
 /**
  * Validates the Authorization header and returns the Supabase User.

@@ -24,26 +24,27 @@
  * key get used" without digging through function logs.
  */
 
-// deno-lint-ignore-file no-explicit-any
+const MIN_KEY_LENGTH = 10;
 
 export type KeyProvider = 'gemini' | 'rapidapi';
+export type KeySource = 'byok' | 'pool' | 'env';
 
 export interface ResolvedKey {
-    key: string;
-    source: 'byok' | 'pool' | 'env';
+    readonly key: string;
+    readonly source: KeySource;
     /** Only present for source: 'pool' — needed to bump last_used after use. */
-    poolRowId?: string;
+    readonly poolRowId?: string;
 }
 
-const ENV_VAR: Record<KeyProvider, string> = {
+const ENV_VAR: Readonly<Record<KeyProvider, string>> = {
     gemini: 'GEMINI_API_KEY',
     rapidapi: 'RAPIDAPI_KEY',
-};
+} as const;
 
-const PROFILE_COLUMN: Record<KeyProvider, string> = {
+const PROFILE_COLUMN: Readonly<Record<KeyProvider, string>> = {
     gemini: 'gemini_key',
     rapidapi: 'rapidapi_key',
-};
+} as const;
 
 /**
  * Resolves ALL usable keys for a provider, in priority order, for rotation
