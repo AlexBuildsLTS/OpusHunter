@@ -4,8 +4,8 @@
  * 2026-07-04 — Added `documents` screen (former top-level Vault tab,
  * moved here — see documents.tsx header comment for why).
  */
-import { Stack } from 'expo-router';
 import { Platform } from 'react-native';
+import { Stack } from 'expo-router';
 import { C } from '../../../lib/theme';
 
 export default function SettingsLayout() {

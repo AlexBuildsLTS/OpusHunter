@@ -1,6 +1,15 @@
 /**
  * app/(tabs)/dashboard.tsx
  * OpusHunter — Main Job Hunt Dashboard
+ *
+ * 2026-07-13 — FIXED: three hardcoded colors bypassing lib/theme.ts
+ * (MetricCard's label color, the "N jobs pending" badge, and the stacked
+ * background cards behind the top swipe card) — same drift pattern fixed
+ * elsewhere this session, smaller scale here. Also expanded Quick Actions
+ * from a single card to three real destinations (Jobs, Configure,
+ * Documents) — all already-existing, already-correct routes; the section
+ * just wasn't using them yet.
+ *
  * 2026-07-02 — JobDetailModal wired in (was dead code — 0 imports anywhere
  * in the repo, confirmed by import-graph scan). Tapping a job card now
  * opens the real Gemini cover-letter preview/edit flow instead of routing
@@ -18,7 +27,7 @@ import { useRouter } from 'expo-router';
 import {
   Zap, CheckCircle2, Clock, Briefcase,
   AlertCircle, RefreshCw, TrendingUp, Play, Pause,
-  ChevronRight, Lock, Target,
+  ChevronRight, Lock, Target, ListChecks, FileText,
 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { SwipeableJobCard, type JobData } from '../../components/pipeline/SwipeableJobCard';
@@ -27,7 +36,6 @@ import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import type { Job } from '../../types/app.types';
 import { C } from '../../lib/theme';
 import { GlassCard } from '../../components/ui/GlassCard';
-import { PageContainer } from '../../components/layout/PageContainer';
 
 // ── METRIC CARD ────────────────────────────────────────────────────────────────
 
@@ -48,7 +56,7 @@ const MetricCard = ({
 const mS = StyleSheet.create({
   iconBox: { width: 34, height: 34, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   value: { fontSize: 26, fontWeight: '900', letterSpacing: -0.5, marginTop: 4 },
-  label: { fontSize: 10, fontWeight: '700', color: 'rgba(216,228,236,0.45)', letterSpacing: 1.5, textTransform: 'uppercase' },
+  label: { fontSize: 10, fontWeight: '700', color: C.dim, letterSpacing: 1.5, textTransform: 'uppercase' },
 });
 
 // ── BATCH APPLY QUEUE ──────────────────────────────────────────────────────────
@@ -90,6 +98,16 @@ const pgS = StyleSheet.create({
   },
   btnText: { fontSize: 10, fontWeight: '900', color: '#000', letterSpacing: 1.5 },
 });
+
+// ── QUICK ACTIONS — real destinations, three of them, not one ─────────────────
+
+interface QuickAction {
+  label: string;
+  sub: string;
+  route: string;
+  color: string;
+  icon: React.ElementType;
+}
 
 // ── MAIN SCREEN ────────────────────────────────────────────────────────────────
 
@@ -265,6 +283,12 @@ export default function DashboardScreen() {
 
   const isDesktop = Platform.OS === 'web';
 
+  const quickActions: QuickAction[] = [
+    { label: 'All Jobs', sub: `${metrics?.total_jobs ?? 0} in your pipeline`, route: '/(tabs)/jobs', color: C.cyan, icon: ListChecks },
+    { label: 'Search Parameters', sub: `${metrics?.active_rules ?? 0} active rule${metrics?.active_rules === 1 ? '' : 's'}`, route: '/(tabs)/configure', color: C.purple, icon: Briefcase },
+    { label: 'Documents', sub: 'CV & certifications', route: '/(tabs)/settings/documents', color: C.amber, icon: FileText },
+  ];
+
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
       <ScrollView
@@ -301,8 +325,6 @@ export default function DashboardScreen() {
         </Animated.View>
 
         {!isPremium && pendingJobs.length >= 18 && (
-          // FIX (2026-07-06): `(settings)` was renamed to `settings` under
-          // `(tabs)` — this stale route-group reference 404'd every tap.
           <PremiumGate onUpgrade={() => router.push('/(tabs)/settings' as any)} />
         )}
 
@@ -392,11 +414,8 @@ export default function DashboardScreen() {
         <Animated.View entering={FadeInDown.delay(200).springify()} style={s.deckSection}>
           <View style={s.sectionHeader}>
             <Text style={s.sectionTitle}>Job Pipeline</Text>
-            {/* FIX (2026-07-06): vault.tsx was removed on 2026-07-04 (CV/certs
-                folded into Settings → Documents) but this link was never
-                updated — was a guaranteed 404 on every tap. */}
-            <TouchableOpacity onPress={() => router.push('/(tabs)/settings/documents' as any)} style={s.sectionLink} activeOpacity={0.8}>
-              <Text style={s.sectionLinkText}>View Documents</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/jobs' as any)} style={s.sectionLink} activeOpacity={0.8}>
+              <Text style={s.sectionLinkText}>View All</Text>
               <ChevronRight size={14} color={C.cyan} />
             </TouchableOpacity>
           </View>
@@ -445,6 +464,7 @@ export default function DashboardScreen() {
             <View style={s.deck}>
               {pendingJobs.slice(0, Math.min(3, pendingJobs.length)).reverse().map((job: any, i: number, arr: any[]) => {
                 const isTop = i === arr.length - 1;
+                const depth = arr.length - 1 - i;
                 return (
                   <View
                     key={job.id}
@@ -453,8 +473,8 @@ export default function DashboardScreen() {
                       {
                         zIndex: i,
                         transform: [
-                          { scale: 1 - (arr.length - 1 - i) * 0.025 },
-                          { translateY: (arr.length - 1 - i) * 10 },
+                          { scale: 1 - depth * 0.025 },
+                          { translateY: depth * 10 },
                         ],
                       },
                     ]}
@@ -467,7 +487,7 @@ export default function DashboardScreen() {
                         onPress={() => setDetailJob(job as unknown as JobData)}
                       />
                     ) : (
-                      <View style={[s.bgCard, { backgroundColor: `rgba(8,16,24,${0.6 - (arr.length - 1 - i) * 0.15})` }]} />
+                      <View style={[s.bgCard, { opacity: 0.6 - depth * 0.15 }]} />
                     )}
                   </View>
                 );
@@ -483,18 +503,7 @@ export default function DashboardScreen() {
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(280).springify()} style={{ gap: 10 }}>
-          {/* REMOVED (2026-07-06): "Cover Letters" quick action used to be here,
-              pointing at the dead /vault route. Unlike the dashboard fix above,
-              there's no honest place to send this — no screen anywhere reads the
-              cover_letters table as a list; the only place a generated letter is
-              visible today is per-job, inside JobDetailModal's Cover Letter tab.
-              A real "Cover Letter history" screen (query cover_letters, join to
-              job_vault for title/company) is genuine new-feature work, not a
-              routing fix — flagging it for the roadmap rather than pointing this
-              at the wrong screen. */}
-          {[
-            { label: 'Search Parameters', sub: `${metrics?.active_rules ?? 0} active`, route: '/(tabs)/configure', color: C.purple, icon: Briefcase },
-          ].map(({ label, sub, route, color, icon: Icon }) => (
+          {quickActions.map(({ label, sub, route, color, icon: Icon }) => (
             <TouchableOpacity key={route} onPress={() => router.push(route as any)} activeOpacity={0.8}>
               <GlassCard tint="frost" padding="sm" hoverable className="flex-row items-center gap-3.5">
                 <View style={[s.quickIcon, { backgroundColor: `${color}12`, borderColor: `${color}24` }]}>
@@ -578,12 +587,12 @@ const s = StyleSheet.create({
 
   deck: { height: 440, position: 'relative', alignItems: 'center' },
   cardLayer: { position: 'absolute', width: '100%', height: 400 },
-  bgCard: { width: '100%', height: 400, borderRadius: 24, borderWidth: 1, borderColor: C.border },
+  bgCard: { width: '100%', height: 400, borderRadius: 24, borderWidth: 1, borderColor: C.border, backgroundColor: C.core },
 
   remainingBadge: {
     position: 'absolute', bottom: 0, alignSelf: 'center',
     paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
-    backgroundColor: 'rgba(8,16,24,0.8)', borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.core, borderWidth: 1, borderColor: C.border,
   },
   remainingText: { fontSize: 11, fontWeight: '700', color: C.sub, letterSpacing: 1 },
 

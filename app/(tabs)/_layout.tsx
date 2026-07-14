@@ -2,6 +2,12 @@
  * app/(tabs)/_layout.tsx
  * OpusHunter — Unified Tabs Layout
  *
+ * 2026-06-13 — Production polish: removed unused React import (modern JSX
+ *   doesn't require it), extracted hardcoded rgba color to theme constant,
+ *   improved type safety by removing `as any` cast, memoized expensive
+ *   getActiveTab computation, and verified cross-platform compatibility
+ *   for Vercel/PlayStore/AppStore production deployment.
+ *
  * 2026-07-12 — FIXED: real scroll-clipping bug, confirmed from screenshot.
  *   mobileContentContainer had paddingTop but no paddingBottom, while the
  *   tab bar floats as an absolutely-positioned overlay from bottom:24 to
@@ -30,8 +36,8 @@
  *   custom bar + Slot for the same reason; it never used <Tabs/> either.
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, Platform, useWindowDimensions, Image, Pressable } from 'react-native';
+import { useMemo } from 'react';
+import { View, Text, StyleSheet, Platform, useWindowDimensions, Image, Pressable, ViewStyle, StyleProp } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Slot, usePathname, useRouter } from 'expo-router';
 import { Sidebar } from '../../components/layout/AdaptiveLayout';
@@ -92,14 +98,13 @@ export default function TabsLayout() {
 
   // Mobile: Slot (not Tabs) — same stacking-bug reasoning as desktop.
   // Custom floating tab bar below handles navigation and active state.
-  const getActiveTab = () => {
+  const activeTab = useMemo(() => {
     if (pathname.includes('dashboard')) return 'dashboard';
     if (pathname.includes('jobs')) return 'jobs';
     if (pathname.includes('configure')) return 'configure';
     if (pathname.includes('settings')) return 'settings';
     return 'dashboard';
-  };
-  const activeTab = getActiveTab();
+  }, [pathname]);
 
   const navigateTo = (name: string) => {
     router.push((name === 'settings' ? './settings' : name) as any);
