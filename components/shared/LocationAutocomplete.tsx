@@ -41,6 +41,10 @@ export function LocationAutocomplete({ selected, onChange, onPrimaryCoordsChange
             ? place.country
             : [place.city, place.region, place.country].filter(Boolean).join(', ');
 
+    const normalizeLocationLabel = (value: string) => value.trim().toLowerCase();
+
+    const makeLocationKey = (value: string, index: number) => `${normalizeLocationLabel(value)}::${index}`;
+
     const handleTextChange = (text: string) => {
         setQuery(text);
         setShowDropdown(true);
@@ -49,7 +53,8 @@ export function LocationAutocomplete({ selected, onChange, onPrimaryCoordsChange
 
     const addLocation = (label: string, coords: Coords | null = null) => {
         const trimmed = label.trim();
-        if (!trimmed || selected.includes(trimmed)) {
+        const normalized = normalizeLocationLabel(trimmed);
+        if (!trimmed || selected.some((item) => normalizeLocationLabel(item) === normalized)) {
             setQuery('');
             setShowDropdown(false);
             return;
@@ -63,8 +68,9 @@ export function LocationAutocomplete({ selected, onChange, onPrimaryCoordsChange
     };
 
     const removeLocation = (loc: string) => {
-        const wasPrimary = selected[0] === loc;
-        const next = selected.filter((l) => l !== loc);
+        const normalizedTarget = normalizeLocationLabel(loc);
+        const wasPrimary = normalizeLocationLabel(selected[0] ?? '') === normalizedTarget;
+        const next = selected.filter((item) => normalizeLocationLabel(item) !== normalizedTarget);
         onChange(next);
         if (wasPrimary) {
             const newPrimary = next[0];
@@ -168,7 +174,7 @@ export function LocationAutocomplete({ selected, onChange, onPrimaryCoordsChange
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
                     {selected.map((loc, idx) => (
                         <TouchableOpacity
-                            key={loc}
+                            key={makeLocationKey(loc, idx)}
                             onPress={() => removeLocation(loc)}
                             style={[st.chip, { borderColor: `${C.cyan}40`, backgroundColor: `${C.cyan}10` }]}
                         >

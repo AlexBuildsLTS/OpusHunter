@@ -18,7 +18,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { getSupabaseAccessToken, supabase } from '../lib/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 
 export interface ScrapeRuleSummary {
@@ -49,8 +49,26 @@ export function useEdgeScraper() {
         setIsLoading(true);
 
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error('Not authenticated. Please log in again.');
+            let accessToken: string | null = null;
+            let lastAuthError: Error | null = null;
+
+            for (let attempt = 0; attempt < 2; attempt += 1) {
+                try {
+                    accessToken = await getSupabaseAccessToken();
+                    if (accessToken) break;
+                    throw new Error('Not authenticated. Please log in again.');
+                } catch (error: any) {
+                    lastAuthError = error;
+                    if (attempt === 0 && /invalid|expired|refresh/i.test(error?.message ?? '')) {
+                        continue;
+                    }
+                    throw error;
+                }
+            }
+
+            if (!accessToken) {
+                throw lastAuthError ?? new Error('Not authenticated. Please log in again.');
+            }
 
             // Discard anything that looks like a React event rather than a
             // real payload — see file header.
@@ -71,14 +89,23 @@ export function useEdgeScraper() {
             const res = await fetch(functionUrl, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${session.access_token}`,
+                    'Authorization': `Bearer ${accessToken}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(safePayload),
             });
 
-            const body = await res.json();
+            let body: any = {};
+            try {
+                body = await res.json();
+            } catch {
+                body = {};
+            }
+
             if (!res.ok) {
+                if (res.status === 401 && /token/i.test(body.error ?? '')) {
+                    throw new Error('Authentication expired. Please sign in again and try one more time.');
+                }
                 throw new Error(body.error || body.detail || `HTTP Error ${res.status}`);
             }
 

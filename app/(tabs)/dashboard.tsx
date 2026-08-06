@@ -29,7 +29,7 @@ import {
   AlertCircle, RefreshCw, TrendingUp, Play, Pause,
   ChevronRight, Lock, Target, ListChecks, FileText,
 } from 'lucide-react-native';
-import { supabase } from '../../lib/supabase';
+import { getSupabaseAccessToken, supabase } from '../../lib/supabase';
 import { SwipeableJobCard, type JobData } from '../../components/pipeline/SwipeableJobCard';
 import { JobDetailModal } from '../../components/pipeline/JobDetailModal';
 import { useEdgeScraper } from '../../hooks/useEdgeScraper';
@@ -247,13 +247,14 @@ export default function DashboardScreen() {
           setQueue((prev) => ({ ...prev, current: `${jobTitle} @ ${(app.job_vault as any)?.company ?? ''}` }));
 
           try {
-            const { data: { session } } = await supabase.auth.getSession();
+            const accessToken = await getSupabaseAccessToken();
+            if (!accessToken) throw new Error('Not authenticated.');
             const resp = await fetch(
               `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/auto-apply`,
               {
                 method: 'POST',
                 headers: {
-                  'Authorization': `Bearer ${session?.access_token}`,
+                  'Authorization': `Bearer ${accessToken}`,
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ job_application_id: app.id }),

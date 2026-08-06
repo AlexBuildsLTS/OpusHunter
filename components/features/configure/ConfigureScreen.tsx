@@ -215,7 +215,7 @@ function EngineTab({ config, setConfig, onScrape, isScraping, activeRulesCount }
                         >
                             {isScraping
                                 ? <ActivityIndicator color="#000" size="small" />
-                                : <Text style={st.runBtnText}>INITIALIZE</Text>}
+                                : <Text style={st.runBtnText}>RUN SCRAPE</Text>}
                         </TouchableOpacity>
                     </View>
                 </GlassCard>

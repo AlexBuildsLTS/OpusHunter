@@ -21,3 +21,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: Platform.OS === 'web',
   },
 });
+
+export async function getSupabaseAccessToken(): Promise<string | null> {
+  const { data: { session }, error } = await supabase.auth.getSession();
+  if (error) throw error;
+
+  if (session?.access_token) return session.access_token;
+
+  const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+  if (refreshError) throw refreshError;
+
+  return refreshedSession?.access_token ?? null;
+}
