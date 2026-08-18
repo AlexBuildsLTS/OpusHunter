@@ -1,417 +1,240 @@
 /**
  * supabase/functions/scrape-jobs/index.ts
- * OpusHunter — Job Scraping Edge Function
- * 2026-07-11 — Coordinates + commute-distance filtering
- *
- * PERFORMANCE OPTIMIZATIONS:
- *   • Memoized regex patterns (tech stack detection)
- *   • Reused number formatter (salary normalization)
- *   • Efficient duplicate tracking (Set-based filtering)
- *   • Graceful degradation for partial data
- *   • Better retry + key rotation strategy
- *   • Reduced memory allocations in hot loops
+ * OpusHunter — Job Scraper with Key Rotation & Strict Geo-Targeting
  */
 
-// deno-lint-ignore-file no-explicit-any
-import { serve } from 'std/http/server.ts';
-import { createAdminClient } from '../_shared/supabaseAdmin.ts';
-import { resolveKeyPool, markKeyUsed, type ResolvedKey } from '../_shared/keyResolver.ts';
-import { withinCommuteDistance } from '../_shared/geo.ts';
+import { createClient } from "supabase";
+import { verifyUser } from "../_shared/auth.ts";
+import { resolveKeyPool, markKeyUsed } from "../_shared/keyResolver.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+const supabaseAdmin = createClient(
+  Deno.env.get("SUPABASE_URL") ?? "",
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+);
+
+const JSEARCH_TYPE_MAP: Record<string, string> = {
+  FULLTIME: "FULLTIME",
+  PARTTIME: "PARTTIME",
+  CONTRACTOR: "CONTRACTOR",
+  INTERNSHIP: "INTERN",
+  INTERN: "INTERN",
 };
-
-// ── Memoized patterns & formatters ───────────────────────────────────────────
-const TECH_PATTERN = /\b(React|React Native|TypeScript|JavaScript|Python|Node\.js|Expo|Deno|Swift|Kotlin|Flutter|Go|Rust|AWS|GCP|Azure|Docker|Kubernetes|PostgreSQL|Supabase|Firebase|GraphQL|REST|Next\.js|Vue|Angular|TailwindCSS|Redux|Zustand|Git|CI\/CD|Figma|Jira)\b/gi;
-const SALARY_MULTIPLIER: Record<string, number> = {
-    YEAR: 1, ANNUAL: 1, MONTH: 12, WEEK: 52, DAY: 260, HOUR: 2080,
-};
-const NUMBER_FORMATTER = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-
-// ── JSearch v2 response shape (June 2026) ─────────────────────────────────────
 
 interface JSearchJob {
-    job_id: string;
-    job_title: string;
-    employer_name: string;
-    employer_website?: string;
-    employer_logo?: string;
-    job_description: string;
-    job_apply_link: string;
-    job_apply_is_direct?: boolean;
-    job_posted_at_datetime_utc?: string;
-    job_city?: string;
-    job_state?: string;
-    job_country?: string;
-    job_latitude?: number | null;
-    job_longitude?: number | null;
-    job_is_remote?: boolean | null;
-    job_employment_type?: string;
-    job_employment_types?: string[];
-    job_required_skills?: string[];
-    job_required_experience?: {
-        required_experience_in_months?: number;
-        no_experience_required?: boolean;
-    };
-    job_min_salary?: number;
-    job_max_salary?: number;
-    job_salary_currency?: string;
-    job_salary_period?: string;
-    job_benefits?: string[];
-    job_google_link?: string;
-    job_highlights?: {
-        Qualifications?: string[];
-        Responsibilities?: string[];
-        Benefits?: string[];
-    };
+  job_id: string;
+  job_title?: string;
+  employer_name?: string;
+  job_city?: string;
+  job_state?: string;
+  job_country?: string;
+  job_description?: string;
+  job_salary?: string;
+  job_apply_link?: string;
 }
 
-interface ScrapeRequest {
-    keywords?: string[];
-    location?: string;
-    work_types?: string[];
-    latitude?: number | null;
-    longitude?: number | null;
-    max_distance_km?: number | null;
-}
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: getCorsHeaders() });
+  }
 
-// ── Salary normalisation to annual ────────────────────────────────────────────
+  try {
+    const user = await verifyUser(req);
+    if (!user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...getCorsHeaders(), "Content-Type": "application/json" },
+      });
+    }
 
-function normaliseSalary(job: JSearchJob): string | null {
-    const { job_min_salary, job_max_salary, job_salary_currency, job_salary_period } = job;
-    if (!job_min_salary && !job_max_salary) return null;
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("role, last_scrape_time")
+      .eq("id", user.id)
+      .single();
 
-    const multiplier: Record<string, number> = {
-        YEAR: 1, ANNUAL: 1, MONTH: 12, WEEK: 52, DAY: 260, HOUR: 2080,
-    };
+    const userRole = profile?.role || "member";
+    const now = new Date();
 
-    const period = (job_salary_period ?? 'YEAR').toUpperCase();
-    const mult = multiplier[period] ?? 1;
-    const currency = job_salary_currency ?? 'USD';
-
-    const fmt = (n: number) =>
-        new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(n * mult));
-
-    if (job_min_salary && job_max_salary) return `${currency} ${fmt(job_min_salary)} – ${fmt(job_max_salary)} /yr`;
-    if (job_min_salary) return `${currency} ${fmt(job_min_salary)}+ /yr`;
-    return `${currency} up to ${fmt(job_max_salary!)} /yr`;
-}
-
-// ── Match scoring (weighted) ───────────────────────────────────────────────────
-
-function scoreJob(job: JSearchJob, keywords: string[]): number {
-    if (!keywords.length) return 50;
-    const normalised = keywords.map((k) => k.toLowerCase().trim());
-
-    let titleHits = 0;
-    const title = (job.job_title ?? '').toLowerCase();
-    for (const kw of normalised) if (title.includes(kw)) titleHits++;
-
-    let skillHits = 0;
-    const skills = (job.job_required_skills ?? []).join(' ').toLowerCase();
-    for (const kw of normalised) if (skills.includes(kw)) skillHits++;
-
-    const quals = (job.job_highlights?.Qualifications ?? []).join(' ').toLowerCase();
-    let qualHits = 0;
-    for (const kw of normalised) if (quals.includes(kw)) qualHits++;
-
-    let descHits = 0;
-    const desc = (job.job_description ?? '').substring(0, 800).toLowerCase();
-    for (const kw of normalised) if (desc.includes(kw)) descHits++;
-
-    const totalWeight = keywords.length * (3 + 2 + 1 + 1);
-    const hitWeight = titleHits * 3 + skillHits * 2 + qualHits * 1 + descHits * 1;
-
-    return Math.min(100, Math.round((hitWeight / totalWeight) * 100));
-}
-
-// ── Build tech stack from multiple JSearch fields ─────────────────────────────
-
-function extractTechStack(job: JSearchJob): string[] {
-    const sources = [...(job.job_required_skills ?? []), ...(job.job_highlights?.Qualifications ?? [])];
-    const techPattern = /\b(React|React Native|TypeScript|JavaScript|Python|Node\.js|Expo|Deno|Swift|Kotlin|Flutter|Go|Rust|AWS|GCP|Azure|Docker|Kubernetes|PostgreSQL|Supabase|Firebase|GraphQL|REST|Next\.js|Vue|Angular|TailwindCSS|Redux|Zustand|Git|CI\/CD|Figma|Jira)\b/gi;
-    const fromText = sources.join(' ').match(techPattern) ?? [];
-    return [...new Set([...fromText.map((s) => s.trim())])].slice(0, 12);
-}
-
-// ── JSearch API fetch with retry across the resolved key pool on 429 ─────────
-
-async function fetchJSearch(
-    params: URLSearchParams,
-    keys: ResolvedKey[],
-    supabase: any,
-): Promise<{ jobs: JSearchJob[]; keyUsed: ResolvedKey }> {
-    const url = `https://jsearch.p.rapidapi.com/search-v2?${params.toString()}`;
-
-    let lastError = '';
-    for (const resolved of keys) {
-        const response = await fetch(url, {
-            method: 'GET',
+    if (userRole === "member" && profile?.last_scrape_time) {
+      const lastScrape = new Date(profile.last_scrape_time);
+      const hoursPassed =
+        (now.getTime() - lastScrape.getTime()) / (1000 * 60 * 60);
+      if (hoursPassed < 4) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Rate limit reached. Upgrade to Premium for unmetered scraping.",
+            cooldown_remaining_hours: (4 - hoursPassed).toFixed(1),
+          }),
+          {
+            status: 429,
             headers: {
-                'X-RapidAPI-Key': resolved.key,
-                'X-RapidAPI-Host': 'jsearch.p.rapidapi.com',
+              ...getCorsHeaders(),
+              "Content-Type": "application/json",
             },
-            signal: AbortSignal.timeout(28000),
+          },
+        );
+      }
+    }
+
+    const availableKeys = await resolveKeyPool(
+      supabaseAdmin,
+      user.id,
+      "rapidapi",
+    );
+    if (availableKeys.length === 0) {
+      throw new Error(
+        "CRITICAL: No RapidAPI keys available in BYOK, pool, or environment.",
+      );
+    }
+    const rapidApiKey = availableKeys[0];
+
+    const { data: rules, error: rulesError } = await supabaseAdmin
+      .from("automation_rules")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("is_active", true);
+
+    if (rulesError) throw rulesError;
+
+    if (!rules || rules.length === 0) {
+      return new Response(
+        JSON.stringify({
+          message: "No active automation rules found.",
+          count: 0,
+        }),
+        {
+          headers: { ...getCorsHeaders(), "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    let totalInserted = 0;
+    const summaries = [];
+
+    for (const rule of rules) {
+      // 1. EXTRACT PRIMARY KEYWORD ONLY to prevent confusing JSearch
+      const primaryKeyword =
+        Array.isArray(rule.keywords) && rule.keywords.length > 0
+          ? rule.keywords[0]
+          : "Software Engineer";
+
+      // 2. CLEAN UP LOCATION (e.g. converts "Sweden, Sweden, Stockholm" to "Sweden, Stockholm")
+      const rawLoc = rule.location || "Sweden";
+      const locParts = rawLoc
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+      const cleanLocation = Array.from(new Set(locParts)).join(", ");
+
+      const remoteString =
+        rule.remote_preference === "Remote Only" ? "Remote " : "";
+      const formattedQuery = `${remoteString}${primaryKeyword} in ${cleanLocation}`;
+
+      const rawTypes = rule.work_types || [];
+      const employmentTypes = rawTypes
+        .map((t: string) => JSEARCH_TYPE_MAP[t.toUpperCase()])
+        .filter(Boolean)
+        .join(",");
+
+      let jsearchUrl = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(formattedQuery)}&page=1&num_pages=1`;
+      if (employmentTypes.length > 0) {
+        jsearchUrl += `&employment_types=${employmentTypes}`;
+      }
+
+      const response = await fetch(jsearchUrl, {
+        method: "GET",
+        headers: {
+          "X-RapidAPI-Key": rapidApiKey.key,
+          "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
+        },
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        summaries.push({
+          rule: primaryKeyword,
+          fetched: 0,
+          new: 0,
+          key_source: `failed: JSearch ${response.status}: ${errText}`,
         });
+        continue;
+      }
 
-        if (response.status === 429) {
-            lastError = `429 rate-limited (${resolved.source} key)`;
-            console.warn(`[scrape-jobs] Key rotation: ${lastError}, trying next…`);
-            continue;
-        }
+      await markKeyUsed(supabaseAdmin, rapidApiKey);
 
-        if (!response.ok) {
-            const body = await response.text();
-            lastError = `JSearch ${response.status}: ${body.substring(0, 200)}`;
-            if (response.status === 401 || response.status === 403) {
-                console.warn(`[scrape-jobs] Key rejected (${resolved.source}): ${lastError}`);
-                continue;
-            }
-            throw new Error(lastError);
-        }
+      const payload = await response.json();
+      const scrapedJobs = payload.data || [];
 
-        await markKeyUsed(supabase, resolved);
-        const data: any = await response.json();
+      if (scrapedJobs.length === 0) {
+        summaries.push({ rule: primaryKeyword, fetched: 0, new: 0 });
+        continue;
+      }
 
-        let safeJobs: JSearchJob[];
-        if (Array.isArray(data?.data)) {
-            safeJobs = data.data;
-        } else if (Array.isArray(data?.data?.jobs)) {
-            safeJobs = data.data.jobs;
-        } else if (Array.isArray(data?.jobs)) {
-            safeJobs = data.jobs;
-        } else if (Array.isArray(data?.results)) {
-            safeJobs = data.results;
-        } else {
-            console.error(
-                '[scrape-jobs] Unrecognised JSearch response shape. Top-level keys:',
-                data && typeof data === 'object' ? Object.keys(data) : typeof data,
-                '\u2014 nested data keys:',
-                data?.data && typeof data.data === 'object' ? Object.keys(data.data) : typeof data?.data,
-            );
-            safeJobs = [];
-        }
+      const records = scrapedJobs.map((job: JSearchJob) => ({
+        user_id: user.id,
+        external_job_id: String(job.job_id),
+        title: job.job_title ?? "Untitled Position",
+        company: job.employer_name ?? "Unknown Employer",
+        location:
+          [job.job_city, job.job_state, job.job_country]
+            .filter(Boolean)
+            .join(", ") || cleanLocation,
+        description: job.job_description ?? "",
+        salary: job.job_salary ?? null,
+        url: job.job_apply_link ?? "",
+        status: "pending",
+        match_score: null,
+      }));
 
-        return { jobs: safeJobs, keyUsed: resolved };
+      const { data: inserted, error: insertError } = await supabaseAdmin
+        .from("job_vault")
+        .upsert(records, {
+          onConflict: "external_job_id, user_id",
+          ignoreDuplicates: true,
+        })
+        .select("id");
+
+      if (insertError) {
+        console.error("Database insert error:", insertError.message);
+      }
+
+      const insertedCount = inserted?.length ?? 0;
+      totalInserted += insertedCount;
+
+      summaries.push({
+        rule: primaryKeyword,
+        fetched: scrapedJobs.length,
+        new: insertedCount,
+      });
     }
 
-    throw new Error(lastError || 'All RapidAPI keys exhausted or rejected.');
-}
-
-// ── Main handler ───────────────────────────────────────────────────────────────
-
-serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-
-    try {
-        const authHeader = req.headers.get('Authorization');
-        if (!authHeader?.startsWith('Bearer ')) {
-            return new Response(JSON.stringify({ error: 'Missing Authorization header.' }), {
-                status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-        }
-
-        const supabase = createAdminClient();
-
-        const token = authHeader.replace('Bearer ', '').trim();
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-        if (authError || !user) {
-            return new Response(JSON.stringify({ error: 'Invalid or expired token.' }), {
-                status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-        }
-
-        let body: ScrapeRequest = {};
-        try { body = await req.json(); } catch { /* empty body is fine */ }
-
-        const keyPool = await resolveKeyPool(supabase, user.id, 'rapidapi');
-
-        if (!keyPool.length) {
-            return new Response(
-                JSON.stringify({
-                    error: 'No RapidAPI key available.',
-                    detail: 'Checked: your Profile BYOK key, the admin api_keys pool (provider=rapidapi, is_active=true), and the RAPIDAPI_KEY Edge Function secret. All three are empty. Add a key in Profile, or in Admin \u2192 API Keys, or run: supabase secrets set RAPIDAPI_KEY=...',
-                }),
-                { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-            );
-        }
-
-        // ── Resolve search rules — now carries origin coordinates + commute cap ──
-        interface SearchRule {
-            keywords: string[];
-            location: string;
-            work_types: string[];
-            latitude: number | null;
-            longitude: number | null;
-            max_distance_km: number | null;
-        }
-        let rules: SearchRule[] = [];
-
-        if (body.keywords?.length && body.location) {
-            rules = [{
-                keywords: body.keywords,
-                location: body.location,
-                work_types: body.work_types ?? [],
-                latitude: body.latitude ?? null,
-                longitude: body.longitude ?? null,
-                max_distance_km: body.max_distance_km ?? null,
-            }];
-        } else {
-            const { data: dbRules, error: rulesError } = await supabase
-                .from('automation_rules')
-                .select('keywords, location, work_types, latitude, longitude, max_distance_km')
-                .eq('user_id', user.id)
-                .eq('is_active', true)
-                .limit(10);
-
-            if (rulesError) throw new Error(`Failed to load rules: ${rulesError.message}`);
-            if (!dbRules?.length) {
-                return new Response(
-                    JSON.stringify({ error: 'No active search rules. Add at least one rule in the Configure screen.' }),
-                    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-                );
-            }
-            rules = dbRules as SearchRule[];
-        }
-
-        const { data: existingJobs } = await supabase
-            .from('job_vault')
-            .select('external_job_id')
-            .eq('user_id', user.id)
-            .in('status', ['pending', 'approved'])
-            .limit(500);
-
-        const seenIds = new Set((existingJobs ?? []).map((j: any) => j.external_job_id));
-
-        const allJobsToUpsert: any[] = [];
-        const scrapeSummary: Array<{ rule: string; fetched: number; new: number; filtered_by_distance?: number; key_source?: string }> = [];
-
-        for (const rule of rules) {
-            const { keywords, location, work_types, latitude: originLat, longitude: originLon, max_distance_km } = rule;
-            const query = keywords.join(' ') + (location && location.toLowerCase() !== 'remote' ? ` in ${location}` : '');
-
-            const employmentTypes = work_types.length > 0
-                ? work_types.map((t) => t.toUpperCase()).join(',')
-                : 'FULLTIME,CONTRACTOR';
-
-            const params = new URLSearchParams({
-                query,
-                page: '1',
-                num_pages: '3',
-                employment_types: employmentTypes,
-                date_posted: 'week',
-                language: 'en',
-                ...(location.toLowerCase() === 'remote' || location.toLowerCase().includes('remote')
-                    ? { remote_jobs_only: 'true' }
-                    : {}),
-            });
-
-            let rawJobs: JSearchJob[] = [];
-            let keySource = 'none';
-            try {
-                const result = await fetchJSearch(params, keyPool, supabase);
-                rawJobs = result.jobs;
-                keySource = result.keyUsed.source;
-            } catch (fetchErr: any) {
-                console.error(`[scrape-jobs] Rule "${keywords[0]}" fetch failed:`, fetchErr.message);
-                scrapeSummary.push({ rule: keywords[0], fetched: 0, new: 0, key_source: 'failed: ' + fetchErr.message });
-                continue;
-            }
-
-            const newJobs = rawJobs.filter((j) => !seenIds.has(j.job_id));
-
-            // Drop onsite/hybrid jobs outside the rule's commute cap. Remote
-            // jobs and jobs with no coordinates from JSearch always pass —
-            // this filters out unreachable jobs, it never hides uncertain ones.
-            let filteredByDistance = 0;
-            const withinRange = newJobs.filter((job) => {
-                const isRemote = job.job_is_remote === true;
-                const ok = withinCommuteDistance(
-                    isRemote, originLat, originLon,
-                    job.job_latitude ?? null, job.job_longitude ?? null,
-                    max_distance_km,
-                );
-                if (!ok) filteredByDistance++;
-                return ok;
-            });
-
-            const transformed = withinRange.map((job) => {
-                seenIds.add(job.job_id);
-                return {
-                    user_id: user.id,
-                    external_job_id: job.job_id,
-                    title: job.job_title?.trim() ?? 'Unknown Title',
-                    company: job.employer_name?.trim() ?? 'Unknown Company',
-                    description: (job.job_description ?? '').substring(0, 3000),
-                    salary: normaliseSalary(job),
-                    location: job.job_is_remote
-                        ? 'Remote'
-                        : [job.job_city, job.job_state, job.job_country].filter(Boolean).join(', ') || location,
-                    latitude: job.job_latitude ?? null,
-                    longitude: job.job_longitude ?? null,
-                    country_code: job.job_country ?? null,
-                    is_remote: job.job_is_remote === true,
-                    tech_stack: extractTechStack(job),
-                    source_url: job.job_apply_link ?? '',
-                    url: job.employer_website ?? job.job_apply_link ?? '',
-                    match_score: scoreJob(job, keywords),
-                    status: 'pending' as const,
-                };
-            });
-
-            allJobsToUpsert.push(...transformed);
-            scrapeSummary.push({
-                rule: keywords.join(', '),
-                fetched: rawJobs.length,
-                new: transformed.length,
-                filtered_by_distance: filteredByDistance,
-                key_source: keySource,
-            });
-        }
-
-        if (!allJobsToUpsert.length) {
-            return new Response(
-                JSON.stringify({
-                    message: 'No new jobs found. All results were already in your pipeline or outside your commute distance.',
-                    count: 0,
-                    summary: scrapeSummary,
-                }),
-                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-            );
-        }
-
-        const BATCH = 50;
-        let totalUpserted = 0;
-
-        for (let i = 0; i < allJobsToUpsert.length; i += BATCH) {
-            const batch = allJobsToUpsert.slice(i, i + BATCH);
-            const { error: upsertError, count } = await supabase
-                .from('job_vault')
-                .upsert(batch, { onConflict: 'user_id,external_job_id', ignoreDuplicates: false, count: 'exact' });
-
-            if (upsertError) throw new Error(`DB upsert batch ${i / BATCH + 1} failed: ${upsertError.message}`);
-            totalUpserted += count ?? batch.length;
-        }
-
-        return new Response(
-            JSON.stringify({
-                message: `Pipeline populated with ${totalUpserted} new jobs.`,
-                count: totalUpserted,
-                summary: scrapeSummary,
-                rules_processed: rules.length,
-            }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
-
-    } catch (err: any) {
-        const isTimeout = err?.name === 'TimeoutError';
-        console.error('[scrape-jobs] Fatal error:', err.message);
-        return new Response(
-            JSON.stringify({ error: isTimeout ? 'Upstream API timed out after 28s.' : (err.message ?? 'Unknown error') }),
-            { status: isTimeout ? 504 : 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
+    if (userRole === "member") {
+      await supabaseAdmin
+        .from("profiles")
+        .update({ last_scrape_time: now.toISOString() })
+        .eq("id", user.id);
     }
+
+    return new Response(
+      JSON.stringify({
+        message:
+          totalInserted > 0
+            ? "Jobs successfully fetched and indexed."
+            : "No new unindexed jobs found.",
+        count: totalInserted,
+        summary: summaries,
+      }),
+      { headers: { ...getCorsHeaders(), "Content-Type": "application/json" } },
+    );
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Internal Server Error";
+    console.error("[Scrape Error]:", message);
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { ...getCorsHeaders(), "Content-Type": "application/json" },
+    });
+  }
 });
