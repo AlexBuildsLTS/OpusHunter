@@ -32,6 +32,7 @@ import {
 import { getSupabaseAccessToken, supabase } from '../../lib/supabase';
 import { SwipeableJobCard, type JobData } from '../../components/pipeline/SwipeableJobCard';
 import { JobDetailModal } from '../../components/pipeline/JobDetailModal';
+import { ScrapeResultModal } from '../../components/ui/ScrapeResultModal';
 import { useEdgeScraper } from '../../hooks/useEdgeScraper';
 import type { Job } from '../../types/app.types';
 import { C } from '../../lib/theme';
@@ -114,7 +115,7 @@ interface QuickAction {
 export default function DashboardScreen() {
   const router = useRouter();
   const qc = useQueryClient();
-  const { triggerScrape, isLoading: isScraping } = useEdgeScraper();
+  const { triggerScrape, isLoading: isScraping, result: scrapeResult, dismissResult: dismissScrapeResult } = useEdgeScraper();
   const [queue, setQueue] = useState<QueueState>(INITIAL_QUEUE);
   const queueRef = useRef(queue);
   queueRef.current = queue;

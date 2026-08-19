@@ -2,7 +2,7 @@
   "buildCommand": "npx expo export --platform web",
   "outputDirectory": "dist",
   "framework": null,
-  "installCommand": "npm install",
+  "installCommand": "pnpm install",
   "devCommand": "npx expo start --web",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "headers": [
