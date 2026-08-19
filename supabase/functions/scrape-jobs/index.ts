@@ -3,15 +3,16 @@
  * OpusHunter — Job Scraper with Key Rotation & Strict Geo-Targeting
  */
 
-import { createClient } from "supabase";
+import { createAdminClient } from "../_shared/supabaseAdmin.ts";
 import { verifyUser } from "../_shared/auth.ts";
 import { resolveKeyPool, markKeyUsed } from "../_shared/keyResolver.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
-const supabaseAdmin = createClient(
-  Deno.env.get("SUPABASE_URL") ?? "",
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-);
+// Helper for Deno types in VS Code
+declare const Deno: {
+  env: { get(name: string): string | undefined };
+  serve(handler: (req: Request) => Response | Promise<Response>): void;
+};
 
 const JSEARCH_TYPE_MAP: Record<string, string> = {
   FULLTIME: "FULLTIME",
@@ -33,51 +34,40 @@ interface JSearchJob {
   job_apply_link?: string;
 }
 
+/**
+ * Clean up location string by removing duplicates and empty parts.
+ */
+function cleanLocationString(location: string): string {
+  const parts = location
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return Array.from(new Set(parts)).join(", ");
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: getCorsHeaders() });
   }
 
+  const supabaseAdmin = createAdminClient();
+
   try {
     const user = await verifyUser(req);
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...getCorsHeaders(), "Content-Type": "application/json" },
-      });
-    }
 
-    const { data: profile } = await supabaseAdmin
+    // 1. Fetch user profile for role and rate-limit check
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
-      .select("role, last_scrape_time")
+      .select("role")
       .eq("id", user.id)
       .single();
+
+    if (profileError) throw profileError;
 
     const userRole = profile?.role || "member";
     const now = new Date();
 
-    if (userRole === "member" && profile?.last_scrape_time) {
-      const lastScrape = new Date(profile.last_scrape_time);
-      const hoursPassed =
-        (now.getTime() - lastScrape.getTime()) / (1000 * 60 * 60);
-      if (hoursPassed < 4) {
-        return new Response(
-          JSON.stringify({
-            error:
-              "Rate limit reached. Upgrade to Premium for unmetered scraping.",
-            cooldown_remaining_hours: (4 - hoursPassed).toFixed(1),
-          }),
-          {
-            status: 429,
-            headers: {
-              ...getCorsHeaders(),
-              "Content-Type": "application/json",
-            },
-          },
-        );
-      }
-    }
-
+    // 2. Resolve available RapidAPI keys
     const availableKeys = await resolveKeyPool(
       supabaseAdmin,
       user.id,
@@ -90,6 +80,7 @@ Deno.serve(async (req: Request) => {
     }
     const rapidApiKey = availableKeys[0];
 
+    // 3. Fetch active automation rules for the user
     const { data: rules, error: rulesError } = await supabaseAdmin
       .from("automation_rules")
       .select("*")
@@ -112,38 +103,36 @@ Deno.serve(async (req: Request) => {
 
     let totalInserted = 0;
     const summaries = [];
+    let keyWasUsed = false;
 
+    // 4. Execute scraping for each active rule
     for (const rule of rules) {
-      // 1. EXTRACT PRIMARY KEYWORD ONLY to prevent confusing JSearch
+      // Use the first keyword as primary or fallback
       const primaryKeyword =
         Array.isArray(rule.keywords) && rule.keywords.length > 0
           ? rule.keywords[0]
           : "Software Engineer";
 
-      // 2. CLEAN UP LOCATION (e.g. converts "Sweden, Sweden, Stockholm" to "Sweden, Stockholm")
-      const rawLoc = rule.location || "Sweden";
-      const locParts = rawLoc
-        .split(",")
-        .map((s: string) => s.trim())
-        .filter(Boolean);
-      const cleanLocation = Array.from(new Set(locParts)).join(", ");
-
-      const remoteString =
+      const cleanLocation = cleanLocationString(rule.location || "Sweden");
+      const remotePrefix =
         rule.remote_preference === "Remote Only" ? "Remote " : "";
-      const formattedQuery = `${remoteString}${primaryKeyword} in ${cleanLocation}`;
+      const formattedQuery = `${remotePrefix}${primaryKeyword} in ${cleanLocation}`;
 
-      const rawTypes = rule.work_types || [];
-      const employmentTypes = rawTypes
+      const employmentTypes = (rule.work_types || [])
         .map((t: string) => JSEARCH_TYPE_MAP[t.toUpperCase()])
         .filter(Boolean)
         .join(",");
 
-      let jsearchUrl = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(formattedQuery)}&page=1&num_pages=1`;
-      if (employmentTypes.length > 0) {
-        jsearchUrl += `&employment_types=${employmentTypes}`;
+      // Construct JSearch URL safely using URLSearchParams
+      const jsearchUrl = new URL("https://jsearch.p.rapidapi.com/search");
+      jsearchUrl.searchParams.set("query", formattedQuery);
+      jsearchUrl.searchParams.set("page", "1");
+      jsearchUrl.searchParams.set("num_pages", "1");
+      if (employmentTypes) {
+        jsearchUrl.searchParams.set("employment_types", employmentTypes);
       }
 
-      const response = await fetch(jsearchUrl, {
+      const response = await fetch(jsearchUrl.toString(), {
         method: "GET",
         headers: {
           "X-RapidAPI-Key": rapidApiKey.key,
@@ -157,13 +146,12 @@ Deno.serve(async (req: Request) => {
           rule: primaryKeyword,
           fetched: 0,
           new: 0,
-          key_source: `failed: JSearch ${response.status}: ${errText}`,
+          error: `JSearch ${response.status}: ${errText}`,
         });
         continue;
       }
 
-      await markKeyUsed(supabaseAdmin, rapidApiKey);
-
+      keyWasUsed = true;
       const payload = await response.json();
       const scrapedJobs = payload.data || [];
 
@@ -172,6 +160,7 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
+      // Map API response to database schema
       const records = scrapedJobs.map((job: JSearchJob) => ({
         user_id: user.id,
         external_job_id: String(job.job_id),
@@ -185,9 +174,9 @@ Deno.serve(async (req: Request) => {
         salary: job.job_salary ?? null,
         url: job.job_apply_link ?? "",
         status: "pending",
-        match_score: null,
       }));
 
+      // Batch upsert jobs for this rule
       const { data: inserted, error: insertError } = await supabaseAdmin
         .from("job_vault")
         .upsert(records, {
@@ -197,7 +186,10 @@ Deno.serve(async (req: Request) => {
         .select("id");
 
       if (insertError) {
-        console.error("Database insert error:", insertError.message);
+        console.error(
+          `[Scrape] Database insert error for rule "${primaryKeyword}":`,
+          insertError.message,
+        );
       }
 
       const insertedCount = inserted?.length ?? 0;
@@ -210,11 +202,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (userRole === "member") {
-      await supabaseAdmin
-        .from("profiles")
-        .update({ last_scrape_time: now.toISOString() })
-        .eq("id", user.id);
+    // 5. Finalize: rotate key and update member rate-limiting
+    if (keyWasUsed) {
+      await markKeyUsed(supabaseAdmin, rapidApiKey);
     }
 
     return new Response(
