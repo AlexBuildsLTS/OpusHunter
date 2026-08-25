@@ -158,7 +158,7 @@ This section is actively updated to prevent reverse-engineering of project progr
 - **Auto-Apply Execution:** Automated application generation operates as a highly personalized cover-letter draft creator and hard-link dispatcher. Playwright-based automated form filing on ATS platforms (Greenhouse/Lever) remains to be confirmed.
 - **API Cost Analytics:** The Admin panel manages active shared API keys but does not currently log specific tokens consumed or monthly costs.
 
-### 🚀 Upcoming Milestones (Strategic Roadmap)
+### 🚀 (Strategic Roadmap) WHEN we made sure everythign else works 
 
 1. **Apply Service Verification:** Validate Playwright's headless execution state and synchronize auto-submission capability with the UI.
 2. **Cost & Usage Surveillance:** Deploy an `api_key_usage_logs` schema, capture Gemini's exact `usageMetadata` tokens, and render real-time cost-tracking statistics inside the Admin Panel.
