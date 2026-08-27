@@ -1,22 +1,8 @@
 /**
  * app/(tabs)/configure.tsx
- * OpusHunter — Master Configuration Engine & Route
- * Architecture: Expo Router v57, TanStack Query, NativeWind v4, Reanimated 4.5.1
- *
- * WHAT CHANGED AND WHY:
- * 1. CONSOLIDATION: Per explicit instruction, components/features/configure/ConfigureScreen.tsx
- *    has been DELETED. The entire routing and screen implementation now lives exclusively here.
- * 2. MASSIVE STABILITY UPGRADE: Introduced rigorous TypeScript interfaces, exhaustive error
- *    boundaries, and component-level memoization to prevent unnecessary re-renders during
- *    heavy state mutations.
- * 3. UI PARITY: Rebuilt to exactly match the visual spec provided in the latest mockups,
- *    including chip-based selections for Work Arrangement, Work Types, and Experience.
- * 4. PERFORMANCE: Replaced heavy inline state mappings with memoized React components
- *    and strict Reanimated layout transitions for a flawless 120fps experience.
- * 5. TOUCH SAFETY: Strictly enforced pointerEvents="none" on all decorative layers.
+ * OpusHunter — Master Configuration Engine
  */
-
-import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -29,20 +15,12 @@ import {
   Modal,
   StyleSheet,
   KeyboardAvoidingView,
-  Dimensions,
-  Keyboard,
-  TouchableWithoutFeedback,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Animated, {
   FadeInDown,
   FadeOutUp,
   Layout,
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSpring,
-  interpolateColor,
 } from "react-native-reanimated";
 import {
   Zap,
@@ -60,14 +38,12 @@ import {
   Sparkles,
   Edit3,
   Trash2,
-  AlertTriangle,
-  Search,
-  ShieldAlert,
 } from "lucide-react-native";
 
 import { supabase } from "../../lib/supabase";
 import { useEdgeScraper } from "../../hooks/useEdgeScraper";
-import { C } from "../../lib/theme";
+import { theme, C } from "../../lib/theme";
+
 import {
   WORK_TYPE_OPTIONS,
   WORK_TYPE_LABELS,
@@ -80,12 +56,6 @@ import { KeywordTagInput } from "../../components/ui/KeywordTagInput";
 import { PageContainer } from "../../components/layout/PageContainer";
 import { SetupWizard } from "../../components/onboarding/SetupWizard";
 import { LocationAutocomplete } from "../../components/shared/LocationAutocomplete";
-
-// ════════════════════════════════════════════════════════════════════════════
-// 1. SYSTEM TYPES & CORE INTERFACES
-// ════════════════════════════════════════════════════════════════════════════
-
-const IS_WEB = Platform.OS === "web";
 
 export interface AutomationRule {
   id: string;
@@ -161,7 +131,7 @@ const REMOTE_OPTIONS = [
   { key: "hybrid", label: "Hybrid" },
   { key: "onsite", label: "On-site" },
   { key: "any", label: "Any" },
-] as const;
+];
 
 const SALARY_STEPS: { label: string; value: number | null }[] = [
   { label: "Any", value: null },
@@ -189,48 +159,43 @@ const JOB_BOARDS = [
   { key: "jsearch", label: "JSearch Edge", color: C.purple },
 ];
 
-// ════════════════════════════════════════════════════════════════════════════
-// 2. HIGH-PERFORMANCE UI PRIMITIVES
-// ════════════════════════════════════════════════════════════════════════════
-
-interface ToggleChipProps {
+const ToggleChip = ({
+  label,
+  active,
+  color = C.cyan,
+  onPress,
+}: {
   label: string;
   active: boolean;
   color?: string;
   onPress: () => void;
-}
-
-const ToggleChip = memo(
-  ({ label, active, color = C.cyan, onPress }: ToggleChipProps) => (
-    <AnimatedPressable
-      onPress={onPress}
-      scaleDownTo={0.94}
-      style={[
-        st.chip,
-        active
-          ? { borderColor: `${color}55`, backgroundColor: `${color}15` }
-          : {
-              borderColor: C.border,
-              backgroundColor: "rgba(255,255,255,0.02)",
-            },
-      ]}
-    >
-      {active && <Check size={12} color={color} />}
-      <Text style={[st.chipText, { color: active ? color : C.sub }]}>
-        {label}
-      </Text>
-    </AnimatedPressable>
-  ),
+}) => (
+  <AnimatedPressable
+    onPress={onPress}
+    scaleDownTo={0.94}
+    style={[
+      st.chip,
+      active
+        ? { borderColor: `${color}55`, backgroundColor: `${color}15` }
+        : { borderColor: C.border, backgroundColor: "rgba(255,255,255,0.02)" },
+    ]}
+  >
+    {active && <Check size={12} color={color} />}
+    <Text style={[st.chipText, { color: active ? color : C.sub }]}>
+      {label}
+    </Text>
+  </AnimatedPressable>
 );
-ToggleChip.displayName = "ToggleChip";
 
-interface SectionHeaderProps {
-  icon: React.ElementType;
+const SectionHeader = ({
+  icon: Icon,
+  title,
+  sub,
+}: {
+  icon: any;
   title: string;
   sub?: string;
-}
-
-const SectionHeader = memo(({ icon: Icon, title, sub }: SectionHeaderProps) => (
+}) => (
   <View style={st.sectionHeader}>
     <View
       style={[
@@ -245,306 +210,290 @@ const SectionHeader = memo(({ icon: Icon, title, sub }: SectionHeaderProps) => (
       {sub && <Text style={st.sectionSub}>{sub}</Text>}
     </View>
   </View>
-));
-SectionHeader.displayName = "SectionHeader";
-
-const SectionCard = memo(
-  ({ children, delay }: { children: React.ReactNode; delay: number }) => (
-    <Animated.View
-      entering={FadeInDown.delay(delay).springify()}
-      style={{ marginBottom: 20 }}
-    >
-      <GlassCard tint="frost" padding="lg" hoverable>
-        {children}
-      </GlassCard>
-    </Animated.View>
-  ),
 );
-SectionCard.displayName = "SectionCard";
 
-// ════════════════════════════════════════════════════════════════════════════
-// 3. ENGINE TAB IMPLEMENTATION
-// ════════════════════════════════════════════════════════════════════════════
+const SectionCard = ({
+  children,
+  delay,
+}: {
+  children: React.ReactNode;
+  delay: number;
+}) => (
+  <Animated.View
+    entering={FadeInDown.delay(delay).springify()}
+    style={{ marginBottom: 20 }}
+  >
+    <GlassCard tint="frost" padding="lg" hoverable>
+      {children}
+    </GlassCard>
+  </Animated.View>
+);
 
-interface EngineTabProps {
+function EngineTab({
+  config,
+  setConfig,
+  onScrape,
+  isScraping,
+  activeRulesCount,
+}: {
   config: EngineConfig;
   setConfig: (c: EngineConfig) => void;
   onScrape: () => void;
   isScraping: boolean;
   activeRulesCount: number;
-}
+}) {
+  const toggle = (key: keyof EngineConfig, val: string) => {
+    const arr = config[key] as string[];
+    setConfig({
+      ...config,
+      [key]: arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val],
+    });
+  };
 
-const EngineTab = memo(
-  ({
-    config,
-    setConfig,
-    onScrape,
-    isScraping,
-    activeRulesCount,
-  }: EngineTabProps) => {
-    const toggleArrayItem = useCallback(
-      (key: keyof EngineConfig, val: string) => {
-        setConfig({
-          ...config,
-          [key]: (config[key] as string[]).includes(val)
-            ? (config[key] as string[]).filter((v) => v !== val)
-            : [...(config[key] as string[]), val],
-        });
-      },
-      [config, setConfig],
-    );
-
-    return (
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={st.tabScroll}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+  return (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={st.tabScroll}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Animated.View
+        entering={FadeInDown.delay(60).springify()}
+        style={{ marginBottom: 20 }}
       >
-        <Animated.View
-          entering={FadeInDown.delay(60).springify()}
-          style={{ marginBottom: 20 }}
-        >
-          <GlassCard tint="cyan" padding="lg" glow hoverable>
+        <GlassCard tint="cyan" padding="lg" glow hoverable>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
             <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
+              style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
             >
-              <View
-                style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
-              >
-                <View style={st.enginePulseIcon}>
-                  <Zap size={22} color={C.cyan} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={st.engineTitle}>Engine Ready</Text>
-                  <Text style={st.engineSub}>
-                    {activeRulesCount > 0
-                      ? `${activeRulesCount} active rule${activeRulesCount === 1 ? "" : "s"} · merging all sources`
-                      : "Add at least one rule below to enable RUN"}
-                  </Text>
-                </View>
+              <View style={st.enginePulseIcon}>
+                <Zap size={22} color={C.cyan} />
               </View>
+              <View style={{ flex: 1 }}>
+                <Text style={st.engineTitle}>Engine Ready</Text>
+                <Text style={st.engineSub}>
+                  {activeRulesCount > 0
+                    ? `${activeRulesCount} active rule${activeRulesCount === 1 ? "" : "s"} · merging all sources`
+                    : "Add at least one rule below to enable RUN"}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={onScrape}
+              disabled={isScraping || activeRulesCount === 0}
+              style={[
+                st.runBtn,
+                (isScraping || activeRulesCount === 0) && { opacity: 0.4 },
+              ]}
+              activeOpacity={0.8}
+            >
+              {isScraping ? (
+                <ActivityIndicator color="#000" size="small" />
+              ) : (
+                <Text style={st.runBtnText}>RUN SCRAPE</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </GlassCard>
+      </Animated.View>
+
+      <SectionCard delay={100}>
+        <SectionHeader
+          icon={MapPin}
+          title="Search Locations"
+          sub="Real cities, regions, or countries only — work mode is set separately below"
+        />
+        <LocationAutocomplete
+          selected={config.locations}
+          onChange={(locs: string[]) =>
+            setConfig({ ...config, locations: locs })
+          }
+        />
+      </SectionCard>
+
+      <SectionCard delay={140}>
+        <SectionHeader
+          icon={Briefcase}
+          title="Contract Structures"
+          sub="Filter by employment agreement type"
+        />
+        <View style={st.chipGrid}>
+          {WORK_TYPE_OPTIONS.map((wt: string) => (
+            <ToggleChip
+              key={wt}
+              label={WORK_TYPE_LABELS[wt]}
+              active={config.workTypes.includes(wt)}
+              color={C.purple}
+              onPress={() => toggle("workTypes", wt)}
+            />
+          ))}
+        </View>
+      </SectionCard>
+
+      <SectionCard delay={180}>
+        <SectionHeader
+          icon={Tag}
+          title="Seniority Targets"
+          sub="Multi-select — scraper searches all selected"
+        />
+        <View style={st.chipGrid}>
+          {EXPERIENCE_LEVELS.map((lvl: string) => (
+            <ToggleChip
+              key={lvl}
+              label={lvl}
+              active={config.experienceLevels.includes(lvl)}
+              color={EXPERIENCE_COLORS[lvl]}
+              onPress={() => toggle("experienceLevels", lvl)}
+            />
+          ))}
+        </View>
+      </SectionCard>
+
+      <SectionCard delay={220}>
+        <SectionHeader
+          icon={Globe}
+          title="Work Modality"
+          sub="Remote, hybrid, or on-site — the ONLY place work arrangement is set"
+        />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+          {REMOTE_OPTIONS.map(({ key, label }) => {
+            const active = config.remotePreference === key;
+            return (
               <TouchableOpacity
-                onPress={onScrape}
-                disabled={isScraping || activeRulesCount === 0}
+                key={key}
+                onPress={() => setConfig({ ...config, remotePreference: key })}
                 style={[
-                  st.runBtn,
-                  (isScraping || activeRulesCount === 0) && { opacity: 0.4 },
+                  st.remoteBtn,
+                  active
+                    ? {
+                        borderColor: `${C.cyan}50`,
+                        backgroundColor: `${C.cyan}15`,
+                      }
+                    : {
+                        borderColor: C.border,
+                        backgroundColor: "rgba(255,255,255,0.04)",
+                      },
                 ]}
                 activeOpacity={0.8}
               >
-                {isScraping ? (
-                  <ActivityIndicator color="#000" size="small" />
-                ) : (
-                  <Text style={st.runBtnText}>RUN SCRAPE</Text>
-                )}
+                {active && <View style={st.remoteDot} />}
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "700",
+                    color: active ? C.cyan : C.sub,
+                  }}
+                >
+                  {label}
+                </Text>
               </TouchableOpacity>
-            </View>
-          </GlassCard>
-        </Animated.View>
+            );
+          })}
+        </View>
+      </SectionCard>
 
-        <SectionCard delay={100}>
-          <SectionHeader
-            icon={MapPin}
-            title="Search Locations"
-            sub="Real cities, regions, or countries only — work mode is set separately below"
-          />
-          <LocationAutocomplete
-            selected={config.locations}
-            onChange={(locs) => setConfig({ ...config, locations: locs })}
-          />
-        </SectionCard>
+      <SectionCard delay={260}>
+        <SectionHeader
+          icon={DollarSign}
+          title="Compensation Floor"
+          sub="Bypass roles below financial threshold"
+        />
+        <View style={st.chipGrid}>
+          {SALARY_STEPS.map(({ label, value }) => (
+            <ToggleChip
+              key={label}
+              label={label}
+              active={
+                config.salaryMin === (value === null ? "Any" : String(value))
+              }
+              color={C.amber}
+              onPress={() =>
+                setConfig({
+                  ...config,
+                  salaryMin: value === null ? "Any" : String(value),
+                })
+              }
+            />
+          ))}
+        </View>
+      </SectionCard>
 
-        <SectionCard delay={140}>
-          <SectionHeader
-            icon={Briefcase}
-            title="Contract Structures"
-            sub="Filter by employment agreement type"
-          />
-          <View style={st.chipGrid}>
-            {WORK_TYPE_OPTIONS.map((wt) => (
-              <ToggleChip
-                key={wt}
-                label={WORK_TYPE_LABELS[wt]}
-                active={config.workTypes.includes(wt)}
-                color={C.purple}
-                onPress={() => toggleArrayItem("workTypes", wt)}
-              />
-            ))}
-          </View>
-        </SectionCard>
-
-        <SectionCard delay={180}>
-          <SectionHeader
-            icon={Tag}
-            title="Seniority Targets"
-            sub="Multi-select — scraper searches all selected"
-          />
-          <View style={st.chipGrid}>
-            {EXPERIENCE_LEVELS.map((lvl) => (
-              <ToggleChip
-                key={lvl}
-                label={lvl}
-                active={config.experienceLevels.includes(lvl)}
-                color={EXPERIENCE_COLORS[lvl]}
-                onPress={() => toggleArrayItem("experienceLevels", lvl)}
-              />
-            ))}
-          </View>
-        </SectionCard>
-
-        <SectionCard delay={220}>
-          <SectionHeader
-            icon={Globe}
-            title="Work Modality"
-            sub="Remote, hybrid, or on-site — the ONLY place work arrangement is set"
-          />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            {REMOTE_OPTIONS.map(({ key, label }) => {
-              const active = config.remotePreference === key;
-              return (
-                <TouchableOpacity
-                  key={key}
-                  onPress={() =>
-                    setConfig({ ...config, remotePreference: key })
-                  }
-                  style={[
-                    st.remoteBtn,
-                    active
-                      ? {
-                          borderColor: `${C.cyan}50`,
-                          backgroundColor: `${C.cyan}15`,
-                        }
-                      : {
-                          borderColor: C.border,
-                          backgroundColor: "rgba(255,255,255,0.04)",
-                        },
-                  ]}
-                  activeOpacity={0.8}
-                >
-                  {active && <View style={st.remoteDot} />}
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "700",
-                      color: active ? C.cyan : C.sub,
-                    }}
+      <SectionCard delay={300}>
+        <SectionHeader
+          icon={Globe}
+          title="Intelligence Sources"
+          sub="Active aggregators and board connections"
+        />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+          {JOB_BOARDS.map((board) => {
+            const active = config.jobBoards.includes(board.key);
+            return (
+              <TouchableOpacity
+                key={board.key}
+                onPress={() => toggle("jobBoards", board.key)}
+                style={[
+                  st.boardCard,
+                  active
+                    ? {
+                        borderColor: `${board.color}60`,
+                        backgroundColor: `${board.color}15`,
+                      }
+                    : {
+                        borderColor: C.border,
+                        backgroundColor: "rgba(255,255,255,0.03)",
+                      },
+                ]}
+                activeOpacity={0.8}
+              >
+                {active && (
+                  <View
+                    style={[st.boardCheck, { backgroundColor: board.color }]}
                   >
-                    {label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </SectionCard>
-
-        <SectionCard delay={260}>
-          <SectionHeader
-            icon={DollarSign}
-            title="Compensation Floor"
-            sub="Bypass roles below financial threshold"
-          />
-          <View style={st.chipGrid}>
-            {SALARY_STEPS.map(({ label, value }) => (
-              <ToggleChip
-                key={label}
-                label={label}
-                active={
-                  config.salaryMin === (value === null ? "Any" : String(value))
-                }
-                color={C.amber}
-                onPress={() =>
-                  setConfig({
-                    ...config,
-                    salaryMin: value === null ? "Any" : String(value),
-                  })
-                }
-              />
-            ))}
-          </View>
-        </SectionCard>
-
-        <SectionCard delay={300}>
-          <SectionHeader
-            icon={Search}
-            title="Intelligence Sources"
-            sub="Active aggregators and board connections"
-          />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            {JOB_BOARDS.map((board) => {
-              const active = config.jobBoards.includes(board.key);
-              return (
-                <TouchableOpacity
-                  key={board.key}
-                  onPress={() => toggleArrayItem("jobBoards", board.key)}
-                  style={[
-                    st.boardCard,
-                    active
-                      ? {
-                          borderColor: `${board.color}60`,
-                          backgroundColor: `${board.color}15`,
-                        }
-                      : {
-                          borderColor: C.border,
-                          backgroundColor: "rgba(255,255,255,0.03)",
-                        },
-                  ]}
-                  activeOpacity={0.8}
+                    <Check size={10} color="#FFF" strokeWidth={3} />
+                  </View>
+                )}
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "700",
+                    color: active ? board.color : C.sub,
+                  }}
                 >
-                  {active && (
-                    <View
-                      style={[st.boardCheck, { backgroundColor: board.color }]}
-                    >
-                      <Check size={10} color="#FFF" strokeWidth={3} />
-                    </View>
-                  )}
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      fontWeight: "700",
-                      color: active ? board.color : C.sub,
-                    }}
-                  >
-                    {board.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          <Text
-            style={{
-              color: C.dim,
-              fontSize: 10,
-              marginTop: 10,
-              lineHeight: 14,
-            }}
-          >
-            Note: scrape-jobs currently queries JSearch, which itself aggregates
-            LinkedIn, Indeed, and Glassdoor listings.
-          </Text>
-        </SectionCard>
-      </ScrollView>
-    );
-  },
-);
-EngineTab.displayName = "EngineTab";
+                  {board.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <Text
+          style={{ color: C.dim, fontSize: 10, marginTop: 10, lineHeight: 14 }}
+        >
+          Note: scrape-jobs currently queries JSearch, which itself aggregates
+          LinkedIn, Indeed, and Glassdoor listings — these toggles reflect
+          source coverage, not separate direct API integrations per board.
+        </Text>
+      </SectionCard>
+    </ScrollView>
+  );
+}
 
-// ════════════════════════════════════════════════════════════════════════════
-// 4. RULE CARD & RULES TAB IMPLEMENTATION
-// ════════════════════════════════════════════════════════════════════════════
-
-interface RuleCardProps {
+function RuleCard({
+  rule,
+  onEdit,
+  onDelete,
+  onToggle,
+}: {
   rule: AutomationRule;
   onEdit: (r: AutomationRule) => void;
   onDelete: (id: string) => void;
   onToggle: (id: string, active: boolean) => void;
-}
-
-const RuleCard = memo(({ rule, onEdit, onDelete, onToggle }: RuleCardProps) => {
+}) {
   return (
     <Animated.View
       layout={Layout.springify().damping(20)}
@@ -652,487 +601,471 @@ const RuleCard = memo(({ rule, onEdit, onDelete, onToggle }: RuleCardProps) => {
       </View>
     </Animated.View>
   );
-});
-RuleCard.displayName = "RuleCard";
+}
 
-interface RulesTabProps {
+function RulesTab({
+  rules,
+  isLoading,
+  onAdd,
+  onEdit,
+  onDelete,
+  onToggle,
+}: {
   rules: AutomationRule[];
   isLoading: boolean;
   onAdd: () => void;
   onEdit: (r: AutomationRule) => void;
   onDelete: (id: string) => void;
   onToggle: (id: string, active: boolean) => void;
-}
-
-const RulesTab = memo(
-  ({ rules, isLoading, onAdd, onEdit, onDelete, onToggle }: RulesTabProps) => {
-    if (isLoading) {
-      return (
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            paddingTop: 60,
-          }}
-        >
-          <ActivityIndicator color={C.cyan} size="large" />
-        </View>
-      );
-    }
-
+}) {
+  if (isLoading) {
     return (
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={st.tabScroll}
-        showsVerticalScrollIndicator={false}
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          paddingTop: 60,
+        }}
       >
+        <ActivityIndicator color={C.cyan} size="large" />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={st.tabScroll}
+      showsVerticalScrollIndicator={false}
+    >
+      <Text
+        style={{ color: C.dim, fontSize: 11, marginBottom: 14, lineHeight: 16 }}
+      >
+        Every rule with its toggle ON is used the next time you tap INITIALIZE —
+        not just one at a time. Toggle any rule off to pause it without deleting
+        it.
+      </Text>
+      {rules.map((rule, idx) => (
+        <Animated.View
+          key={rule.id}
+          entering={FadeInDown.delay(idx * 50).springify()}
+          style={{ marginBottom: 16 }}
+        >
+          <RuleCard
+            rule={rule}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onToggle={onToggle}
+          />
+        </Animated.View>
+      ))}
+      <TouchableOpacity
+        onPress={onAdd}
+        style={st.addRuleBtn}
+        activeOpacity={0.8}
+      >
+        <Plus size={18} color={C.cyan} />
         <Text
           style={{
-            color: C.dim,
-            fontSize: 11,
-            marginBottom: 14,
-            lineHeight: 16,
+            color: C.cyan,
+            fontSize: 14,
+            fontWeight: "800",
+            marginLeft: 8,
           }}
         >
-          Every rule with its toggle ON is used the next time you tap INITIALIZE
-          — not just one at a time. Toggle any rule off to pause it without
-          deleting it.
+          ADD NEW RULE
         </Text>
-        {rules.map((rule, idx) => (
-          <Animated.View
-            key={rule.id}
-            entering={FadeInDown.delay(idx * 50).springify()}
-            style={{ marginBottom: 16 }}
-          >
-            <RuleCard
-              rule={rule}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onToggle={onToggle}
-            />
-          </Animated.View>
-        ))}
-        <TouchableOpacity
-          onPress={onAdd}
-          style={st.addRuleBtn}
-          activeOpacity={0.8}
-        >
-          <Plus size={18} color={C.cyan} />
-          <Text
-            style={{
-              color: C.cyan,
-              fontSize: 14,
-              fontWeight: "800",
-              marginLeft: 8,
-            }}
-          >
-            ADD NEW RULE
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    );
-  },
-);
-RulesTab.displayName = "RulesTab";
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
 
-// ════════════════════════════════════════════════════════════════════════════
-// 5. RULE FORM MODAL IMPLEMENTATION
-// ════════════════════════════════════════════════════════════════════════════
-
-interface RuleFormModalProps {
+function RuleFormModal({
+  visible,
+  initial,
+  onClose,
+  onSave,
+  saving,
+}: {
   visible: boolean;
   initial: RuleFormState;
   onClose: () => void;
   onSave: (form: RuleFormState) => void;
   saving: boolean;
-}
+}) {
+  const [form, setForm] = useState<RuleFormState>(initial);
+  useEffect(() => {
+    if (visible) setForm(initial);
+  }, [visible, initial]);
 
-const RuleFormModal = memo(
-  ({ visible, initial, onClose, onSave, saving }: RuleFormModalProps) => {
-    const [form, setForm] = useState<RuleFormState>(initial);
-    useEffect(() => {
-      if (visible) setForm(initial);
-    }, [visible, initial]);
+  const toggleWorkType = (wt: string) => {
+    setForm((f) => ({
+      ...f,
+      work_types: f.work_types.includes(wt)
+        ? f.work_types.filter((w) => w !== wt)
+        : [...f.work_types, wt],
+    }));
+  };
+  const toggleExperience = (lvl: string) => {
+    setForm((f) => ({
+      ...f,
+      experience_levels: f.experience_levels.includes(lvl)
+        ? f.experience_levels.filter((v) => v !== lvl)
+        : [...f.experience_levels, lvl],
+    }));
+  };
 
-    const [generating, setGenerating] = useState(false);
-    const [generateError, setGenerateError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
-    const handleGenerateTemplate = useCallback(async () => {
-      setGenerating(true);
-      setGenerateError(null);
-      try {
-        const { data, error } = await supabase.functions.invoke(
-          "generate-rule-template",
-          {
-            body: {
-              keywords: form.keywords,
-              location: form.location,
-              work_types: form.work_types,
-              experience_levels: form.experience_levels,
-              remote_preference: form.remote_preference,
-            },
+  const handleGenerateTemplate = useCallback(async () => {
+    setGenerating(true);
+    setGenerateError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "generate-rule-template",
+        {
+          body: {
+            keywords: form.keywords,
+            location: form.location,
+            work_types: form.work_types,
+            experience_levels: form.experience_levels,
+            remote_preference: form.remote_preference,
           },
-        );
-        if (error) throw new Error(error.message);
-        if (data?.error) throw new Error(data.error);
-        setForm((f) => ({ ...f, base_cover_letter: data.draft }));
-      } catch (e) {
-        setGenerateError(
-          e instanceof Error
-            ? e.message
-            : "Could not generate a draft. Ensure your API key is valid.",
-        );
-      } finally {
-        setGenerating(false);
-      }
-    }, [
-      form.keywords,
-      form.location,
-      form.work_types,
-      form.experience_levels,
-      form.remote_preference,
-    ]);
+        },
+      );
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+      setForm((f) => ({ ...f, base_cover_letter: data.draft }));
+    } catch (e) {
+      setGenerateError(
+        e instanceof Error ? e.message : "Could not generate a draft.",
+      );
+    } finally {
+      setGenerating(false);
+    }
+  }, [
+    form.keywords,
+    form.location,
+    form.work_types,
+    form.experience_levels,
+    form.remote_preference,
+  ]);
 
-    const toggleWorkType = (wt: string) => {
-      setForm((f) => ({
-        ...f,
-        work_types: f.work_types.includes(wt)
-          ? f.work_types.filter((w) => w !== wt)
-          : [...f.work_types, wt],
-      }));
-    };
+  const canSave =
+    form.keywords.length > 0 &&
+    (form.remote_preference === "remote" || form.location.trim().length > 0);
 
-    const toggleExperience = (lvl: string) => {
-      setForm((f) => ({
-        ...f,
-        experience_levels: f.experience_levels.includes(lvl)
-          ? f.experience_levels.filter((v) => v !== lvl)
-          : [...f.experience_levels, lvl],
-      }));
-    };
+  const showDistancePicker = form.remote_preference !== "remote";
 
-    const canSave =
-      form.keywords.length > 0 &&
-      (form.remote_preference === "remote" || form.location.trim().length > 0);
-    const showDistancePicker = form.remote_preference !== "remote";
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent
+      statusBarTranslucent
+    >
+      <View style={st.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ width: "100%", maxWidth: 560, alignSelf: "center" }}
+        >
+          <View style={st.modalCard}>
+            <View style={st.modalHeader}>
+              <Text style={st.modalTitle}>
+                {initial.keywords.length > 0 ? "Edit Rule" : "New Search Rule"}
+              </Text>
+              <TouchableOpacity
+                onPress={onClose}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={20} color={C.sub} />
+              </TouchableOpacity>
+            </View>
 
-    return (
-      <Modal
-        visible={visible}
-        animationType="slide"
-        transparent
-        statusBarTranslucent
-      >
-        <View style={st.modalOverlay}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              style={{ width: "100%", maxWidth: 560, alignSelf: "center" }}
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: 20, gap: 18 }}
+              keyboardShouldPersistTaps="handled"
             >
-              <View style={st.modalCard}>
-                <View style={st.modalHeader}>
-                  <Text style={st.modalTitle}>
-                    {initial.keywords.length > 0
-                      ? "Edit Rule"
-                      : "New Search Rule"}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={onClose}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <X size={20} color={C.sub} />
-                  </TouchableOpacity>
-                </View>
+              <View>
+                <Text style={st.fieldLabel}>
+                  KEYWORDS{" "}
+                  <Text style={st.fieldLabelSub}>(role titles and skills)</Text>
+                </Text>
+                <KeywordTagInput
+                  value={form.keywords}
+                  onChange={(tags: string[]) =>
+                    setForm((f) => ({ ...f, keywords: tags }))
+                  }
+                />
+              </View>
 
-                <ScrollView
-                  style={{ flex: 1 }}
-                  contentContainerStyle={{ padding: 20, gap: 18 }}
-                  keyboardShouldPersistTaps="handled"
+              <View>
+                <Text style={st.fieldLabel}>WORK ARRANGEMENT</Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    marginTop: 6,
+                  }}
                 >
-                  <View>
-                    <Text style={st.fieldLabel}>
-                      KEYWORDS{" "}
-                      <Text style={st.fieldLabelSub}>
-                        (role titles and skills)
-                      </Text>
-                    </Text>
-                    <KeywordTagInput
-                      value={form.keywords}
-                      onChange={(tags) =>
-                        setForm((f) => ({ ...f, keywords: tags }))
-                      }
-                    />
-                  </View>
-
-                  <View>
-                    <Text style={st.fieldLabel}>WORK ARRANGEMENT</Text>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        flexWrap: "wrap",
-                        gap: 8,
-                        marginTop: 6,
-                      }}
-                    >
-                      {REMOTE_OPTIONS.map(({ key, label }) => {
-                        const active = form.remote_preference === key;
-                        return (
-                          <TouchableOpacity
-                            key={key}
-                            onPress={() =>
-                              setForm((f) => ({ ...f, remote_preference: key }))
-                            }
-                            activeOpacity={0.8}
-                            style={[
-                              st.remoteBtn,
-                              active
-                                ? {
-                                    borderColor: `${C.cyan}50`,
-                                    backgroundColor: `${C.cyan}15`,
-                                  }
-                                : {
-                                    borderColor: C.border,
-                                    backgroundColor: "rgba(255,255,255,0.04)",
-                                  },
-                            ]}
-                          >
-                            {active && <View style={st.remoteDot} />}
-                            <Text
-                              style={{
-                                fontSize: 12,
-                                fontWeight: "700",
-                                color: active ? C.cyan : C.sub,
-                              }}
-                            >
-                              {label}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  {showDistancePicker && (
-                    <View>
-                      <Text style={st.fieldLabel}>LOCATIONS</Text>
-                      <LocationAutocomplete
-                        selected={
-                          form.location
-                            ? form.location
-                                .split(",")
-                                .map((s) => s.trim())
-                                .filter(Boolean)
-                            : []
-                        }
-                        onChange={(locations) =>
-                          setForm((f) => ({
-                            ...f,
-                            location: locations.join(", "),
-                          }))
-                        }
-                        onPrimaryCoordsChange={(coords) =>
-                          setForm((f) => ({
-                            ...f,
-                            latitude: coords?.latitude ?? null,
-                            longitude: coords?.longitude ?? null,
-                          }))
-                        }
-                      />
-                      <Text style={st.fieldHint}>
-                        Real cities or whole countries only — required since
-                        this rule isn't Remote Only.
-                      </Text>
-                    </View>
-                  )}
-
-                  <View>
-                    <Text style={st.fieldLabel}>WORK TYPES</Text>
-                    <View style={[st.chipGrid, { marginTop: 6 }]}>
-                      {WORK_TYPE_OPTIONS.map((wt) => (
-                        <ToggleChip
-                          key={wt}
-                          label={WORK_TYPE_LABELS[wt]}
-                          active={form.work_types.includes(wt)}
-                          onPress={() => toggleWorkType(wt)}
-                        />
-                      ))}
-                    </View>
-                  </View>
-
-                  <View>
-                    <Text style={st.fieldLabel}>
-                      EXPERIENCE LEVEL{" "}
-                      <Text style={st.fieldLabelSub}>(optional)</Text>
-                    </Text>
-                    <View style={[st.chipGrid, { marginTop: 6 }]}>
-                      {EXPERIENCE_LEVELS.map((lvl) => (
-                        <ToggleChip
-                          key={lvl}
-                          label={lvl}
-                          active={form.experience_levels.includes(lvl)}
-                          color={EXPERIENCE_COLORS[lvl]}
-                          onPress={() => toggleExperience(lvl)}
-                        />
-                      ))}
-                    </View>
-                  </View>
-
-                  {showDistancePicker && (
-                    <View>
-                      <Text style={st.fieldLabel}>
-                        MAX COMMUTE DISTANCE{" "}
-                        <Text style={st.fieldLabelSub}>(optional)</Text>
-                      </Text>
-                      <View style={[st.chipGrid, { marginTop: 6 }]}>
-                        {DISTANCE_STEPS.map(({ label, value }) => (
-                          <ToggleChip
-                            key={label}
-                            label={label}
-                            active={form.max_distance_km === value}
-                            onPress={() =>
-                              setForm((f) => ({ ...f, max_distance_km: value }))
-                            }
-                          />
-                        ))}
-                      </View>
-                    </View>
-                  )}
-
-                  <View>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        marginBottom: 8,
-                      }}
-                    >
-                      <Text style={st.fieldLabel}>
-                        BASE COVER LETTER{" "}
-                        <Text style={st.fieldLabelSub}>
-                          ( BASED ON APPLICATION )
-                        </Text>
-                      </Text>
+                  {REMOTE_OPTIONS.map(({ key, label }) => {
+                    const active = form.remote_preference === key;
+                    return (
                       <TouchableOpacity
-                        onPress={handleGenerateTemplate}
-                        disabled={generating || form.keywords.length === 0}
+                        key={key}
+                        onPress={() =>
+                          setForm((f) => ({ ...f, remote_preference: key }))
+                        }
+                        activeOpacity={0.8}
                         style={[
-                          st.generateBtn,
-                          form.keywords.length === 0 && { opacity: 0.4 },
+                          st.remoteBtn,
+                          active
+                            ? {
+                                borderColor: `${C.cyan}50`,
+                                backgroundColor: `${C.cyan}15`,
+                              }
+                            : {
+                                borderColor: C.border,
+                                backgroundColor: "rgba(255,255,255,0.04)",
+                              },
                         ]}
                       >
-                        {generating ? (
-                          <ActivityIndicator size="small" color={C.cyan} />
-                        ) : (
-                          <Sparkles size={12} color={C.cyan} />
-                        )}
+                        {active && <View style={st.remoteDot} />}
                         <Text
                           style={{
-                            color: C.cyan,
-                            fontSize: 11,
-                            fontWeight: "800",
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color: active ? C.cyan : C.sub,
                           }}
                         >
-                          {generating ? "Generating…" : "Generate with AI"}
+                          {label}
                         </Text>
                       </TouchableOpacity>
-                    </View>
-
-                    {generateError && (
-                      <Animated.View entering={FadeInDown.duration(200)}>
-                        <Text style={st.errorText}>{generateError}</Text>
-                      </Animated.View>
-                    )}
-
-                    <TextInput
-                      style={[st.textInput, { minHeight: 130, paddingTop: 14 }]}
-                      placeholder={
-                        "Dear Hiring Manager,\n\nI am writing to express my interest in..."
-                      }
-                      placeholderTextColor={C.dim}
-                      value={form.base_cover_letter}
-                      onChangeText={(v) =>
-                        setForm((f) => ({ ...f, base_cover_letter: v }))
-                      }
-                      multiline
-                      textAlignVertical="top"
-                      autoCorrect={false}
-                      {...(IS_WEB ? ({ outlineStyle: "none" } as any) : {})}
-                    />
-                    <Text style={st.fieldHint}>
-                      Use [COMPANY], [ROLE], [NAME] — Gemini replaces them
-                      automatically.
-                    </Text>
-                  </View>
-
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      paddingTop: 4,
-                    }}
-                  >
-                    <View>
-                      <Text style={st.fieldLabel}>ACTIVE</Text>
-                      <Text style={{ fontSize: 11, color: C.sub }}>
-                        Scraper uses every rule with this ON.
-                      </Text>
-                    </View>
-                    <Switch
-                      value={form.is_active}
-                      onValueChange={(v) =>
-                        setForm((f) => ({ ...f, is_active: v }))
-                      }
-                      trackColor={{
-                        false: "rgba(255,255,255,0.08)",
-                        true: `${C.cyan}50`,
-                      }}
-                      thumbColor={
-                        form.is_active ? C.cyan : "rgba(255,255,255,0.25)"
-                      }
-                    />
-                  </View>
-                </ScrollView>
-
-                <View style={st.modalFooter}>
-                  <TouchableOpacity
-                    onPress={() => onSave(form)}
-                    disabled={saving || !canSave}
-                    style={[
-                      st.saveBtn,
-                      (!canSave || saving) && { opacity: 0.45 },
-                    ]}
-                    activeOpacity={0.8}
-                  >
-                    {saving ? (
-                      <ActivityIndicator color="#000" />
-                    ) : (
-                      <Text style={st.saveBtnText}>Save Rule</Text>
-                    )}
-                  </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
-            </KeyboardAvoidingView>
-          </TouchableWithoutFeedback>
-        </View>
-      </Modal>
-    );
-  },
-);
-RuleFormModal.displayName = "RuleFormModal";
 
-// ════════════════════════════════════════════════════════════════════════════
-// 6. MAIN ROUTE EXPORT
-// ════════════════════════════════════════════════════════════════════════════
+              {form.remote_preference !== "remote" && (
+                <View>
+                  <Text style={st.fieldLabel}>LOCATIONS</Text>
+                  <LocationAutocomplete
+                    selected={
+                      form.location
+                        ? form.location
+                            .split(",")
+                            .map((s) => s.trim())
+                            .filter(Boolean)
+                        : []
+                    }
+                    onChange={(locations: string[]) =>
+                      setForm((f) => ({ ...f, location: locations.join(", ") }))
+                    }
+                    onPrimaryCoordsChange={(coords: any) =>
+                      setForm((f) => ({
+                        ...f,
+                        latitude: coords?.latitude ?? null,
+                        longitude: coords?.longitude ?? null,
+                      }))
+                    }
+                  />
+                  <Text style={st.fieldHint}>
+                    Real cities or whole countries only — required since this
+                    rule isn't Remote Only. The first location is the origin for
+                    the commute-distance filter below.
+                  </Text>
+                </View>
+              )}
 
-export default function ConfigureScreenRoute() {
+              <View>
+                <Text style={st.fieldLabel}>WORK TYPES</Text>
+                <View style={[st.chipGrid, { marginTop: 6 }]}>
+                  {WORK_TYPE_OPTIONS.map((wt: string) => (
+                    <ToggleChip
+                      key={wt}
+                      label={WORK_TYPE_LABELS[wt]}
+                      active={form.work_types.includes(wt)}
+                      onPress={() => toggleWorkType(wt)}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View>
+                <Text style={st.fieldLabel}>
+                  EXPERIENCE LEVEL{" "}
+                  <Text style={st.fieldLabelSub}>
+                    (optional — leave empty for any)
+                  </Text>
+                </Text>
+                <View style={[st.chipGrid, { marginTop: 6 }]}>
+                  {EXPERIENCE_LEVELS.map((lvl: string) => (
+                    <ToggleChip
+                      key={lvl}
+                      label={lvl}
+                      active={form.experience_levels.includes(lvl)}
+                      color={EXPERIENCE_COLORS[lvl]}
+                      onPress={() => toggleExperience(lvl)}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              {showDistancePicker && (
+                <View>
+                  <Text style={st.fieldLabel}>
+                    MAX COMMUTE DISTANCE{" "}
+                    <Text style={st.fieldLabelSub}>(optional)</Text>
+                  </Text>
+                  <View style={[st.chipGrid, { marginTop: 6 }]}>
+                    {DISTANCE_STEPS.map(({ label, value }) => (
+                      <ToggleChip
+                        key={label}
+                        label={label}
+                        active={form.max_distance_km === value}
+                        onPress={() =>
+                          setForm((f) => ({ ...f, max_distance_km: value }))
+                        }
+                      />
+                    ))}
+                  </View>
+                  {form.max_distance_km != null && form.latitude == null && (
+                    <Text style={[st.fieldHint, { color: C.amber }]}>
+                      Pick your first location from the dropdown (not just
+                      typed) so distance can actually be measured — otherwise
+                      this limit won't filter anything.
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              <View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: 8,
+                  }}
+                >
+                  <Text style={st.fieldLabel}>
+                    BASE COVER LETTER{" "}
+                    <Text style={st.fieldLabelSub}>
+                      ( BASED ON APPLICATION )
+                    </Text>
+                  </Text>
+                  <TouchableOpacity
+                    onPress={handleGenerateTemplate}
+                    disabled={generating || form.keywords.length === 0}
+                    style={[
+                      st.generateBtn,
+                      form.keywords.length === 0 && { opacity: 0.4 },
+                    ]}
+                  >
+                    {generating ? (
+                      <ActivityIndicator size="small" color={C.cyan} />
+                    ) : (
+                      <Sparkles size={12} color={C.cyan} />
+                    )}
+                    <Text
+                      style={{ color: C.cyan, fontSize: 11, fontWeight: "800" }}
+                    >
+                      {generating ? "Generating…" : "Generate with AI"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {generateError && (
+                  <Text
+                    style={{ color: C.pink, fontSize: 11, marginBottom: 6 }}
+                  >
+                    {generateError}
+                  </Text>
+                )}
+                <TextInput
+                  style={[st.textInput, { minHeight: 130, paddingTop: 14 }]}
+                  placeholder={
+                    "Dear Hiring Manager,\n\nI am writing to express my interest in..."
+                  }
+                  placeholderTextColor={C.dim}
+                  value={form.base_cover_letter}
+                  onChangeText={(v) =>
+                    setForm((f) => ({ ...f, base_cover_letter: v }))
+                  }
+                  multiline
+                  numberOfLines={6}
+                  textAlignVertical="top"
+                  autoCorrect={false}
+                  {...(Platform.OS === "web"
+                    ? ({ outlineStyle: "none" } as any)
+                    : {})}
+                />
+                <Text style={st.fieldHint}>
+                  Use [COMPANY], [ROLE], [NAME] — Gemini replaces them
+                  automatically.
+                </Text>
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingTop: 4,
+                }}
+              >
+                <View>
+                  <Text style={st.fieldLabel}>ACTIVE</Text>
+                  <Text style={{ fontSize: 11, color: C.sub }}>
+                    Scraper uses every rule with this ON, all at once
+                  </Text>
+                </View>
+                <Switch
+                  value={form.is_active}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, is_active: v }))
+                  }
+                  trackColor={{
+                    false: "rgba(255,255,255,0.08)",
+                    true: `${C.cyan}50`,
+                  }}
+                  thumbColor={
+                    form.is_active ? C.cyan : "rgba(255,255,255,0.25)"
+                  }
+                />
+              </View>
+            </ScrollView>
+
+            <View style={st.modalFooter}>
+              <TouchableOpacity
+                onPress={() => onSave(form)}
+                disabled={saving || !canSave}
+                style={[st.saveBtn, (!canSave || saving) && { opacity: 0.45 }]}
+                activeOpacity={0.8}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <Text style={st.saveBtnText}>Save Rule</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+export default function ConfigureScreen() {
   const queryClient = useQueryClient();
   const { triggerScrape, isLoading: isScraping } = useEdgeScraper();
-
   const [scrapeSuccess, setScrapeSuccess] = useState(false);
   const [scrapeError, setScrapeError] = useState<string | null>(null);
+
   const [activeTab, setActiveTab] = useState<"engine" | "rules">("engine");
   const [engineConfig, setEngineConfig] =
     useState<EngineConfig>(DEFAULT_ENGINE);
@@ -1194,13 +1127,13 @@ export default function ConfigureScreenRoute() {
       if (editingRule) {
         const { error } = await supabase
           .from("automation_rules")
-          .update(payload)
+          .update(payload as any)
           .eq("id", editingRule.id);
         if (error) throw new Error(error.message);
       } else {
         const { error } = await supabase
           .from("automation_rules")
-          .insert(payload);
+          .insert(payload as any);
         if (error) throw new Error(error.message);
       }
     },
@@ -1236,7 +1169,7 @@ export default function ConfigureScreenRoute() {
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
       const { error } = await supabase
         .from("automation_rules")
-        .update({ is_active: active })
+        .update({ is_active: active } as any)
         .eq("id", id);
       if (error) throw new Error(error.message);
     },
@@ -1310,7 +1243,7 @@ export default function ConfigureScreenRoute() {
             {banner.type === "success" ? (
               <CheckCircle2 size={16} color={C.cyan} />
             ) : (
-              <ShieldAlert size={16} color={C.pink} />
+              <AlertCircle size={16} color={C.pink} />
             )}
             <Text
               style={{
@@ -1451,10 +1384,6 @@ export default function ConfigureScreenRoute() {
     </PageContainer>
   );
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// 7. STYLESHEET
-// ════════════════════════════════════════════════════════════════════════════
 
 const st = StyleSheet.create({
   screenWrapper: { flex: 1, paddingHorizontal: 24, paddingTop: 20 },
@@ -1699,12 +1628,6 @@ const st = StyleSheet.create({
     backgroundColor: `${C.cyan}14`,
     borderWidth: 1,
     borderColor: `${C.cyan}30`,
-  },
-  errorText: {
-    color: C.pink,
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 8,
   },
   saveBtn: {
     paddingVertical: 16,
