@@ -80,6 +80,7 @@ const PALETTE = {
   CORE: "#05080d",
   MID: "#05050d",
   CARD_RGB: "20, 14, 64",
+  CARD_BG: "#140E40",
   SURFACE: "#051123",
   SURFACE_LIGHT: "#001422",
   OVERLAY: "#010517",

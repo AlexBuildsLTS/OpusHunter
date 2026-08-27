@@ -6,15 +6,15 @@
  * If you change the formula, change it in both places.
  */
 
-const EARTH_RADIUS_KM = 6371;
-const KM_TO_MILES = 0.621371;
-const MILES_TO_KM = 1.60934;
+const EARTH_RADIUS_KM = 6371.0;
+const KM_TO_MILES = 0.621371192;
+const MILES_TO_KM = 1.609344;
 
 /**
  * Converts degrees to radians.
  */
 function toRadians(deg: number): number {
-    return (deg * Math.PI) / 180;
+  return (deg * Math.PI) / 180;
 }
 
 /**
@@ -26,21 +26,19 @@ function toRadians(deg: number): number {
  * @returns Distance in kilometers
  */
 export function distanceKm(
-    lat1: number,
-    lon1: number,
-    lat2: number,
-    lon2: number,
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
 ): number {
-    const dLat = toRadians(lat2 - lat1);
-    const dLon = toRadians(lon2 - lon1);
-    const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRadians(lat1)) *
-        Math.cos(toRadians(lat2)) *
-        Math.sin(dLon / 2) ** 2;
-    return (
-        EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-    );
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLon / 2) ** 2;
+  return EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 /**
@@ -56,24 +54,24 @@ export function distanceKm(
  * @returns True if the job should be kept based on distance criteria
  */
 export function withinCommuteDistance(
-    isRemote: boolean,
-    originLat: number | null,
-    originLon: number | null,
-    jobLat: number | null,
-    jobLon: number | null,
-    maxDistanceKm: number | null,
+  isRemote: boolean,
+  originLat: number | null,
+  originLon: number | null,
+  jobLat: number | null,
+  jobLon: number | null,
+  maxDistanceKm: number | null,
 ): boolean {
-    if (isRemote) return true;
-    if (maxDistanceKm == null) return true;
-    if (
-        originLat == null ||
-        originLon == null ||
-        jobLat == null ||
-        jobLon == null
-    ) {
-        return true;
-    }
-    return distanceKm(originLat, originLon, jobLat, jobLon) <= maxDistanceKm;
+  if (isRemote) return true;
+  if (maxDistanceKm == null) return true;
+  if (
+    originLat == null ||
+    originLon == null ||
+    jobLat == null ||
+    jobLon == null
+  ) {
+    return true;
+  }
+  return distanceKm(originLat, originLon, jobLat, jobLon) <= maxDistanceKm;
 }
 
 /**
@@ -82,7 +80,7 @@ export function withinCommuteDistance(
  * @returns Distance in miles
  */
 export function kmToMiles(km: number): number {
-    return km * KM_TO_MILES;
+  return km * KM_TO_MILES;
 }
 
 /**
@@ -91,5 +89,5 @@ export function kmToMiles(km: number): number {
  * @returns Distance in kilometers
  */
 export function milesToKm(miles: number): number {
-    return miles * MILES_TO_KM;
+  return miles * MILES_TO_KM;
 }

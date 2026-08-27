@@ -17,26 +17,28 @@
  */
 
 // deno-lint-ignore-file
-import { createClient } from 'supabase';
-import type { Database } from '../../../types/database.types.ts';
+import { createClient } from "supabase";
+import type { Database } from "../../../types/database.types.ts";
 
 declare const Deno: {
-    env: { get: (key: string) => string | undefined };
+  env: { get: (key: string) => string | undefined };
 };
 
 export const createAdminClient = () => {
-    const url = Deno.env.get('SUPABASE_URL');
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const url = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!url || !serviceKey) {
-        throw new Error('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars are not set.');
-    }
+  if (!url || !serviceKey) {
+    throw new Error(
+      "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars are not set.",
+    );
+  }
 
-    return createClient<Database>(url, serviceKey, {
-        auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-            detectSessionInUrl: false,
-        },
-    });
+  return createClient<Database>(url, serviceKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
 };

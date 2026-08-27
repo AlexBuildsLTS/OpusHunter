@@ -2,7 +2,7 @@
  * app/(tabs)/configure.tsx
  * OpusHunter — Master Configuration Engine
  */
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
 import {
   View,
   Text,
@@ -15,12 +15,20 @@ import {
   Modal,
   StyleSheet,
   KeyboardAvoidingView,
+  useWindowDimensions,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Animated, {
   FadeInDown,
-  FadeOutUp,
+  FadeInUp,
   Layout,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSequence,
+  withDelay,
+  Easing,
 } from "react-native-reanimated";
 import {
   Zap,
@@ -56,6 +64,198 @@ import { KeywordTagInput } from "../../components/ui/KeywordTagInput";
 import { PageContainer } from "../../components/layout/PageContainer";
 import { SetupWizard } from "../../components/onboarding/SetupWizard";
 import { LocationAutocomplete } from "../../components/shared/LocationAutocomplete";
+// ════════════════════════════════════════════════════════════════════════════
+// 2. BACKGROUND AMBIENT ENGINE (Ported from Login)
+// ════════════════════════════════════════════════════════════════════════════
+
+const AmbientNode = memo(({ delay, duration, x, y, size }: any) => {
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(0.2);
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(0.4, {
+            duration: duration / 2,
+            easing: Easing.inOut(Easing.sin),
+          }),
+          withTiming(0, {
+            duration: duration / 2,
+            easing: Easing.inOut(Easing.sin),
+          }),
+        ),
+        -1,
+        false,
+      ),
+    );
+
+    scale.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(1.2, {
+            duration: duration / 2,
+            easing: Easing.out(Easing.quad),
+          }),
+          withTiming(0.8, {
+            duration: duration / 2,
+            easing: Easing.in(Easing.quad),
+          }),
+        ),
+        -1,
+        true,
+      ),
+    );
+
+    translateY.value = withDelay(
+      delay,
+      withRepeat(
+        withTiming(-150, { duration: duration, easing: Easing.linear }),
+        -1,
+        false,
+      ),
+    );
+  }, [delay, duration, opacity, scale, translateY]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }, { translateY: translateY.value }],
+  }));
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        animatedStyle,
+        {
+          position: "absolute",
+          left: x,
+          top: y,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: C.cyan,
+        },
+      ]}
+    />
+  );
+});
+AmbientNode.displayName = "AmbientNode";
+
+const QuantumGrid = memo(() => {
+  const { width, height } = useWindowDimensions();
+  const rotateX = useSharedValue(0);
+
+  useEffect(() => {
+    rotateX.value = withRepeat(
+      withTiming(360, { duration: 120000, easing: Easing.linear }),
+      -1,
+      false,
+    );
+  }, [rotateX]);
+
+  const gridStyle = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: 1000 },
+      { rotateZ: `${rotateX.value}deg` },
+      { scale: 2.5 },
+    ],
+  }));
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        { backgroundColor: "#02040A", overflow: "hidden" },
+      ]}
+    >
+      <Svg
+        width="100%"
+        height="100%"
+        style={{ position: "absolute", opacity: 0.4 }}
+      >
+        <Defs>
+          <RadialGradient id="coreGlow" cx="30%" cy="50%" r="60%">
+            <Stop offset="0%" stopColor={C.cyan} stopOpacity="0.12" />
+            <Stop offset="40%" stopColor={C.purple} stopOpacity="0.05" />
+            <Stop offset="100%" stopColor="#02040A" stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Circle
+          cx={width * 0.5}
+          cy={height * 0.5}
+          r={height}
+          fill="url(#coreGlow)"
+        />
+      </Svg>
+
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          gridStyle,
+          { opacity: 0.04, alignItems: "center", justifyContent: "center" },
+        ]}
+      >
+        <Svg
+          width={width * 2}
+          height={width * 2}
+          viewBox={`0 0 ${width * 2} ${width * 2}`}
+        >
+          <Defs>
+            <RadialGradient id="radar" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%" stopColor={C.cyan} stopOpacity="1" />
+              <Stop offset="100%" stopColor="transparent" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          {Array.from({ length: 30 }).map((_, i) => (
+            <Circle
+              key={`ring-${i}`}
+              cx={width}
+              cy={width}
+              r={(i + 1) * 60}
+              stroke={C.cyan}
+              strokeWidth={1}
+              fill="none"
+              strokeDasharray="4 16"
+            />
+          ))}
+          {Array.from({ length: 16 }).map((_, i) => {
+            const angle = (i * 22.5 * Math.PI) / 180;
+            return (
+              <Line
+                key={`spoke-${i}`}
+                x1={width}
+                y1={width}
+                x2={width + Math.cos(angle) * width}
+                y2={width + Math.sin(angle) * width}
+                stroke={C.cyan}
+                strokeWidth={1}
+                strokeDasharray="2 8"
+              />
+            );
+          })}
+        </Svg>
+      </Animated.View>
+
+      {/* Floating telemetry nodes */}
+      {Array.from({ length: 25 }).map((_, i) => (
+        <AmbientNode
+          key={`node-${i}`}
+          delay={Math.random() * 5000}
+          duration={15000 + Math.random() * 10000}
+          x={Math.random() * width}
+          y={height + Math.random() * 200}
+          size={Math.random() * 4 + 2}
+        />
+      ))}
+    </View>
+  );
+});
+QuantumGrid.displayName = "QuantumGrid";
 
 export interface AutomationRule {
   id: string;

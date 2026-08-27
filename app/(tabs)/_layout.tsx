@@ -36,7 +36,7 @@
  *   custom bar + Slot for the same reason; it never used <Tabs/> either.
  */
 
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Platform, useWindowDimensions, Image, Pressable, ViewStyle, StyleProp } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Slot, usePathname, useRouter } from 'expo-router';
@@ -70,6 +70,35 @@ export default function TabsLayout() {
   const router = useRouter();
   const isDesktop = Platform.OS === 'web' && width >= 768;
 
+  // --- Hooks must be defined before any early returns ---
+  const activeTab = useMemo(() => {
+    if (pathname.includes('dashboard')) return 'dashboard';
+    if (pathname.includes('jobs')) return 'jobs';
+    if (pathname.includes('configure')) return 'configure';
+    if (pathname.includes('settings')) return 'settings';
+    return 'dashboard';
+  }, [pathname]);
+
+  const navigateTo = (name: string) => {
+    router.push((name === 'settings' ? './settings' : name) as any);
+  };
+
+  const navItems = NAV_ITEMS.map(({ name, label, Icon }) => {
+    const active = activeTab === name;
+    return (
+      <Pressable
+        key={name}
+        onPress={() => navigateTo(name)}
+        style={[styles.tabBarItem, active && styles.tabBarItemActive]}
+      >
+        <Icon size={22} color={active ? C.cyan : C.sub} strokeWidth={2.5} />
+        <Text style={[styles.tabBarLabel, active && styles.tabBarLabelActive]}>{label}</Text>
+        {active && <View style={styles.activeDot} />}
+      </Pressable>
+    );
+  });
+  // -----------------------------------------------------
+
   const sharedStyle: any = {
     flex: 1,
     backgroundColor: C.bg,
@@ -99,34 +128,6 @@ export default function TabsLayout() {
 
   // Mobile: Slot (not Tabs) — same stacking-bug reasoning as desktop.
   // Custom floating tab bar below handles navigation and active state.
-  const activeTab = useMemo(() => {
-    if (pathname.includes('dashboard')) return 'dashboard';
-    if (pathname.includes('jobs')) return 'jobs';
-    if (pathname.includes('configure')) return 'configure';
-    if (pathname.includes('settings')) return 'settings';
-    return 'dashboard';
-  }, [pathname]);
-
-  const navigateTo = (name: string) => {
-    router.push((name === 'settings' ? './settings' : name) as any);
-  };
-
-  // Shared between the web and native render paths below — was previously
-  // duplicated verbatim in both branches.
-  const navItems = NAV_ITEMS.map(({ name, label, Icon }) => {
-    const active = activeTab === name;
-    return (
-      <Pressable
-        key={name}
-        onPress={() => navigateTo(name)}
-        style={[styles.tabBarItem, active && styles.tabBarItemActive]}
-      >
-        <Icon size={22} color={active ? C.cyan : C.sub} strokeWidth={2.5} />
-        <Text style={[styles.tabBarLabel, active && styles.tabBarLabelActive]}>{label}</Text>
-        {active && <View style={styles.activeDot} />}
-      </Pressable>
-    );
-  });
 
   return (
     <PageContainer style={sharedStyle} safeAreaTop={false}>
