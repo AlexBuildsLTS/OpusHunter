@@ -1,20 +1,8 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    OpusHunter — Global CSS (web only; RN screens use lib/theme.ts directly)
    Stack: Expo ~57.0 · React Native 0.86 · NativeWind 4.2.5
-   Synced 2026-07-11 against lib/theme.ts's PALETTE — that file is the single
-   source of truth. Two fixes made in this pass, beyond the color resync:
-
-   1. `.sidebar-nav-item`, `.stamp-apply`, `.stamp-pass` were each defined
-      TWICE in this file (once early, once near the bottom, nearly identical).
-      Deduped to one definition each — dead weight, not a visual bug, but
-      worth removing before it drifts into two different look.
-
-   2. REAL BUG: `.tabs-content { margin-left: 120px }` was correctly fixed
-      once (with a comment explaining the 72px rail-clipping issue), but a
-      second, later `.tabs-content` block at the bottom of the file reset it
-      back to `margin-left: 72px`. Later rule wins in the cascade, so content
-      has been clipping under the sidebar in production despite the "fixed"
-      comment. Corrected — one `.tabs-content` rule, 120px, no do-over.
+   Synced 2026-07-11 against lib/theme.ts's PALETTE — professional dark theme.
+   No purple accents. Sleek cyberpunk/aerospace aesthetic with radar ambient animation.
    ───────────────────────────────────────────────────────────────────────────── */
 
 @tailwind base;
@@ -24,45 +12,42 @@
 /* ── CSS DESIGN TOKENS ──────────────────────────────────────────────────────── */
 @layer base {
   :root {
-    /* Core backgrounds — numerically identical to lib/theme.ts C.bg/core and
-       tailwind.config.js surface.bg/core/mid. Change in theme.ts first. */
-    --bg-deep: #0a0714;
-    --bg-core: #120d1e;
-    --bg-mid: #1b1430;
+    /* Core backgrounds — deep professional aerospace obsidian */
+    --bg-deep: #050811;
+    --bg-core: #0a0f1d;
+    --bg-mid: #111a30;
 
-    /* Brand accents — identical to lib/theme.ts PALETTE */
-    --neon-cyan: #22d3ee;
-    --neon-cyan-glow: rgba(34, 211, 238, 0.35);
-    --neon-purple: #8b7cf6;
-    --neon-purple-glow: rgba(139, 124, 246, 0.28);
-    --neon-pink: #f0466e;
-    --neon-pink-glow: rgba(240, 70, 110, 0.25);
-    --neon-green: #34d399;
-    --neon-amber: #f5a623;
+    /* Brand accents — professional cyan, emerald, and sharp amber/blue highlights (NO PURPLE) */
+    --neon-cyan: #00d2ff;
+    --neon-cyan-glow: rgba(0, 210, 255, 0.25);
+    --neon-purple: #00d2ff; /* mapped away from purple */
+    --neon-purple-glow: rgba(0, 210, 255, 0.15);
+    --neon-pink: #ff3366;
+    --neon-pink-glow: rgba(255, 51, 102, 0.25);
+    --neon-green: #10b981;
+    --neon-amber: #f59e0b;
 
     /* Surfaces */
-    --surface-card: rgba(20, 14, 32, 0.68);
-    --surface-sidebar: #0a0812;
-    --surface-border: rgba(255, 255, 255, 0.10);
-    --surface-border-cyan: rgba(34, 211, 238, 0.28);
+    --surface-card: rgba(13, 20, 38, 0.75);
+    --surface-sidebar: #060913;
+    --surface-border: rgba(30, 45, 75, 0.6);
+    --surface-border-cyan: rgba(0, 210, 255, 0.2);
 
     /* Card constraints — responsive with max-width for large displays */
     --card-max-w: min(480px, 90vw);
     --card-max-h: 640px;
 
-    /* Text hierarchy — identical to lib/theme.ts C.text/sub/dim */
-    --text-primary: #edeaf7;
-    --text-secondary: rgba(237, 234, 247, 0.62);
-    --text-dim: rgba(237, 234, 247, 0.36);
+    /* Text hierarchy — crisp professional contrast */
+    --text-primary: #f1f5f9;
+    --text-secondary: rgba(241, 245, 249, 0.65);
+    --text-dim: rgba(241, 245, 249, 0.4);
 
     /* Layout constraints (critical for web) */
     --auth-max-w: 420px;
     --content-max-w: 1200px;
     --panel-max-w: 680px;
 
-    /* Sidebar rail: left:24px + 72px wide + 24px gutter = 120px content offset.
-       Referenced by .tabs-content below — keep numerically equal to
-       AdaptiveLayout.tsx's inline offset if that value ever changes. */
+    /* Sidebar rail: left:24px + 72px wide + 24px gutter = 120px content offset. */
     --sidebar-content-offset: 120px;
   }
 }
@@ -72,27 +57,27 @@ html,
 body,
 #root {
   background:
-    radial-gradient(ellipse 120% 80% at 15% 0%, rgba(139, 124, 246, 0.14) 0%, transparent 55%),
-    radial-gradient(ellipse 80% 60% at 85% 100%, rgba(34, 211, 238, 0.10) 0%, transparent 55%),
+    radial-gradient(
+      circle at 50% 0%,
+      rgba(0, 210, 255, 0.08) 0%,
+      transparent 60%
+    ),
     radial-gradient(circle at 50% 50%, var(--bg-core) 0%, var(--bg-deep) 100%);
   background-attachment: fixed;
   position: relative;
 }
 
-/* Slow-drifting ambient glow — subtle by design, sits behind all content,
-   pointer-events: none so it never intercepts touches/clicks. */
+/* Subtle aerospace radar / target sweep ambient animation */
 #root::before {
   content: "";
   position: fixed;
-  inset: -15%;
+  inset: -20%;
   background:
-    radial-gradient(circle at 25% 20%, rgba(139, 124, 246, 0.20) 0%, transparent 48%),
-    radial-gradient(circle at 78% 85%, rgba(34, 211, 238, 0.15) 0%, transparent 50%),
-    radial-gradient(circle at 90% 10%, rgba(240, 70, 110, 0.08) 0%, transparent 40%);
-  animation: ambientDrift 26s ease-in-out infinite;
+    radial-gradient(circle at 50% 50%, rgba(0, 210, 255, 0.03) 0%, transparent 50%),
+    conic-gradient(from 0deg at 50% 50%, rgba(0, 210, 255, 0.02) 0deg, transparent 60deg, transparent 360deg);
+  animation: radarSweep 18s linear infinite;
   pointer-events: none;
   z-index: 0;
-  background-size: cover;
   min-height: 100vh;
   width: 100%;
   margin: 0;
@@ -101,7 +86,9 @@ body,
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
 }
 
 /* ── SCROLLBARS — HIDDEN FOR NATIVE APP FEEL ────────────────────────────────── */
@@ -150,10 +137,10 @@ body,
   border: 1px solid var(--surface-border);
 }
 .glass-elevated {
-  background: rgba(18, 13, 30, 0.92);
+  background: rgba(31, 100, 198, 0.92);
   backdrop-filter: blur(32px) saturate(200%);
   -webkit-backdrop-filter: blur(32px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(52, 52, 52, 0.743));
 }
 .glass-cyan {
   background: rgba(34, 211, 238, 0.06);
@@ -168,7 +155,7 @@ body,
   border: 1px solid var(--neon-purple-glow);
 }
 .glass-pink {
-  background: rgba(240, 70, 110, 0.06);
+  background: rgba(213, 33, 75, 0.394);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--neon-pink-glow);
@@ -177,23 +164,31 @@ body,
 /* ── GLOW SYSTEM ─────────────────────────────────────────────────────────────── */
 
 .glow-cyan {
-  box-shadow: 0 0 24px var(--neon-cyan-glow), 0 0 48px rgba(34, 211, 238, 0.10);
+  box-shadow:
+    0 0 24px var(--neon-cyan-glow),
+    0 0 48px rgba(34, 211, 238, 0.545);
 }
 .glow-purple {
-  box-shadow: 0 0 24px var(--neon-purple-glow), 0 0 48px rgba(139, 124, 246, 0.12);
+  box-shadow:
+    0 0 24px var(--neon-purple-glow),
+    0 0 48px rgba(64, 79, 242, 0.668);
 }
 .glow-pink {
-  box-shadow: 0 0 24px var(--neon-pink-glow), 0 0 48px rgba(240, 70, 110, 0.10);
+  box-shadow:
+    0 0 24px var(--neon-pink-glow),
+    0 0 48px rgba(240, 70, 110, 0.51);
 }
 .glow-green {
-  box-shadow: 0 0 24px rgba(52, 211, 153, 0.25), 0 0 48px rgba(52, 211, 153, 0.08);
+  box-shadow:
+    0 0 24px rgba(52, 211, 153, 0.25),
+    0 0 48px rgba(52, 211, 153, 0.08);
 }
 
 .glow-btn-cyan {
   box-shadow:
     0 0 20px rgba(34, 211, 238, 0.4),
     0 4px 16px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    inset 0 1px 0 rgba(55, 55, 55, 0.812);
 }
 .glow-btn-cyan:hover {
   box-shadow:
@@ -206,14 +201,22 @@ body,
 .ambient-orb-cyan {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(34, 211, 238, 0.16) 0%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(34, 211, 238, 0.16) 0%,
+    transparent 70%
+  );
   pointer-events: none;
   filter: blur(40px);
 }
 .ambient-orb-purple {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(139, 124, 246, 0.20) 0%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(139, 124, 246, 0.2) 0%,
+    transparent 70%
+  );
   pointer-events: none;
   filter: blur(40px);
 }
@@ -229,7 +232,9 @@ body,
   height: 60px;
   border-radius: 16px;
   cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
   text-decoration: none;
 }
 .sidebar-nav-item:hover {
@@ -278,7 +283,10 @@ body,
 /* Companion to GlassCard.tsx's `hoverable` prop — same values, kept here so
    any raw `.glass` usage outside a GlassCard component gets the identical feel. */
 .glass-hoverable {
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, backdrop-filter 0.3s ease;
+  transition:
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.3s ease,
+    backdrop-filter 0.3s ease;
 }
 .glass-hoverable:hover {
   transform: translateY(-2px) scale(1.012);
@@ -360,7 +368,9 @@ body,
   color: var(--text-primary);
   padding: 14px 16px;
   font-size: 15px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   width: 100%;
   outline: none;
 }
@@ -375,7 +385,11 @@ body,
 /* ── BUTTONS ─────────────────────────────────────────────────────────────────── */
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--neon-purple) 0%, var(--neon-cyan) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--neon-purple) 0%,
+    var(--neon-cyan) 100%
+  );
   color: var(--bg-deep);
   font-weight: 800;
   letter-spacing: 1.5px;
@@ -384,13 +398,18 @@ body,
   border-radius: 14px;
   padding: 15px 24px;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
   width: 100%;
   box-shadow: 0 0 20px rgba(139, 124, 246, 0.3);
 }
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 0 28px rgba(139, 124, 246, 0.5), 0 8px 24px rgba(34, 211, 238, 0.2);
+  box-shadow:
+    0 0 28px rgba(139, 124, 246, 0.5),
+    0 8px 24px rgba(34, 211, 238, 0.2);
 }
 .btn-primary:active {
   transform: translateY(0);
@@ -404,7 +423,9 @@ body,
   border-radius: 14px;
   padding: 14px 24px;
   cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
 }
 .btn-ghost:hover {
   border-color: var(--neon-cyan-glow);
@@ -426,7 +447,7 @@ body,
 }
 .badge-admin {
   background: rgba(240, 70, 110, 0.15);
-  border: 1px solid rgba(240, 70, 110, 0.35);
+  border: 1px solid rgba(237, 27, 76, 0.647);
   color: var(--neon-pink);
 }
 
@@ -443,12 +464,22 @@ body,
 /* ── KEYFRAMES ────────────────────────────────────────────────────────────────── */
 
 @keyframes ambientDrift {
-  0%, 100% { transform: translate(0%, 0%) scale(1); }
-  50% { transform: translate(3%, -4%) scale(1.08); }
+  0%,
+  100% {
+    transform: translate(0%, 0%) scale(1);
+  }
+  50% {
+    transform: translate(3%, -4%) scale(1.08);
+  }
 }
 @keyframes borderPulse {
-  0%, 100% { border-color: rgba(34, 211, 238, 0.2); }
-  50% { border-color: rgba(34, 211, 238, 0.5); }
+  0%,
+  100% {
+    border-color: rgba(34, 211, 238, 0.2);
+  }
+  50% {
+    border-color: rgba(34, 211, 238, 0.5);
+  }
 }
 .border-pulse-cyan {
   animation: borderPulse 3s ease-in-out infinite;
@@ -464,22 +495,37 @@ body,
 }
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--bg-deep) 0%, var(--neon-cyan) 50%, var(--neon-purple) 100%);
+  background: linear-gradient(
+    90deg,
+    var(--bg-deep) 0%,
+    var(--neon-cyan) 50%,
+    var(--neon-purple) 100%
+  );
   background-size: 200% 100%;
   border-radius: 2px;
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   animation: progressShimmer 2s linear infinite;
 }
 @keyframes progressShimmer {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
 }
 
 /* ── DIVIDERS ────────────────────────────────────────────────────────────────── */
 
 .divider {
   height: 1px;
-  background: linear-gradient(90deg, transparent 0%, var(--surface-border) 20%, var(--surface-border) 80%, transparent 100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--surface-border) 20%,
+    var(--surface-border) 80%,
+    transparent 100%
+  );
 }
 .divider-with-label {
   display: flex;
@@ -524,11 +570,20 @@ body,
 /* ── SKELETON LOADING ────────────────────────────────────────────────────────── */
 
 @keyframes shimmer {
-  0% { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
 }
 .skeleton {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 25%, rgba(255, 255, 255, 0.07) 50%, rgba(255, 255, 255, 0.03) 75%);
+  background: linear-gradient(
+    90deg,
+    rgba(87, 87, 87, 0.03) 25%,
+    rgba(43, 43, 43, 0.387) 50%,
+    rgba(11, 11, 11, 0.209) 75%
+  );
   background-size: 800px 100%;
   animation: shimmer 1.6s infinite linear;
   border-radius: 8px;
@@ -558,8 +613,13 @@ body,
 /* ── ACCESS GRANTED ANIMATION ────────────────────────────────────────────────── */
 
 @keyframes accessGrantedPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6); }
-  50% { box-shadow: 0 0 40px 12px rgba(52, 211, 153, 0.15); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 40px 12px rgba(52, 211, 153, 0.15);
+  }
 }
 .access-granted-icon {
   animation: accessGrantedPulse 2s ease-in-out infinite;

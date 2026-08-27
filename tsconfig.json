@@ -6,36 +6,16 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/app/*": [
-        "./app/*"
-      ],
-      "@/assets/*": [
-        "./assets/*"
-      ],
-      "@/components/*": [
-        "./components/*"
-      ],
-      "@/constants/*": [
-        "./constants/*"
-      ],
-      "@/hooks/*": [
-        "./hooks/*"
-      ],
-      "@/lib/*": [
-        "./lib/*"
-      ],
-      "@/services/*": [
-        "./services/*"
-      ],
-      "@/store/*": [
-        "./store/*"
-      ],
-      "@/types/*": [
-        "./types/*"
-      ],
-      "@/utils/*": [
-        "./utils/*"
-      ]
+      "@/app/*": ["./app/*"],
+      "@/assets/*": ["./assets/*"],
+      "@/components/*": ["./components/*"],
+      "@/constants/*": ["./constants/*"],
+      "@/hooks/*": ["./hooks/*"],
+      "@/lib/*": ["./lib/*"],
+      "@/services/*": ["./services/*"],
+      "@/store/*": ["stores/*"],
+      "@/types/*": ["./types/*"],
+      "@/utils/*": ["./utils/*"]
     }
   },
   "include": [
