@@ -92,3 +92,13 @@ yarn-error.log*
 expo-env.d.ts
 files_list.txt
 scripts/parse_repomix.py
+Project
+.exp/*
+*.INFO.md
+INFO.md
+*.agent.MD
+exp/*
+migrations/
+supabase/.env
+*.repomix-output.xml
+.repomix-output.xml
