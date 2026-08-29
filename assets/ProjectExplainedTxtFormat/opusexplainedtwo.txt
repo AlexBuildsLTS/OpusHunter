@@ -1,0 +1,418 @@
+You are an expert full-stack mobile and web engineer specializing in cross-platform architecture with Expo Router, React Native, Supabase, and AI-powered automation systems. The current date is August 2026. Your task is to architect, implement, and document the complete **OpusHunter** autonomous job application engine — a production-grade, cross-platform (iOS, Android, Web) application built to the highest mid-2026 engineering standards.
+
+---
+
+## 🎯 PROJECT MISSION
+
+OpusHunter is a "set it and forget it" autonomous job application engine. A user creates an account, fills in their career profile and preferences, uploads their CV and certifications, and the system automatically:
+
+1. Scrapes matching job listings from multiple sources in parallel (JSearch + Adzuna, with a flexible scraper architecture that can add new sources without refactoring)
+2. Deduplicates and normalizes listings using deterministic hashing
+3. Extracts the user's full career narrative from uploaded documents using AI
+4. Generates tailored, company-named, role-specific, 4–5 paragraph cover letters with quantified impact for each job using Google Gemini
+5. Presents a fluid, swipeable triage UI for the user to review
+6. Dispatches applications (cover letter + hard links) with one tap
+
+The experience must feel **exceptional** — smooth, fast, beautiful, and reliable on every platform.
+
+---
+
+## 🏗️ ARCHITECTURE MANDATE
+
+### Non-Negotiable Engineering Standards
+
+- **Zero mock data, ever** — every feature must connect to real APIs, real Supabase tables, and real Edge Functions from day one. No placeholder data, no fake responses, no TODO stubs left in production paths.
+- **Everything must use the absolute latest stable versions** as of mid-2026
+- **Zero technical debt patterns** — every module must be built so adding new features requires zero refactoring of existing structure
+- **Cross-platform first** — a single unified codebase compiles flawlessly to iOS, Android, and Web (hosted on Vercel) with zero platform-specific hacks. Mobile browsers visiting the Vercel URL must receive a fully responsive mobile-optimized layout.
+- **Adaptive UI/UX** — desktop uses sidebar drawer navigation, mobile uses floating tab bar, iPad gets an optimized split-view layout, all driven by a single `lib/navConfig.ts` source of truth
+- **Performance baseline** — 120fps gesture-driven UI on native threads via Reanimated Worklets; no jank, no dropped frames
+- **Security baseline** — Zero-trust, RLS on every table, Service-Role-only for sensitive data, SECURITY DEFINER for all admin procedures
+- **Supabase sync rule** — The file `types/database.types.ts` is ALWAYS generated fresh by running the Supabase CLI after each SQL migration. It is never hand-written. Every SQL schema change must be planned upfront and included in the full migration script so the types file remains the single source of truth.
+
+### Technology Stack (Latest Stable — Mid-2026)
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| **Build System** | Expo SDK ~57+ | Cross-platform orchestration |
+| **Router** | Expo Router v57+ | Typed filesystem routing |
+| **UI Engine** | React Native 0.86+ / React 19+ | Native UI and layout |
+| **Styling** | NativeWind 4+ / Tailwind CSS 3.4+ | Utility-first cross-platform styles |
+| **Animation** | Reanimated 4+ / Worklets 0.10+ | 120fps native-thread physics & gestures |
+| **Local State** | Zustand 4.5+ | Ephemeral client-side state |
+| **Server State** | TanStack Query v5+ | Cache, optimistic mutations, refetches |
+| **AI Inference** | Google Gemini Flash (latest stable, mid-2026) | Cover letter generation, context synthesis |
+| **Backend** | Supabase Edge Functions (Deno) | Orchestration, scraping, geo, AI dispatch |
+| **Database** | PostgreSQL 16 (Supabase) | ACID, RLS, relational schema |
+| **Storage** | Supabase Storage v2 | Binary CV/PDF vaulting |
+| **Auth** | Supabase Auth | Email/password + Google OAuth + Gmail linking |
+| **Job Sources** | JSearch (RapidAPI) + Adzuna + flexible scraper adapter pattern | Multi-source job ingestion |
+| **Geo** | GeoDB Cities (proxied via Edge Function) | Location autocomplete |
+| **Hosting** | Vercel | Web deployment |
+
+---
+
+## 📁 DELIVERABLE 1 — COMPLETE PROJECT STRUCTURE
+
+Provide the **full, production-ready folder structure and file organization plan** for the entire OpusHunter project. Every file and folder must be listed with a concise one-line comment explaining its purpose. The structure must be designed so that adding new features (new job sources, new AI providers, new auth methods) is seamless with zero structural refactoring.
+
+The structure must include:
+
+```
+opushunter/
+├── app/                          # Expo Router filesystem routes
+│   ├── (auth)/                   # Auth group: login, register, onboarding
+│   ├── (app)/                    # Protected app group
+│   │   ├── (tabs)/               # Tab navigator routes
+│   │   ├── job/[id].tsx          # Job detail dynamic route
+│   │   ├── cover-letter/[id].tsx # Cover letter view/edit route
+│   │   └── _layout.tsx           # App group layout with auth gate
+│   ├── admin/                    # Admin panel routes (role-gated)
+│   └── _layout.tsx               # Root layout with providers
+├── components/
+│   ├── ui/                       # Atomic design system components
+│   ├── job/                      # Job card, swipe deck, kanban
+│   ├── cover-letter/             # Cover letter display and editor
+│   ├── profile/                  # Profile form components
+│   ├── vault/                    # Document upload and preview
+│   ├── admin/                    # Admin panel components
+│   └── shared/                   # AnimatedBackground, NavBar, etc.
+├── supabase/
+│   ├── functions/                # All Deno Edge Functions
+│   │   ├── scrape-jobs/          # Multi-source parallel scraper
+│   │   ├── extract-context/      # CV/cert AI context extraction
+│   │   ├── generate-cover-letter/# Gemini cover letter generation
+│   │   ├── geo-autocomplete/     # GeoDB Cities proxy
+│   │   └── _shared/              # Shared Deno utilities, key resolver
+│   └── migrations/               # All SQL migration files in order
+├── lib/
+│   ├── navConfig.ts              # Single source of truth for navigation
+│   ├── supabase.ts               # Supabase client (native + web)
+│   ├── queryClient.ts            # TanStack Query client config
+│   ├── scrapers/                 # Flexible scraper adapter pattern
+│   │   ├── types.ts              # Unified JobListing interface
+│   │   ├── jsearch.ts            # JSearch adapter
+│   │   ├── adzuna.ts             # Adzuna adapter
+│   │   └── index.ts              # Scraper registry and orchestrator
+│   └── gemini.ts                 # Gemini client wrapper
+├── stores/                       # Zustand stores
+├── hooks/                        # Custom React hooks
+├── types/
+│   └── database.types.ts         # AUTO-GENERATED by Supabase CLI — never hand-edit
+├── constants/                    # Theme, colors, animation configs
+└── assets/                       # Fonts, images, icons
+```
+
+---
+
+## 📁 DELIVERABLE 2 — COMPLETE SQL MIGRATION PLAN
+
+Provide the **complete, production-ready SQL migration script** that creates every table, enum, index, RLS policy, and SECURITY DEFINER function needed for the entire application. This must be planned holistically upfront so the `types/database.types.ts` generated from it covers every feature.
+
+### Required Tables (minimum — expand as needed):
+
+**`profiles`** — Extended user profile linked to `auth.users`
+- `id` (uuid, FK to auth.users), `first_name`, `last_name`, `professional_title`, `bio`, `years_experience`, `seniority_level` (enum), `target_roles` (text[]), `work_type_preferences` (enum[]), `location_radius_km` (int), `target_countries` (text[]), `target_cities` (text[]), `salary_min`, `salary_max`, `salary_currency`, `languages` (text[]), `role` (enum: `member` | `premium` | `admin`), `profile_complete` (bool), `last_scrape_at` (timestamptz), `gmail_linked_email` (text), `created_at`, `updated_at`
+
+**`user_documents`** — CV and certification uploads
+- `id`, `user_id`, `document_type` (enum: `cv` | `certification`), `file_name`, `storage_path`, `mime_type`, `file_size_bytes`, `cert_name`, `cert_issuer`, `cert_date`, `cert_tags` (text[]), `uploaded_at`
+
+**`user_context`** — AI-extracted career narrative from documents
+- `id`, `user_id`, `extracted_skills` (text[]), `extracted_experience` (jsonb), `extracted_education` (jsonb), `extracted_certifications` (jsonb), `career_summary`, `key_achievements` (text[]), `tone_preference`, `raw_context_json` (jsonb), `last_extracted_at`
+
+**`job_listings`** — Normalized job listings from all sources
+- `id` (deterministic hash), `user_id`, `source` (enum: `jsearch` | `adzuna`), `external_id`, `title`, `company`, `company_logo_url`, `location`, `country`, `work_type` (enum), `salary_min`, `salary_max`, `currency`, `description`, `apply_url`, `posted_at`, `scraped_at`, `dedup_hash` (unique per user)
+
+**`job_applications`** — User's application pipeline
+- `id`, `user_id`, `job_listing_id`, `status` (enum: `discovered` | `saved` | `applied` | `interview` | `offer` | `rejected`), `cover_letter_id`, `applied_at`, `notes`, `created_at`, `updated_at`
+
+**`cover_letters`** — AI-generated cover letters
+- `id`, `user_id`, `job_listing_id`, `company_name`, `role_title`, `content` (text), `tone`, `gemini_model_used`, `tokens_used` (int), `generation_duration_ms` (int), `created_at`, `updated_at`
+
+**`user_api_keys`** — User-owned BYOK API keys (Service-Role only)
+- `id`, `user_id`, `provider` (enum: `rapidapi` | `gemini`), `encrypted_key`, `is_active`, `created_at`
+
+**`system_api_keys`** — Admin-managed fallback API keys (Service-Role only)
+- `id`, `provider`, `encrypted_key`, `priority_order` (int), `is_active`, `label`, `created_at`
+
+**`api_key_usage_logs`** — Token and cost tracking
+- `id`, `user_id`, `provider`, `key_source` (enum: `user` | `system`), `tokens_used`, `estimated_cost_usd`, `function_name`, `created_at`
+
+**`scrape_rate_limits`** — Enforce 24-hour scrape limit per user
+- `id`, `user_id`, `last_scrape_at`, `scrape_count_today`
+
+**RLS Policies required on every table:**
+- Users can only SELECT/INSERT/UPDATE/DELETE their own rows
+- `system_api_keys` and `user_api_keys` are invisible to all client queries — Service-Role only
+- Admin role can SELECT all rows on all tables via SECURITY DEFINER functions only
+
+---
+
+## 📁 DELIVERABLE 3 — AUTHENTICATION FLOW IMPLEMENTATION
+
+Implement the **complete authentication flow** with the following files, each complete and production-ready:
+
+### Auth Screens (in `app/(auth)/`):
+- **`onboarding.tsx`** — 3–4 animated slides explaining OpusHunter's value proposition. Uses Reanimated for slide transitions and the animated background. "Get Started" CTA navigates to register.
+- **`login.tsx`** — Email/password login + Google OAuth button. Animated background active. Form validation with Zod. Error states displayed inline.
+- **`register.tsx`** — Email/password registration + Google OAuth. On success, routes to profile setup. First name and last name collected here — these become the display name used in cover letters.
+- **`profile-setup.tsx`** — Multi-step form (4–5 steps) collecting all profile fields. Cannot be skipped. On completion, sets `profile_complete = true` and routes to main app.
+
+### Auth Infrastructure:
+- **`stores/authStore.ts`** — Zustand store managing: `user`, `session`, `profile`, `isLoading`, `isHydrated`. Persisted via `expo-secure-store` on native, `localStorage` on web.
+- **`lib/supabase.ts`** — Supabase client configured for both native (with SecureStore adapter) and web environments. Exports typed client using `database.types.ts`.
+- **`hooks/useAuth.ts`** — Hook wrapping auth store with helper methods: `signIn`, `signUp`, `signOut`, `signInWithGoogle`, `linkGmailAccount`.
+- **`app/(app)/_layout.tsx`** — Auth gate: redirects unauthenticated users to login, redirects users with `profile_complete = false` to profile setup. Includes `isMounted` hydration guard for SSR web compatibility.
+
+### Gmail Linking (in Settings):
+- Users who registered with email/password can link their Gmail account via OAuth
+- The linked Gmail email is stored in `profiles.gmail_linked_email`
+- This ensures job application responses route to the correct email
+- The name used in all cover letters is always `profiles.first_name + profiles.last_name`
+
+---
+
+## 📁 DELIVERABLE 4 — EDGE FUNCTION ORCHESTRATION LAYER
+
+Implement all Supabase Edge Functions as complete, production-ready Deno TypeScript files.
+
+### `supabase/functions/_shared/keyResolver.ts`
+The **triple-tier API key resolver** used by all Edge Functions:
+1. **Tier 1:** Check `user_api_keys` for the calling user's own key for the requested provider
+2. **Tier 2:** If not found or invalid, fall back to `system_api_keys` ordered by `priority_order ASC`, cycling through on `429` responses
+3. **Tier 3:** If all system keys exhausted, return a structured error with `{ error: 'quota_exhausted', retryAfter: ... }`
+- All key lookups use Service-Role client — never exposed to client
+- Log every key usage to `api_key_usage_logs`
+
+### `supabase/functions/scrape-jobs/index.ts`
+**Multi-source parallel job scraper:**
+- Accepts: `{ userId, searchParams: { keywords, workTypes, countries, cities, radiusKm, experienceLevel, datePosted, page } }`
+- Enforces 24-hour rate limit: check `scrape_rate_limits` — if `last_scrape_at` is within 24 hours for `member` role, return `{ error: 'rate_limited', nextAvailableAt: ... }`. Premium users with their own API keys bypass this limit.
+- Fires JSearch and Adzuna requests **in parallel** using `Promise.allSettled`
+- **JSearch adapter:** Normalizes RapidAPI JSearch response to `JobListing` schema. Passes `country: 'SE'` and Swedish city names correctly. Handles `429` via keyResolver cycling.
+- **Adzuna adapter:** Uses the correct regional endpoint (`/se/jobs/search` for Sweden, `/gb/jobs/search` for UK, etc.). Normalizes Adzuna response to `JobListing` schema. Handles `429` via keyResolver cycling.
+- **Flexible scraper registry pattern:** Scrapers are registered in an array `const scrapers: ScraperAdapter[] = [jsearchAdapter, adzunaAdapter]`. Adding a new source requires only creating a new adapter file and adding it to this array — zero changes to orchestration logic.
+- **Deduplication:** After merging results, compute `dedup_hash = sha256(normalize(company + title + location))`. If hash exists in `job_listings` for this user, skip. Keep the richer record (more fields populated) when cross-source duplicates are detected.
+- Upsert up to 30 normalized listings per scrape batch into `job_listings`
+- Return paginated results with metadata: `{ listings: JobListing[], total: number, page: number, sources: { jsearch: number, adzuna: number } }`
+
+**Sweden-specific handling (non-negotiable):**
+- GeoDB Cities must resolve: Stockholm, Gothenburg (Göteborg), Malmö, Uppsala, Västerås, Örebro, Linköping, Helsingborg, Jönköping, Norrköping
+- Adzuna Sweden endpoint: `https://api.adzuna.com/v1/api/jobs/se/search/1`
+- JSearch: pass `location=Stockholm, Sweden` and `country=SE` in query params
+- Radius filtering applied post-fetch using haversine distance calculation
+
+### `supabase/functions/extract-context/index.ts`
+**AI-powered career context extraction:**
+- Triggered after document upload to Supabase Storage
+- Downloads the document binary from Storage using Service-Role client
+- For PDF: extracts text using a Deno-compatible PDF parser
+- For DOCX: extracts text using XML parsing
+- Sends extracted text to Gemini with a structured prompt requesting JSON output:
+  ```json
+  {
+    "extracted_skills": ["TypeScript", "React", "Java", ...],
+    "extracted_experience": [{ "company": "...", "role": "...", "duration": "...", "achievements": ["..."] }],
+    "extracted_education": [{ "institution": "...", "degree": "...", "year": "..." }],
+    "extracted_certifications": [{ "name": "...", "issuer": "...", "date": "..." }],
+    "career_summary": "...",
+    "key_achievements": ["Reduced API latency by 40%", "Led team of 6 engineers", ...]
+  }
+  ```
+- Upserts result into `user_context` table
+- Uses keyResolver for Gemini API key
+
+### `supabase/functions/generate-cover-letter/index.ts`
+**Advanced AI cover letter generation:**
+- Accepts: `{ userId, jobListingId }`
+- Fetches from Supabase: `user_context`, `profiles`, and the full `job_listings` record for `jobListingId`
+- Constructs a rich, structured prompt that includes:
+  - User's full name (from `profiles.first_name + last_name`)
+  - Career summary, key achievements, extracted skills, certifications
+  - Target job title, **exact company name**, location, work type
+  - Full job description text
+  - Instruction: "Write a professional, concise 4–5 paragraph cover letter. Address it to [Company Name]. Open with a strong hook referencing the specific role. Paragraph 2: match the candidate's top 3 relevant skills/achievements to the job requirements with quantified impact where available. Paragraph 3: demonstrate knowledge of the company and why this specific role. Paragraph 4: certifications and technical depth relevant to this role. Closing: confident call to action. No filler phrases. No generic statements. Every sentence must earn its place."
+  - Tone: professional, direct, confident — not sycophantic
+- Sends prompt to Gemini Flash, parses response
+- Stores result in `cover_letters` table with `company_name`, `role_title`, `content`, `tokens_used`, `generation_duration_ms`
+- Returns the complete cover letter record
+- Uses keyResolver for Gemini API key
+
+### `supabase/functions/geo-autocomplete/index.ts`
+**GeoDB Cities proxy with Swedish priority:**
+- Accepts: `{ query: string, countryCode?: string }`
+- Proxies to GeoDB Cities API with rate-limit buffering
+- When `countryCode = 'SE'` or query matches Swedish city patterns, prioritizes Swedish results
+- Returns: `{ cities: [{ name, country, countryCode, latitude, longitude }] }`
+
+---
+
+## 📁 DELIVERABLE 5 — UI/UX DESIGN SYSTEM & ANIMATED BACKGROUND
+
+### Visual Design Language
+The app must look and feel like a **top-tier 2026 product** — sleek, modern, professional, with subtle but impactful animations. Every screen must feel alive without being distracting.
+
+**Color Palette & Theme:**
+- Dark-first design with deep navy/charcoal base (`#0A0F1E`, `#0D1526`)
+- Electric accent: vibrant blue-purple gradient (`#4F46E5` → `#7C3AED`)
+- Secondary accent: cyan/teal highlights (`#06B6D4`)
+- Card surfaces: semi-transparent glass morphism (`rgba(255,255,255,0.05)` with `backdrop-blur`)
+- Text: pure white primary, `#94A3B8` secondary
+- Success: `#10B981`, Warning: `#F59E0B`, Error: `#EF4444`
+- All colors defined in `constants/theme.ts` as a single source of truth
+
+**Animated Background (`components/shared/AnimatedBackground.tsx`):**
+- Must appear on **every single screen** — auth screens, onboarding, all app tabs, admin panel, every modal
+- Implemented as a Reanimated Worklet running entirely on the native UI thread
+- Fluid, slow-moving gradient orbs/blobs in the background (3–4 orbs)
+- Colors: deep purple, electric blue, dark teal — subtle, not overwhelming
+- Orbs animate with slow sinusoidal movement (period: 8–12 seconds per cycle)
+- On web: uses CSS animations as fallback for performance
+- Opacity: low enough to not interfere with content readability (~15–25% opacity)
+- This component is mounted at the root layout level and persists across navigation
+
+**Typography:**
+- Font: Inter (loaded via `expo-font`) — Regular, Medium, SemiBold, Bold weights
+- Heading scale: 32px / 24px / 20px / 16px
+- Body: 14px regular, 12px caption
+
+**Component Design Patterns:**
+- **Cards:** Glass morphism with `border: 1px solid rgba(255,255,255,0.1)`, subtle shadow, 12px border radius
+- **Buttons:** Primary = gradient fill (`#4F46E5` → `#7C3AED`), Secondary = glass border, Destructive = `#EF4444`
+- **Inputs:** Dark surface with subtle border, focus state glows with accent color
+- **Hover states (web):** Subtle scale transform (1.02) + border color brightening — smooth 200ms transition
+- **Press states (native):** Haptic feedback + scale to 0.97 via Reanimated
+- **Loading states:** Skeleton screens with shimmer animation, never spinners alone
+
+### Navigation Implementation (`lib/navConfig.ts`):
+```typescript
+// Single source of truth for all navigation
+// Desktop (web, width > 1024px): Sidebar drawer, always visible
+// Tablet/iPad (768px–1024px): Collapsible sidebar
+// Mobile (< 768px): Floating tab bar at bottom with blur background
+// Mobile web (Vercel, narrow viewport): Same floating tab bar as native mobile
+```
+
+**Tab/Sidebar Items:**
+1. 🔍 Discover — Job search and swipe deck
+2. 📋 Pipeline — Kanban board of all applications
+3. 📄 Vault — Document management (CV + certs)
+4. 👤 Profile — Career profile and preferences
+5. ⚙️ Settings — App settings, Gmail linking, API keys (premium)
+6. 🛡️ Admin — Admin panel (role-gated, only visible to admin role)
+
+---
+
+## 📁 DELIVERABLE 6 — CORE FEATURE IMPLEMENTATIONS
+
+### Job Triage — Swipe Deck (`components/job/SwipeDeck.tsx`)
+- Renders a stack of 3 visible cards (top card interactive, 2 behind for depth effect)
+- Built with `react-native-gesture-handler` PanGesture + Reanimated Worklets
+- Swipe right → `saved` status, green overlay with ✓ icon
+- Swipe left → `rejected` status, red overlay with ✗ icon
+- Swipe up → triggers `generate-cover-letter` Edge Function, navigates to cover letter view
+- Card rotation: `rotate = interpolate(translateX, [-200, 0, 200], [-15, 0, 15], 'clamp')` degrees
+- Velocity-based throw: card flies off screen at natural velocity, next card springs into position
+- Empty state: animated illustration with "No more jobs — run a new search" CTA
+- Each card displays: company logo (with fallback initials avatar), job title, company name, location chip, work type badge, salary range (if available), posted date, source badge (JSearch/Adzuna)
+
+### Job Triage — Kanban Board (`components/job/KanbanBoard.tsx`)
+- Columns: `Discovered` → `Saved` → `Applied` → `Interview` → `Offer` → `Rejected`
+- Drag-and-drop via `react-native-draggable-flatlist` or equivalent
+- Optimistic mutations via TanStack Query — status updates instantly in UI, syncs to Supabase in background
+- Column headers show count badges
+- Cards are compact versions of the swipe deck card
+- Desktop layout: horizontal scroll with fixed-width columns
+- Mobile layout: horizontal swipe between columns (one column visible at a time)
+
+### Cover Letter View (`app/(app)/cover-letter/[id].tsx`)
+- Displays the generated cover letter with full formatting
+- Header: company name + role title + generation timestamp
+- Body: rendered as formatted text with proper paragraph spacing
+- Actions: Copy to clipboard, Share, Edit (inline editing with auto-save), Regenerate
+- "Apply Now" button: opens `job_listings.apply_url` in system browser
+- Shows token usage and generation time in a subtle footer
+
+### Document Vault (`app/(app)/(tabs)/vault.tsx`)
+- CV section: upload button, preview card showing filename + upload date + extracted skills count
+- Certifications section: grid of certification cards, each showing cert name, issuer, date, tags
+- Upload flow: file picker → stream as ArrayBuffer → upload to Supabase Storage → trigger `extract-context` Edge Function → show extraction progress → display extracted data summary
+- Storage path pattern: `{userId}/cv/{filename}` and `{userId}/certs/{filename}`
+- Delete with confirmation dialog
+
+### Admin Panel (`app/admin/`)
+- **Route guard:** Only accessible if `profiles.role = 'admin'` — verified server-side via SECURITY DEFINER function
+- **Dashboard:** Total users, total applications, total cover letters generated, API usage stats
+- **User Management:** Table of all users with role, plan, last active, scrape count. Ability to change roles.
+- **API Key Management:**
+  - Add/remove/reorder system fallback keys for RapidAPI and Gemini
+  - Each key shows: label, provider, priority order, active status, last used
+  - Keys are never displayed in full after saving — show only last 4 characters
+- **Usage Logs:** Table of `api_key_usage_logs` with filters by date, provider, user
+
+### Settings (`app/(app)/(tabs)/settings.tsx`)
+- **Account:** Display name, email, change password
+- **Gmail Linking:** Connect Gmail account button (OAuth flow), shows linked email if connected, disconnect option
+- **API Keys (Premium only):** Input fields for personal RapidAPI key and Gemini API key. Saved to `user_api_keys` via Service-Role Edge Function. Keys shown masked after saving.
+- **Preferences:** Notification settings, theme (dark only for now)
+- **Danger Zone:** Delete account (with confirmation)
+
+---
+
+## 📁 DELIVERABLE 7 — RATE LIMITING & BYOK ARCHITECTURE
+
+### Scrape Rate Limiting Rules:
+- **Member role:** Can trigger the scrape engine **once every 24 hours**. Enforced in the `scrape-jobs` Edge Function by checking `scrape_rate_limits.last_scrape_at`. Returns a clear error with `nextAvailableAt` timestamp if limit exceeded.
+- **Premium role with own API keys:** No rate limit enforced — their keys, their quota.
+- **Premium role without own API keys:** Same 24-hour limit as member (uses system keys).
+- The UI must display the rate limit status clearly: "Next scrape available in X hours" with a countdown.
+
+### API Key Cascade (enforced in `keyResolver.ts`):
+```
+1. Check user_api_keys for this user + provider → use if exists and active
+2. If not found → query system_api_keys ORDER BY priority_order ASC
+3. Try each system key in order → on 429, mark as temporarily throttled, try next
+4. If all exhausted → return { error: 'quota_exhausted' }
+5. Log every attempt to api_key_usage_logs
+```
+
+---
+
+## 📁 DELIVERABLE 8 — IMPLEMENTATION SEQUENCE
+
+Deliver the implementation in this exact order, one complete file at a time, with no placeholders:
+
+1. **Complete SQL migration script** — all tables, enums, indexes, RLS policies, SECURITY DEFINER functions
+2. **`types/database.types.ts`** — generated output matching the SQL above
+3. **`constants/theme.ts`** — complete design system tokens
+4. **`lib/navConfig.ts`** — complete navigation configuration
+5. **`lib/supabase.ts`** — Supabase client for native + web
+6. **`stores/authStore.ts`** — Zustand auth store with SecureStore persistence
+7. **`components/shared/AnimatedBackground.tsx`** — Reanimated fluid background
+8. **`app/_layout.tsx`** — Root layout with all providers
+9. **`app/(auth)/onboarding.tsx`** — Animated onboarding slides
+10. **`app/(auth)/login.tsx`** — Login screen
+11. **`app/(auth)/register.tsx`** — Registration screen
+12. **`app/(auth)/profile-setup.tsx`** — Multi-step profile completion
+13. **`app/(app)/_layout.tsx`** — Auth gate + adaptive navigation layout
+14. **`supabase/functions/_shared/keyResolver.ts`** — Triple-tier key resolver
+15. **`supabase/functions/geo-autocomplete/index.ts`** — GeoDB proxy
+16. **`supabase/functions/scrape-jobs/index.ts`** — Multi-source parallel scraper
+17. **`supabase/functions/extract-context/index.ts`** — AI context extraction
+18. **`supabase/functions/generate-cover-letter/index.ts`** — AI cover letter generation
+19. **All remaining app screens and components** in logical dependency order
+
+---
+
+## 🔒 ABSOLUTE RULES — NEVER VIOLATE
+
+1. **ZERO mock data** — every data fetch hits real Supabase tables or real APIs
+2. **Supabase always in sync** — every table used in code must exist in the SQL migration. `types/database.types.ts` is always CLI-generated, never hand-written.
+3. **AnimatedBackground on every screen** — mounted at root layout, never removed
+4. **Names in cover letters** — always use `profiles.first_name + ' ' + profiles.last_name`, never auth email
+5. **Keys never exposed to client** — `user_api_keys` and `system_api_keys` are Service-Role only, always
+6. **RLS on every table** — no exceptions
+7. **One complete file at a time** — no partial implementations, no "implement the rest yourself" comments
+8. **Concise comments only** — one-line comments per module explaining purpose, no essay-length explanations in code
+9. **Cross-platform always** — test every component mentally against iOS, Android, mobile web (Vercel), desktop web, and iPad before finalizing
+10. **Sweden is priority geography** — Swedish cities, Swedish Adzuna endpoint, Swedish JSearch params must work correctly and be explicitly tested in the scraper logic , But the target is ofcourse worldwide, but SWEDEN and EUROPE must work,

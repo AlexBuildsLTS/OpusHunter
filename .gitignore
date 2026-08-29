@@ -66,6 +66,10 @@ repomix-output-AlexBuildsLTS-VeraxAI.xml
 Expo_SDK_56__Architectural_Evo.txt
 # Whitelist essential documentation
 !README.md
+*.CONTINUE.md
+*.kilo/
+.kilo/
+.github/
 
 # --- 6. IDE & OS ARTIFACTS ---
 .vscode/

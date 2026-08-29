@@ -1,8 +1,8 @@
 /* ─────────────────────────────────────────────────────────────────────────────
-   OpusHunter — Global CSS (web only; RN screens use lib/theme.ts directly)
+   OpusHunter — Global CSS (Web only; RN screens use constants/theme.ts)
    Stack: Expo ~57.0 · React Native 0.86 · NativeWind 4.2.5
-   Synced 2026-07-11 against lib/theme.ts's PALETTE — professional dark theme.
-   No purple accents. Sleek cyberpunk/aerospace aesthetic with radar ambient animation.
+   Synced 2026-08-27 against constants/theme.ts PALETTE — Aerospace dark theme.
+   No purple accents. Cyan/Blue/Grey with subtle radar sweep ambient.
    ───────────────────────────────────────────────────────────────────────────── */
 
 @tailwind base;
@@ -12,42 +12,40 @@
 /* ── CSS DESIGN TOKENS ──────────────────────────────────────────────────────── */
 @layer base {
   :root {
-    /* Core backgrounds — deep professional aerospace obsidian */
+    /* Core backgrounds — deep aerospace obsidian (matches theme.ts bg) */
     --bg-deep: #050811;
     --bg-core: #0a0f1d;
     --bg-mid: #111a30;
+    --bg-elevated: #0d1426;
+    --bg-sidebar: #060913;
 
-    /* Brand accents — professional cyan, emerald, and sharp amber/blue highlights (NO PURPLE) */
+    /* Brand accents — professional cyan + blue (NO PURPLE) */
     --neon-cyan: #00d2ff;
     --neon-cyan-glow: rgba(0, 210, 255, 0.25);
-    --neon-purple: #00d2ff; /* mapped away from purple */
-    --neon-purple-glow: rgba(0, 210, 255, 0.15);
-    --neon-pink: #ff3366;
-    --neon-pink-glow: rgba(255, 51, 102, 0.25);
+    --neon-blue: #3b82f6;
+    --neon-blue-glow: rgba(59, 130, 246, 0.3);
     --neon-green: #10b981;
     --neon-amber: #f59e0b;
+    --neon-red: #f87171;
 
     /* Surfaces */
     --surface-card: rgba(13, 20, 38, 0.75);
-    --surface-sidebar: #060913;
+    --surface-frost: rgba(26, 29, 46, 0.8);
+    --surface-glass: rgba(255, 255, 255, 0.04);
     --surface-border: rgba(30, 45, 75, 0.6);
     --surface-border-cyan: rgba(0, 210, 255, 0.2);
+    --surface-border-blue: rgba(59, 130, 246, 0.3);
 
-    /* Card constraints — responsive with max-width for large displays */
-    --card-max-w: min(480px, 90vw);
-    --card-max-h: 640px;
-
-    /* Text hierarchy — crisp professional contrast */
+    /* Text hierarchy */
     --text-primary: #f1f5f9;
     --text-secondary: rgba(241, 245, 249, 0.65);
     --text-dim: rgba(241, 245, 249, 0.4);
+    --text-inverse: #050811;
 
     /* Layout constraints (critical for web) */
     --auth-max-w: 420px;
     --content-max-w: 1200px;
     --panel-max-w: 680px;
-
-    /* Sidebar rail: left:24px + 72px wide + 24px gutter = 120px content offset. */
     --sidebar-content-offset: 120px;
   }
 }
@@ -65,19 +63,6 @@ body,
     radial-gradient(circle at 50% 50%, var(--bg-core) 0%, var(--bg-deep) 100%);
   background-attachment: fixed;
   position: relative;
-}
-
-/* Subtle aerospace radar / target sweep ambient animation */
-#root::before {
-  content: "";
-  position: fixed;
-  inset: -20%;
-  background:
-    radial-gradient(circle at 50% 50%, rgba(0, 210, 255, 0.03) 0%, transparent 50%),
-    conic-gradient(from 0deg at 50% 50%, rgba(0, 210, 255, 0.02) 0deg, transparent 60deg, transparent 360deg);
-  animation: radarSweep 18s linear infinite;
-  pointer-events: none;
-  z-index: 0;
   min-height: 100vh;
   width: 100%;
   margin: 0;
@@ -91,6 +76,28 @@ body,
     sans-serif;
 }
 
+/* Subtle aerospace radar / target sweep ambient (very subtle, 18s loop) */
+#root::before {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(0, 210, 255, 0.03) 0%,
+      transparent 50%
+    ),
+    conic-gradient(
+      from 0deg at 50% 50%,
+      rgba(0, 210, 255, 0.02) 0deg,
+      transparent 60deg,
+      transparent 360deg
+    );
+  animation: radarSweep 18s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
 /* ── SCROLLBARS — HIDDEN FOR NATIVE APP FEEL ────────────────────────────────── */
 * {
   scrollbar-width: none;
@@ -102,9 +109,6 @@ body,
 }
 
 /* ── WEB LAYOUT CONTAINERS ──────────────────────────────────────────────────── */
-/* Without these, NativeWind's w-full balloons to 100vw on desktop.
-   Always wrap page content in one of these. */
-
 .web-auth-shell {
   display: flex;
   min-height: 100vh;
@@ -128,8 +132,7 @@ body,
   padding: 0 24px;
 }
 
-/* ── GLASS MORPHISM SYSTEM ───────────────────────────────────────────────────── */
-
+/* ── GLASS MORPHISM SYSTEM ──────────────────────────────────────────────────── */
 .glass {
   background: var(--surface-card);
   backdrop-filter: blur(20px) saturate(180%);
@@ -137,88 +140,78 @@ body,
   border: 1px solid var(--surface-border);
 }
 .glass-elevated {
-  background: rgba(31, 100, 198, 0.92);
+  background: rgba(13, 20, 38, 0.92);
   backdrop-filter: blur(32px) saturate(200%);
   -webkit-backdrop-filter: blur(32px) saturate(200%);
-  border: 1px solid rgba(52, 52, 52, 0.743));
+  border: 1px solid rgba(30, 45, 75, 0.8);
 }
 .glass-cyan {
-  background: rgba(34, 211, 238, 0.06);
+  background: rgba(0, 210, 255, 0.06);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--neon-cyan-glow);
+  border: 1px solid var(--surface-border-cyan);
 }
-.glass-purple {
-  background: rgba(139, 124, 246, 0.06);
+.glass-blue {
+  background: rgba(59, 130, 246, 0.06);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--neon-purple-glow);
-}
-.glass-pink {
-  background: rgba(213, 33, 75, 0.394);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--neon-pink-glow);
+  border: 1px solid var(--surface-border-blue);
 }
 
 /* ── GLOW SYSTEM ─────────────────────────────────────────────────────────────── */
-
 .glow-cyan {
   box-shadow:
     0 0 24px var(--neon-cyan-glow),
-    0 0 48px rgba(34, 211, 238, 0.545);
+    0 0 48px rgba(0, 210, 255, 0.08);
 }
-.glow-purple {
+.glow-blue {
   box-shadow:
-    0 0 24px var(--neon-purple-glow),
-    0 0 48px rgba(64, 79, 242, 0.668);
-}
-.glow-pink {
-  box-shadow:
-    0 0 24px var(--neon-pink-glow),
-    0 0 48px rgba(240, 70, 110, 0.51);
+    0 0 24px var(--neon-blue-glow),
+    0 0 48px rgba(59, 130, 246, 0.08);
 }
 .glow-green {
   box-shadow:
-    0 0 24px rgba(52, 211, 153, 0.25),
-    0 0 48px rgba(52, 211, 153, 0.08);
+    0 0 24px rgba(16, 185, 129, 0.25),
+    0 0 48px rgba(16, 185, 129, 0.08);
 }
-
+.glow-amber {
+  box-shadow:
+    0 0 24px rgba(245, 158, 11, 0.25),
+    0 0 48px rgba(245, 158, 11, 0.08);
+}
+.glow-red {
+  box-shadow:
+    0 0 24px rgba(248, 113, 113, 0.25),
+    0 0 48px rgba(248, 113, 113, 0.08);
+}
 .glow-btn-cyan {
   box-shadow:
-    0 0 20px rgba(34, 211, 238, 0.4),
-    0 4px 16px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(55, 55, 55, 0.812);
+    0 0 20px rgba(0, 210, 255, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .glow-btn-cyan:hover {
   box-shadow:
-    0 0 32px rgba(34, 211, 238, 0.6),
-    0 8px 24px rgba(0, 0, 0, 0.6),
+    0 0 32px rgba(0, 210, 255, 0.4),
+    0 8px 24px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
-/* ── AMBIENT BACKGROUND ORBS (web only) ─────────────────────────────────────── */
-.ambient-orb-cyan {
-  position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(34, 211, 238, 0.16) 0%,
-    transparent 70%
-  );
-  pointer-events: none;
-  filter: blur(40px);
+/* ── GLASS CARD HOVER (frosty lift) ──────────────────────────────────────────── */
+.glass-hoverable {
+  transition:
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.3s ease,
+    backdrop-filter 0.3s ease;
 }
-.ambient-orb-purple {
-  position: absolute;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(139, 124, 246, 0.2) 0%,
-    transparent 70%
-  );
-  pointer-events: none;
-  filter: blur(40px);
+.glass-hoverable:hover {
+  transform: translateY(-2px) scale(1.012);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  box-shadow:
+    0 0 32px rgba(0, 210, 255, 0.2),
+    0 20px 60px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 /* ── SIDEBAR NAV (web) ───────────────────────────────────────────────────────── */
@@ -238,11 +231,11 @@ body,
   text-decoration: none;
 }
 .sidebar-nav-item:hover {
-  background: rgba(34, 211, 238, 0.12);
+  background: rgba(0, 210, 255, 0.08);
   transform: translateY(-1px);
 }
 .sidebar-nav-item.active {
-  background: rgba(139, 124, 246, 0.15);
+  background: rgba(59, 130, 246, 0.12);
 }
 .sidebar-nav-item .nav-label {
   font-size: 9px;
@@ -255,52 +248,7 @@ body,
   color: var(--neon-cyan);
 }
 
-/* ── SWIPE CARD STAMPS ───────────────────────────────────────────────────────── */
-.stamp-apply {
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: 3px;
-  color: var(--neon-cyan);
-  border: 3px solid var(--neon-cyan);
-  border-radius: 6px;
-  padding: 2px 10px;
-  transform: rotate(-12deg);
-  text-shadow: 0 0 12px rgba(34, 211, 238, 0.8);
-}
-.stamp-pass {
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: 3px;
-  color: var(--neon-pink);
-  border: 3px solid var(--neon-pink);
-  border-radius: 6px;
-  padding: 2px 10px;
-  transform: rotate(12deg);
-  text-shadow: 0 0 12px rgba(240, 70, 110, 0.6);
-}
-
-/* ── GLASS CARD HOVER (frosty lift) ──────────────────────────────────────────── */
-/* Companion to GlassCard.tsx's `hoverable` prop — same values, kept here so
-   any raw `.glass` usage outside a GlassCard component gets the identical feel. */
-.glass-hoverable {
-  transition:
-    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.3s ease,
-    backdrop-filter 0.3s ease;
-}
-.glass-hoverable:hover {
-  transform: translateY(-2px) scale(1.012);
-  backdrop-filter: blur(32px) saturate(200%);
-  -webkit-backdrop-filter: blur(32px) saturate(200%);
-  box-shadow:
-    0 0 32px rgba(139, 124, 246, 0.35),
-    0 20px 60px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
-}
-
 /* ── TABS LAYOUT: sidebar on ≥768px, bottom bar on mobile ────────────────────── */
-/* Single definition — do not add a second .tabs-content block. Rail sits at
-   left:24px, is 72px wide; content needs 24+72+24=120px or it clips under it. */
 @media (min-width: 768px) {
   .tabs-sidebar {
     display: flex !important;
@@ -325,44 +273,9 @@ body,
   }
 }
 
-/* ── REDUCED MOTION (a11y) ────────────────────────────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/* ── TYPOGRAPHY UTILITIES ────────────────────────────────────────────────────── */
-
-.label-caps {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-.label-caps-cyan {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--neon-cyan);
-}
-.mono {
-  font-family: "Menlo", "Monaco", "Courier New", monospace;
-  font-size: 12px;
-  letter-spacing: 0.5px;
-}
-
 /* ── FORM INPUTS ─────────────────────────────────────────────────────────────── */
-
 .input-field {
-  background: rgba(10, 7, 20, 0.7);
+  background: rgba(10, 15, 29, 0.7);
   border: 1px solid var(--surface-border);
   border-radius: 14px;
   color: var(--text-primary);
@@ -375,24 +288,23 @@ body,
   outline: none;
 }
 .input-field:focus {
-  border-color: var(--neon-cyan-glow);
-  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 0 3px rgba(0, 210, 255, 0.1);
 }
 .input-field::placeholder {
-  color: rgba(237, 234, 247, 0.25);
+  color: var(--text-dim);
 }
 
 /* ── BUTTONS ─────────────────────────────────────────────────────────────────── */
-
 .btn-primary {
   background: linear-gradient(
     135deg,
-    var(--neon-purple) 0%,
-    var(--neon-cyan) 100%
+    var(--neon-cyan) 0%,
+    var(--neon-blue) 100%
   );
-  color: var(--bg-deep);
+  color: var(--text-inverse);
   font-weight: 800;
-  letter-spacing: 1.5px;
+  letter-spacing: 1px;
   text-transform: uppercase;
   border: none;
   border-radius: 14px;
@@ -403,13 +315,13 @@ body,
     box-shadow 0.15s ease,
     opacity 0.15s ease;
   width: 100%;
-  box-shadow: 0 0 20px rgba(139, 124, 246, 0.3);
+  box-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
 }
 .btn-primary:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 0 28px rgba(139, 124, 246, 0.5),
-    0 8px 24px rgba(34, 211, 238, 0.2);
+    0 0 28px rgba(0, 210, 255, 0.4),
+    0 8px 24px rgba(59, 130, 246, 0.2);
 }
 .btn-primary:active {
   transform: translateY(0);
@@ -425,30 +337,30 @@ body,
   cursor: pointer;
   transition:
     border-color 0.2s,
-    color 0.2s;
+    color 0.2s,
+    box-shadow 0.2s;
 }
 .btn-ghost:hover {
-  border-color: var(--neon-cyan-glow);
+  border-color: var(--surface-border-cyan);
   color: var(--neon-cyan);
-  box-shadow: 0 0 12px rgba(34, 211, 238, 0.15);
+  box-shadow: 0 0 12px rgba(0, 210, 255, 0.1);
 }
 
 /* ── BADGES / CHIPS ──────────────────────────────────────────────────────────── */
-
 .badge-member {
-  background: rgba(52, 211, 153, 0.15);
-  border: 1px solid rgba(52, 211, 153, 0.25);
-  color: var(--neon-green);
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
 }
 .badge-premium {
-  background: rgba(245, 166, 35, 0.15);
-  border: 1px solid rgba(245, 166, 35, 0.35);
-  color: var(--neon-amber);
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
 }
 .badge-admin {
-  background: rgba(240, 70, 110, 0.15);
-  border: 1px solid rgba(237, 27, 76, 0.647);
-  color: var(--neon-pink);
+  background: rgba(248, 113, 113, 0.15);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #f87171;
 }
 
 .chip {
@@ -462,31 +374,52 @@ body,
 }
 
 /* ── KEYFRAMES ────────────────────────────────────────────────────────────────── */
-
-@keyframes ambientDrift {
-  0%,
-  100% {
-    transform: translate(0%, 0%) scale(1);
+@keyframes radarSweep {
+  0% {
+    transform: rotate(0deg);
   }
-  50% {
-    transform: translate(3%, -4%) scale(1.08);
+  100% {
+    transform: rotate(360deg);
   }
 }
 @keyframes borderPulse {
   0%,
   100% {
-    border-color: rgba(34, 211, 238, 0.2);
+    border-color: rgba(0, 210, 255, 0.2);
   }
   50% {
-    border-color: rgba(34, 211, 238, 0.5);
+    border-color: rgba(0, 210, 255, 0.5);
   }
 }
-.border-pulse-cyan {
-  animation: borderPulse 3s ease-in-out infinite;
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes accessGrantedPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 40px 12px rgba(16, 185, 129, 0.12);
+  }
 }
 
 /* ── PROGRESS BAR (batch apply queue) ────────────────────────────────────────── */
-
 .progress-track {
   height: 4px;
   background: rgba(255, 255, 255, 0.06);
@@ -497,9 +430,9 @@ body,
   height: 100%;
   background: linear-gradient(
     90deg,
-    var(--bg-deep) 0%,
+    var(--neon-blue) 0%,
     var(--neon-cyan) 50%,
-    var(--neon-purple) 100%
+    var(--neon-blue) 100%
   );
   background-size: 200% 100%;
   border-radius: 2px;
@@ -516,7 +449,6 @@ body,
 }
 
 /* ── DIVIDERS ────────────────────────────────────────────────────────────────── */
-
 .divider {
   height: 1px;
   background: linear-gradient(
@@ -546,11 +478,10 @@ body,
 }
 
 /* ── MODALS / SHEETS (web) ───────────────────────────────────────────────────── */
-
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(5, 3, 10, 0.75);
+  background: rgba(5, 8, 17, 0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
@@ -568,21 +499,12 @@ body,
 }
 
 /* ── SKELETON LOADING ────────────────────────────────────────────────────────── */
-
-@keyframes shimmer {
-  0% {
-    background-position: -400px 0;
-  }
-  100% {
-    background-position: 400px 0;
-  }
-}
 .skeleton {
   background: linear-gradient(
     90deg,
-    rgba(87, 87, 87, 0.03) 25%,
-    rgba(43, 43, 43, 0.387) 50%,
-    rgba(11, 11, 11, 0.209) 75%
+    rgba(255, 255, 255, 0.02) 25%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.02) 75%
   );
   background-size: 800px 100%;
   animation: shimmer 1.6s infinite linear;
@@ -590,7 +512,6 @@ body,
 }
 
 /* ── STATUS INDICATORS ───────────────────────────────────────────────────────── */
-
 .status-dot {
   width: 7px;
   height: 7px;
@@ -606,36 +527,16 @@ body,
   box-shadow: 0 0 12px var(--neon-amber);
 }
 .status-dot.error {
-  background: var(--neon-pink);
-  box-shadow: 0 0 12px var(--neon-pink);
+  background: var(--neon-red);
+  box-shadow: 0 0 12px var(--neon-red);
 }
 
 /* ── ACCESS GRANTED ANIMATION ────────────────────────────────────────────────── */
-
-@keyframes accessGrantedPulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
-  }
-  50% {
-    box-shadow: 0 0 40px 12px rgba(52, 211, 153, 0.15);
-  }
-}
 .access-granted-icon {
   animation: accessGrantedPulse 2s ease-in-out infinite;
 }
 
-/* ── MOBILE SAFE AREA OVERRIDES (web only) ───────────────────────────────────── */
-
-@media (min-width: 768px) {
-  [data-rnw-class*="SafeAreaView"] {
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-  }
-}
-
 /* ── RESPONSIVE: AUTH LAYOUT ─────────────────────────────────────────────────── */
-
 @media (min-width: 768px) {
   .web-auth-shell {
     flex-direction: row;
@@ -648,7 +549,7 @@ body,
     align-items: center;
     justify-content: center;
     padding: 40px 48px;
-    background: rgba(10, 7, 20, 0.7);
+    background: rgba(10, 15, 29, 0.7);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-right: 1px solid var(--surface-border);
@@ -670,6 +571,71 @@ body,
     padding: 24px 20px;
   }
   .web-auth-features-col {
-    display: none; /* hide features on mobile — show only form */
+    display: none;
+  }
+}
+
+/* ── REDUCED MOTION (a11y) ────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── TYPOGRAPHY UTILITIES ────────────────────────────────────────────────────── */
+.label-caps {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.label-caps-cyan {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--neon-cyan);
+}
+.mono {
+  font-family: "Menlo", "Monaco", "Courier New", monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+/* ── SWIPE CARD STAMPS ───────────────────────────────────────────────────────── */
+.stamp-apply {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: var(--neon-cyan);
+  border: 3px solid var(--neon-cyan);
+  border-radius: 6px;
+  padding: 2px 10px;
+  transform: rotate(-12deg);
+  text-shadow: 0 0 12px rgba(0, 210, 255, 0.8);
+}
+.stamp-pass {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: var(--neon-red);
+  border: 3px solid var(--neon-red);
+  border-radius: 6px;
+  padding: 2px 10px;
+  transform: rotate(12deg);
+  text-shadow: 0 0 12px rgba(248, 113, 113, 0.6);
+}
+
+/* ── MOBILE SAFE AREA OVERRIDES (web only) ───────────────────────────────────── */
+@media (min-width: 768px) {
+  [data-rnw-class*="SafeAreaView"] {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
   }
 }

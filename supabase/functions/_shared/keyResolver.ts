@@ -1,100 +1,240 @@
 /**
  * supabase/functions/_shared/keyResolver.ts
- * OpusHunter — BYOK Key Resolution & Rotation
+ * OpusHunter — Triple-Tier API Key Resolver with Automatic Key Rotation & Fallback.
+ * Tier 1: User BYOK (user_api_keys).
+ * Tier 2: System Key Pool (system_api_keys) sorted by priority with automatic 429 rotation.
+ * Tier 3: Environment variables fallback (GEMINI_API_KEY, RAPIDAPI_KEY, ADZUNA_KEY, etc.).
+ * Supports optional AES-256-GCM decryption with plaintext fallback.
  */
 
-import type { SupabaseClient } from "supabase";
+import { getSupabaseAdmin } from "./supabaseAdmin.ts";
+import { SupabaseClient } from "@supabase/supabase-js";
 
-export type KeyProvider = "gemini" | "rapidapi";
-export type KeySource = "byok" | "pool" | "env";
+// Helper for AES-256-GCM decryption with plaintext fallback
+async function decryptKeyIfNeeded(rawKey: string): Promise<string> {
+  const secret = Deno.env.get("KEY_ENCRYPTION_SECRET");
+  if (!secret) return rawKey; // Fallback to raw plaintext if no secret set
+
+  try {
+    const combined = new Uint8Array(
+      atob(rawKey)
+        .split("")
+        .map((c) => c.charCodeAt(0))
+    );
+    if (combined.length < 13) return rawKey; // Not encrypted string
+
+    const iv = combined.slice(0, 12);
+    const ciphertext = combined.slice(12);
+
+    const encoder = new TextEncoder();
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret.padEnd(32, "0").slice(0, 32)),
+      { name: "AES-GCM" },
+      false,
+      ["decrypt"]
+    );
+
+    const decrypted = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      cryptoKey,
+      ciphertext
+    );
+
+    return new TextDecoder().decode(decrypted);
+  } catch (_err) {
+    // If decryption fails, assume it was stored as unencrypted plain text
+    return rawKey;
+  }
+}
 
 export interface ResolvedKey {
-  readonly key: string;
-  readonly source: KeySource;
-  /** Only present for source: 'pool' — needed to bump last_used after use. */
-  readonly poolRowId?: string;
+  key: string;
+  keyId: string;
+  source: "user" | "system" | "env";
+  provider: string;
+  extra?: Record<string, string>;
 }
-
-const ENV_VAR: Readonly<Record<KeyProvider, string>> = {
-  gemini: "GEMINI_API_KEY",
-  rapidapi: "RAPIDAPI_KEY",
-} as const;
-
-const PROFILE_COLUMN: Readonly<Record<KeyProvider, string>> = {
-  gemini: "gemini_key",
-  rapidapi: "rapidapi_key",
-} as const;
 
 /**
- * Resolves ALL usable keys for a provider, in priority order, for rotation.
- * Index 0 is always tried first.
+ * Resolves all candidate keys for a provider in priority order.
+ * Returning an array enables calling functions to rotate keys seamlessly if one returns 429/401/error.
  */
-export async function resolveKeyPool(
-  supabase: SupabaseClient,
+export async function getCandidateKeys(
+  adminClient: SupabaseClient,
   userId: string,
-  provider: KeyProvider,
+  provider: string
 ): Promise<ResolvedKey[]> {
-  const keys: ResolvedKey[] = [];
-  const column = PROFILE_COLUMN[provider];
+  const candidates: ResolvedKey[] = [];
+  const normalizedProvider = provider.toLowerCase();
 
-  // ── Tier 1: BYOK — the calling user's own key ────────────────────────────
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select(column)
-    .eq("id", userId)
-    .maybeSingle();
+  // ── Tier 1: User BYOK ─────────────────────────────────────────────────
+  if (userId) {
+    try {
+      const { data: userKeys } = await adminClient
+        .from("user_api_keys")
+        .select("id, encrypted_key, provider")
+        .eq("user_id", userId)
+        .eq("provider", normalizedProvider)
+        .eq("is_active", true);
 
-  if (profile) {
-    // Safely cast to bypass strict TS index signature rules (Error 7015 Fix)
-    const byok = (profile as unknown as Record<string, unknown>)[column];
-    if (typeof byok === "string" && byok.trim().length > 10) {
-      keys.push({ key: byok.trim(), source: "byok" });
+      if (userKeys && userKeys.length > 0) {
+        for (const k of userKeys) {
+          if (k.encrypted_key) {
+            const keyVal = await decryptKeyIfNeeded(k.encrypted_key);
+            candidates.push({
+              key: keyVal,
+              keyId: k.id,
+              source: "user",
+              provider: k.provider,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`User key lookup failed for ${provider}:`, e);
     }
   }
 
-  // ── Tier 2: admin-managed pool ───────────────────────────────────────────
-  const { data: poolRows } = await supabase
-    .from("api_keys")
-    .select("id, api_key")
-    .eq("provider", provider)
-    .eq("is_active", true)
-    .order("last_used", { ascending: true, nullsFirst: true })
-    .limit(6);
+  // ── Tier 2: System Pool (Active & Unthrottled) ─────────────────────────
+  try {
+    const { data: systemKeys } = await adminClient
+      .from("system_api_keys")
+      .select("id, encrypted_key, throttled_until")
+      .eq("provider", normalizedProvider)
+      .eq("is_active", true)
+      .or(
+        `throttled_until.is.null,throttled_until.lt.${new Date().toISOString()}`
+      )
+      .order("priority_order", { ascending: true });
 
-  for (const row of poolRows ?? []) {
-    if (row.api_key) {
-      keys.push({ key: row.api_key, source: "pool", poolRowId: row.id });
+    if (systemKeys && systemKeys.length > 0) {
+      for (const sk of systemKeys) {
+        if (sk.encrypted_key) {
+          const keyVal = await decryptKeyIfNeeded(sk.encrypted_key);
+          candidates.push({
+            key: keyVal,
+            keyId: sk.id,
+            source: "system",
+            provider: normalizedProvider,
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`System key pool lookup failed for ${provider}:`, e);
+  }
+
+  // ── Tier 3: Environment Variable Fallbacks ────────────────────────────
+  const envKeyNames = [
+    `${normalizedProvider.toUpperCase()}_API_KEY`,
+    `${normalizedProvider.toUpperCase()}_KEY`,
+  ];
+
+  if (normalizedProvider === "gemini") {
+    envKeyNames.push("GEMINI_API_KEY", "GOOGLE_API_KEY");
+  } else if (normalizedProvider === "rapidapi") {
+    envKeyNames.push("RAPIDAPI_KEY", "RAPID_API_KEY", "JSEARCH_API_KEY");
+  } else if (normalizedProvider === "adzuna") {
+    envKeyNames.push("ADZUNA_KEY", "ADZUNA_API_KEY");
+  } else if (normalizedProvider === "geodb") {
+    envKeyNames.push("GEODB_API_KEY", "GEODB_KEY", "RAPIDAPI_KEY");
+  }
+
+  for (const envVar of envKeyNames) {
+    const val = Deno.env.get(envVar);
+    if (val && !candidates.some((c) => c.key === val)) {
+      candidates.push({
+        key: val,
+        keyId: `env-${envVar}`,
+        source: "env",
+        provider: normalizedProvider,
+      });
     }
   }
 
-  // ── Tier 3: env secret ────────────────────────────────────────────────────
-  const envKey = Deno.env.get(ENV_VAR[provider]);
-  if (envKey && envKey.trim().length > 10) {
-    keys.push({ key: envKey.trim(), source: "env" });
-  }
-
-  return keys;
+  return candidates;
 }
 
-/** Convenience wrapper when the caller just needs the single best key. */
+/**
+ * Resolves a single primary API key for the given provider and user.
+ */
 export async function resolveKey(
-  supabase: SupabaseClient,
+  adminClient: SupabaseClient,
   userId: string,
-  provider: KeyProvider,
-): Promise<ResolvedKey | null> {
-  const pool = await resolveKeyPool(supabase, userId, provider);
-  return pool[0] ?? null;
+  provider: string
+): Promise<ResolvedKey> {
+  const candidates = await getCandidateKeys(adminClient, userId, provider);
+
+  if (candidates.length === 0) {
+    await logUsage(adminClient, userId, provider, "system", false);
+    throw new Error(
+      `quota_exhausted: No API keys available for provider "${provider}"`
+    );
+  }
+
+  const selected = candidates[0];
+  await logUsage(adminClient, userId, provider, selected.source, true);
+  return selected;
 }
 
-/** Call after successfully using a pool-sourced key, to rotate fairly. */
+/**
+ * Marks a system API key as used and updates its last_used_at.
+ */
 export async function markKeyUsed(
-  supabase: SupabaseClient,
-  resolved: ResolvedKey,
-): Promise<void> {
-  if (resolved.source === "pool" && resolved.poolRowId) {
-    await supabase
-      .from("api_keys")
-      .update({ last_used: new Date().toISOString() })
-      .eq("id", resolved.poolRowId);
+  adminClient: SupabaseClient,
+  resolvedKey: { keyId: string; source: string }
+) {
+  if (resolvedKey.source === "system" && !resolvedKey.keyId.startsWith("env-")) {
+    await adminClient
+      .from("system_api_keys")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", resolvedKey.keyId);
+  }
+}
+
+/**
+ * Marks a system API key as throttled after receiving a 429 rate-limit response.
+ */
+export async function handle429(
+  adminClient: SupabaseClient,
+  keyId: string,
+  cooldownMs: number = 3600000
+) {
+  if (keyId && !keyId.startsWith("env-")) {
+    await adminClient
+      .from("system_api_keys")
+      .update({
+        throttled_until: new Date(Date.now() + cooldownMs).toISOString(),
+      })
+      .eq("id", keyId);
+  }
+}
+
+/**
+ * Logs API key usage into api_key_usage_logs.
+ */
+export async function logUsage(
+  adminClient: SupabaseClient,
+  userId: string,
+  provider: string,
+  source: string,
+  success: boolean,
+  tokensUsed = 0,
+  functionName = "keyResolver"
+) {
+  try {
+    await adminClient.from("api_key_usage_logs").insert({
+      user_id: userId || null,
+      provider,
+      key_source: source,
+      success,
+      function_name: functionName,
+      tokens_used: tokensUsed,
+      cost_estimate_usd: 0,
+      status_code: success ? 200 : 500,
+    });
+  } catch (err) {
+    console.error("Failed to insert api_key_usage_log:", err);
   }
 }

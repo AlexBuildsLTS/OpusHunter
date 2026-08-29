@@ -1,17 +1,61 @@
-import { Link, Stack } from 'expo-router';
-import { View, Text } from 'react-native';
+// app/+not-found.tsx
+import { Link, Stack } from "expo-router";
+import { View, Text, StyleSheet } from "react-native";
+import { C } from "../lib/theme";
 
 export default function NotFoundScreen() {
-    return (
-        <>
-            <Stack.Screen options={{ title: 'Oops!' }} />
-            <View className="flex-1 bg-surface-bg items-center justify-center p-6">
-                <Text className="text-pink-500 text-6xl font-black mb-4">404</Text>
-                <Text className="text-white text-lg mb-8">This page does not exist in the pipeline.</Text>
-                <Link href="/" className="px-8 py-4 bg-brand-cyan/10 border border-brand-cyan/30 rounded-2xl">
-                    <Text className="text-cyan-400">Go Home</Text>
-                </Link>
-            </View>
-        </>
-    );
+  return (
+    <>
+      <Stack.Screen options={{ title: "System Error 404" }} />
+      <View style={styles.container}>
+        <Text style={styles.errorCode}>404</Text>
+        <Text style={styles.errorText}>
+          Sector trajectory missing in current pipeline.
+        </Text>
+
+        <Link href="/(tabs)" style={styles.linkButton}>
+          <Text style={styles.linkText}>Return to Core Deck</Text>
+        </Link>
+      </View>
+    </>
+  );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  errorCode: {
+    color: C.red,
+    fontSize: 72,
+    fontWeight: "900",
+    marginBottom: 8,
+    letterSpacing: 2,
+  },
+  errorText: {
+    color: C.sub,
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 32,
+    textAlign: "center",
+  },
+  linkButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    backgroundColor: `${C.cyan}10`,
+    borderWidth: 1,
+    borderColor: `${C.cyan}30`,
+    borderRadius: 16,
+  },
+  linkText: {
+    color: C.cyan,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 2,
+    fontSize: 12,
+  },
+});

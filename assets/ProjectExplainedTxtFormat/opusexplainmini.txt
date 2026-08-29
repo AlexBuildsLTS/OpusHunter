@@ -1,0 +1,487 @@
+
+
+    i want you to properly, now. i am seriopus, no jokes. the first image you see now, that is my old ,  the new one, is horrific, its pourple, igly, disaster, i said. clearly, ### Visual Design Language
+
+- **Dark-first design** with a clean, modern aesthetic (deep navy/charcoal backgrounds, electric accent colors)
+
+- **Glassmorphism cards** for job listings — frosted glass effect with subtle borders
+
+- **Micro-animations everywhere** — button press feedback, card entrance animations, loading skeletons
+
+- **Typography hierarchy** — clear distinction between headings, body, and metadata text
+
+- **Color system:** Primary accent (electric blue or brand color), success green, warning amber, error red — all accessible (WCAG AA)
+
+
+
+### Adaptive Layout (navConfig.ts)
+
+```typescript
+
+// lib/navConfig.ts — the ONLY place navigation is defined
+
+export const NAV_CONFIG = {
+
+  routes: [
+
+    { key: 'index', label: 'Dashboard', icon: 'home', href: '/(app)/' },
+
+    { key: 'search', label: 'Search', icon: 'search', href: '/(app)/search' },
+
+    { key: 'triage', label: 'Triage', icon: 'layers', href: '/(app)/triage' },
+
+    { key: 'kanban', label: 'Pipeline', icon: 'kanban', href: '/(app)/kanban' },
+
+    { key: 'documents', label: 'Documents', icon: 'file', href: '/(app)/documents' },
+
+    { key: 'profile', label: 'Profile', icon: 'user', href: '/(app)/profile' },
+
+  ],
+
+  adminRoutes: [
+
+    { key: 'admin', label: 'Admin', icon: 'shield', href: '/(admin)/' },
+
+  ]
+
+};
+
+// The _layout.tsx reads this config and renders SidebarDrawer on web/tablet
+
+// and FloatingTabBar on mobile — zero duplication
+
+```
+
+### Mobile-Specific
+
+- Floating tab bar with blur background, haptic feedback on tab press
+
+- Swipe deck fills the screen with satisfying physics
+
+- Pull-to-refresh on all list views
+
+- Bottom sheet modals (not full-screen navigations) for quick actions
+
+### Web/Desktop-Specific
+
+- Persistent sidebar with collapsible sections
+
+- Kanban board uses full viewport width
+
+- Hover states on all interactive elements
+
+- Keyboard navigation support
+
+| **Animation** | Reanimated 4+ / Worklets 0.10+ | 120fps native-thread physics & gestures |## Part 2: Complete Monorepo Structure
+
+### Repository Architecture
+
+```
+
+opushunter/                                    # Monorepo root
+
+├── .github/
+
+│   ├── workflows/
+
+│   │   ├── ci.yml                             # Lint, type-check, test on every PR
+
+│   │   ├── deploy-web.yml                     # Vercel deployment on main merge
+
+│   │   ├── deploy-edge-functions.yml          # Supabase Edge Function deployment
+
+│   │   └── eas-build.yml                      # EAS build trigger for iOS/Android
+
+│   └── CODEOWNERS                             # Code ownership rules
+
+│
+
+├── apps/
+
+│   └── mobile/                                # Expo Router app (iOS + Android + Web)
+
+│       ├── app/                               # Expo Router filesystem routes
+
+│       │   ├── _layout.tsx                    # Root layout: providers, AnimatedBackground, font loading
+
+│       │   ├── +not-found.tsx                 # 404 route for web
+
+│       │   │
+
+│       │   ├── (auth)/                        # Unauthenticated route group
+
+│       │   │   ├── _layout.tsx                # Auth group layout: redirect if already authed
+
+│       │   │   ├── onboarding.tsx             # Animated 4-slide value proposition
+
+│       │   │   ├── login.tsx                  # Email/password + Google OAuth login
+
+│       │   │   ├── register.tsx               # Registration with name collection
+
+│       │   │   └── profile-setup.tsx          # 5-step mandatory profile completion wizard
+
+│       │   │
+
+│       │   ├── (app)/                         # Authenticated route group
+
+│       │   │   ├── _layout.tsx                # Auth gate + adaptive nav (sidebar/tabs)
+
+│       │   │   │
+
+│       │   │   ├── (tabs)/                    # Tab navigator routes
+
+│       │   │   │   ├── _layout.tsx            # Tab bar configuration
+
+│       │   │   │   ├── discover.tsx           # Job search + swipe deck screen
+
+│       │   │   │   ├── pipeline.tsx           # Kanban application tracker
+
+│       │   │   │   ├── vault.tsx              # Document management (CV + certs)
+
+│       │   │   │   ├── profile.tsx            # Career profile editor
+
+│       │   │   │   └── settings.tsx           # App settings + Gmail + API keys
+
+│       │   │   │
+
+│       │   │   ├── job/
+
+│       │   │   │   └── [id].tsx               # Job detail dynamic route
+
+│       │   │   │
+
+│       │   │   └── cover-letter/
+
+│       │   │       └── [id].tsx               # Cover letter view/edit/compare route
+
+│       │   │
+
+│       │   └── admin/                         # Admin panel (role-gated)
+
+│       │       ├── _layout.tsx                # Admin role verification gate
+
+│       │       ├── index.tsx                  # Admin dashboard with stats
+
+│       │       ├── users.tsx                  # User management table
+
+│       │       ├── api-keys.tsx               # System API key management
+
+│       │       └── usage-logs.tsx             # API usage log viewer
+
+│       │
+
+│       ├── components/
+
+│       │   ├── ui/                            # Atomic design system primitives
+
+│       │   │   ├── Button.tsx                 # Primary/secondary/destructive variants
+
+│       │   │   ├── Input.tsx                  # Dark surface input with glow focus
+
+│       │   │   ├── Card.tsx                   # Glass morphism card container
+
+│       │   │   ├── Badge.tsx                  # Status/type/source badges
+
+│       │   │   ├── Avatar.tsx                 # Company logo with initials fallback
+
+│       │   │   ├── Skeleton.tsx               # Shimmer loading skeleton
+
+│       │   │   ├── Modal.tsx                  # Bottom sheet modal (native) / centered (web)
+
+│       │   │   ├── Toast.tsx                  # Notification toast system
+
+│       │   │   ├── ProgressBar.tsx            # Animated progress indicator
+
+│       │   │   ├── Chip.tsx                   # Filter/tag chip component
+
+│       │   │   ├── Divider.tsx                # Section divider
+
+│       │   │   └── Typography.tsx             # Typed text components (H1–H4, Body, Caption)
+
+│       │   │
+
+│       │   ├── job/
+
+│       │   │   ├── SwipeDeck.tsx              # Gesture-driven swipeable card stack
+
+│       │   │   ├── JobCard.tsx                # Individual job card (swipe + kanban variant)
+
+│       │   │   ├── JobCardCompact.tsx         # Compact kanban card variant
+
+│       │   │   ├── KanbanBoard.tsx            # Drag-and-drop application pipeline
+
+│       │   │   ├── KanbanColumn.tsx           # Individual kanban column
+
+│       │   │   ├── SearchFilters.tsx          # Job search filter panel
+
+│       │   │   ├── SwipeOverlay.tsx           # Accept/reject/apply overlays on swipe
+
+│       │   │   ├── RateLimitBanner.tsx        # "Next scrape in X hours" countdown
+
+│       │   │   └── EmptyDeck.tsx              # Empty state with CTA
+
+│       │   │
+
+│       │   ├── cover-letter/
+
+│       │   │   ├── CoverLetterView.tsx        # Formatted cover letter display
+
+│       │   │   ├── CoverLetterEditor.tsx      # Inline editing with auto-save
+
+│       │   │   ├── StrategySelector.tsx       # A/B/C strategy comparison UI
+
+│       │   │   ├── ScoreCard.tsx              # ATS score + specificity metrics display
+
+│       │   │   ├── GenerationProgress.tsx     # Animated generation progress indicator
+
+│       │   │   └── CoverLetterActions.tsx     # Copy/share/edit/regenerate action bar
+
+│       │   │
+
+│       │   ├── profile/
+
+│       │   │   ├── ProfileForm.tsx            # Main profile editor form
+
+│       │   │   ├── StepIndicator.tsx          # Multi-step wizard progress dots
+
+│       │   │   ├── LocationAutocomplete.tsx   # GeoDB-powered city search input
+
+│       │   │   ├── SalaryRangeSlider.tsx      # Dual-handle salary range picker
+
+│       │   │   ├── SkillsInput.tsx            # Tag-style skills input
+
+│       │   │   ├── WorkTypeSelector.tsx       # Remote/hybrid/onsite multi-select
+
+│       │   │   └── SenioritySelector.tsx      # Seniority level picker
+
+│       │   │
+
+│       │   ├── vault/
+
+│       │   │   ├── DocumentUploader.tsx       # File picker + upload progress
+
+│       │   │   ├── CVCard.tsx                 # CV preview with extracted skills summary
+
+│       │   │   ├── CertCard.tsx               # Certification card with metadata
+
+│       │   │   ├── ExtractionProgress.tsx     # AI extraction progress indicator
+
+│       │   │   ├── ExtractedDataSummary.tsx   # Skills/experience extraction results
+
+│       │   │   └── DeleteConfirmDialog.tsx    # Confirmation dialog for document deletion
+
+│       │   │
+
+│       │   ├── admin/
+
+│       │   │   ├── StatsGrid.tsx              # Dashboard metrics grid
+
+│       │   │   ├── UserTable.tsx              # Paginated user management table
+
+│       │   │   ├── ApiKeyManager.tsx          # System key CRUD with masking
+
+│       │   │   ├── UsageLogTable.tsx          # Filterable usage log table
+
+│       │   │   └── RoleChanger.tsx            # User role assignment control
+
+│       │   │
+
+│       │   └── shared/
+
+│       │       ├── AnimatedBackground.tsx     # Root-level fluid orb animation
+
+│       │       ├── NavBar.tsx                 # Adaptive nav (sidebar/tabs) orchestrator
+
+│       │       ├── SidebarNav.tsx             # Desktop sidebar navigation
+
+│       │       ├── TabBarNav.tsx              # Mobile floating tab bar
+
+│       │       ├── GradientText.tsx           # Gradient-filled text component
+
+│       │       ├── HapticButton.tsx           # Button with haptic feedback wrapper
+
+│       │       ├── KeyboardAvoidingWrapper.tsx # Cross-platform keyboard handling
+
+│       │       └── SafeAreaWrapper.tsx        # Platform-aware safe area handling
+
+│       │
+
+│       ├── lib/
+
+│       │   ├── navConfig.ts                   # Single source of truth: all nav items + breakpoints
+
+│       │   ├── supabase.ts                    # Typed Supabase client (native + web)
+
+│       │   ├── queryClient.ts                 # TanStack Query client with retry/cache config
+
+│       │   ├── gemini.ts                      # Gemini client wrapper with strategy support
+
+│       │   ├── scoring.ts                     # Cover letter ATS scoring algorithm
+
+│       │   └── scrapers/
+
+│       │       ├── types.ts                   # Unified JobListing + ScraperAdapter interfaces
+
+│       │       ├── jsearch.ts                 # JSearch RapidAPI adapter
+
+│       │       ├── adzuna.ts                  # Adzuna multi-region adapter
+
+│       │       └── index.ts                   # Scraper registry + orchestrator
+
+│       │
+
+│       ├── stores/
+
+│       │   ├── authStore.ts                   # Zustand: user, session, profile, hydration
+
+│       │   ├── jobStore.ts                    # Zustand: current deck, filters, scrape state
+
+│       │   ├── coverLetterStore.ts            # Zustand: generation state, strategy selection
+
+│       │   └── uiStore.ts                     # Zustand: modals, toasts, loading states
+
+│       │
+
+│       ├── hooks/
+
+│       │   ├── useAuth.ts                     # Auth actions: signIn, signUp, signOut, OAuth
+
+│       │   ├── useProfile.ts                  # Profile CRUD with TanStack Query
+
+│       │   ├── useJobs.ts                     # Job fetching, scraping, status updates
+
+│       │   ├── useCoverLetter.ts              # Cover letter generation + strategy management
+
+│       │   ├── useDocuments.ts                # Document upload, extraction, deletion
+
+│       │   ├── useGeoSearch.ts                # GeoDB city autocomplete with debounce
+
+│       │   ├── useRateLimit.ts                # Scrape rate limit status + countdown
+
+│       │   ├── useAdaptiveLayout.ts           # Breakpoint detection for nav/layout switching
+
+│       │   └── useHaptics.ts                  # Cross-platform haptic feedback abstraction
+
+│       │
+
+│       ├── types/
+
+│       │   └── database.types.ts              # AUTO-GENERATED by Supabase CLI — never hand-edit
+
+│       │
+
+│       ├── constants/
+
+│       │   ├── theme.ts                       # All colors, typography, spacing, shadows
+
+│       │   ├── animations.ts                  # Reanimated timing configs, spring presets
+
+│       │   └── config.ts                      # App-wide constants (API URLs, limits, etc.)
+
+│       │
+
+│       ├── assets/
+
+│       │   ├── fonts/                         # Inter font family (4 weights)
+
+│       │   ├── images/                        # App logo, onboarding illustrations
+
+│       │   └── icons/                         # Custom SVG icons
+
+│       │
+
+│       ├── app.json                           # Expo app configuration
+
+│       ├── eas.json                           # EAS Build + Submit configuration
+
+│       ├── tailwind.config.js                 # NativeWind + Tailwind configuration
+
+│       ├── global.css                         # Tailwind base styles + web-specific overrides
+
+│       ├── metro.config.js                    # Metro bundler configuration
+
+│       ├── babel.config.js                    # Babel with NativeWind + Reanimated plugins
+
+│       └── tsconfig.json                      # TypeScript configuration with path aliases
+
+│
+
+├── supabase/
+
+│   ├── functions/
+
+│   │   ├── _shared/
+
+│   │   │   ├── keyResolver.ts                 # Triple-tier API key cascade resolver
+
+│   │   │   ├── supabaseAdmin.ts               # Service-Role Supabase client for Edge Functions
+
+│   │   │   ├── cors.ts                        # CORS headers for all Edge Functions
+
+│   │   │   ├── rateLimit.ts                   # Rate limit enforcement utilities
+
+│   │   │   └── types.ts                       # Shared Deno types for Edge Functions
+
+│   │   │
+
+│   │   ├── scrape-jobs/
+
+│   │   │   └── index.ts                       # Multi-source parallel job scraper
+
+│   │   │
+
+│   │   ├── extract-context/
+
+│   │   │   └── index.ts                       # AI career context extraction from documents
+
+│   │   │
+
+│   │   ├── generate-cover-letter/
+
+│   │   │   └── index.ts                       # Tri-strategy Gemini cover letter generation
+
+│   │   │
+
+│   │   ├── score-cover-letter/
+
+│   │   │   └── index.ts                       # ATS scoring + specificity analysis
+
+│   │   │
+
+│   │   ├── save-api-key/
+
+│   │   │   └── index.ts                       # Service-Role key storage (never client-side)
+
+│   │   │
+
+│   │   └── geo-autocomplete/
+
+│   │       └── index.ts                       # GeoDB Cities proxy with Swedish priority
+
+│   │
+
+│   ├── migrations/
+
+│   │   └── 20260801000000_initial_schema.sql  # Complete schema: all tables, RLS, functions
+
+│   │
+
+│   └── config.toml                            # Supabase project configuration
+
+│
+
+├── packages/                                  # Shared packages (future: design tokens, utils)
+
+│   └── .gitkeep
+
+│
+
+├── .env.example                               # Environment variable template
+
+├── .gitignore                                 # Git ignore rules
+
+├── package.json                               # Root workspace package.json
+
+├── turbo.json                                 # Turborepo pipeline configuration
+
+└── README.md                                  # Project setup and development guide and my   and, the rules is, always has been, i run sql i nsupabase directly   is the latest generated from my supabase, ALWAYS

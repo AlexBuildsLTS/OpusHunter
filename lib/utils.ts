@@ -14,7 +14,6 @@
  * implementation for `twMerge(clsx(inputs))` after adding `clsx` and
  * `tailwind-merge` to package.json — every call site here stays identical.
  */
-
 type ClassValue = string | number | null | undefined | false | ClassValue[];
 
 function flatten(inputs: ClassValue[]): string[] {

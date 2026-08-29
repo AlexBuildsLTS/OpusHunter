@@ -1,44 +1,84 @@
 /**
  * supabase/functions/_shared/supabaseAdmin.ts
- * OpusHunter — Service Role Client
- *
- * FIX P1-05: Previous import path was:
- *   import type { Database } from '@/../types/database/database.types.ts'
- * This is wrong — the `@/` alias does not resolve in the Deno runtime.
- * The Deno edge function runtime uses URLs or relative paths only.
- *
- * The functions directory sits at: supabase/functions/
- * The types file sits at:          types/database.types.ts
- * From _shared/, the relative path to repo root is: ../../../
- * So the correct path is:          ../../../types/database.types.ts
- *
- * NOTE: If the types file is not deployed alongside functions,
- * use a Deno import map entry in deno.json instead.
+ * OpusHunter — Service-Role Supabase Client (Refined & Bulletproof).
+ * Used exclusively inside Edge Functions for server-side operations.
+ * NEVER import this into client code. RLS is bypassed intentionally.
+ * Cached singleton to avoid re-instantiation across invocations.
  */
 
-// deno-lint-ignore-file
-import { createClient } from "supabase";
-import type { Database } from "../../../types/database.types.ts";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-declare const Deno: {
-  env: { get: (key: string) => string | undefined };
-};
+// Validate environment variables at invocation time with fallback to EXPO_PUBLIC_*
+function getEnvCredentials() {
+// @ts-ignore: Deno global
+  const supabaseUrl =
+    Deno.env.get("SUPABASE_URL") ||
+    Deno.env.get("EXPO_PUBLIC_SUPABASE_URL") ||
+    "";
+  // @ts-ignore: Deno global
+  const supabaseServiceRoleKey =
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ||
+    Deno.env.get("EXPO_PUBLIC_SUPABASE_ANON_KEY") ||
+    "";
 
-export const createAdminClient = () => {
-  const url = Deno.env.get("SUPABASE_URL");
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-  if (!url || !serviceKey) {
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
     throw new Error(
-      "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars are not set.",
+      "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment variables."
     );
   }
 
-  return createClient<Database>(url, serviceKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
-};
+  return { supabaseUrl, supabaseServiceRoleKey };
+}
+
+let client: SupabaseClient | null = null;
+
+/**
+ * Returns a cached Service-Role Supabase client.
+ * Bypasses RLS — use ONLY in trusted Edge Function code.
+ */
+export function getSupabaseAdmin(): SupabaseClient {
+  if (!client) {
+    const { supabaseUrl, supabaseServiceRoleKey } = getEnvCredentials();
+    client = createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+      global: {
+        headers: { "x-application-name": "opushunter" },
+      },
+    });
+  }
+  return client;
+}
+
+/**
+ * Verifies the JWT from the Authorization header and returns the user ID.
+ * Used in all Edge Functions that require user authentication.
+ * @param req - The incoming Request object.
+ * @returns { userId: string } or null if authentication fails.
+ */
+export async function verifyJwt(
+  req: Request
+): Promise<{ userId: string } | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return null;
+
+  const token = authHeader.replace("Bearer ", "");
+  const supabase = getSupabaseAdmin();
+
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
+    if (error || !user) return null;
+    return { userId: user.id };
+  } catch (err) {
+    console.error("JWT verification error:", err);
+    return null;
+  }
+}
+
+export default getSupabaseAdmin;

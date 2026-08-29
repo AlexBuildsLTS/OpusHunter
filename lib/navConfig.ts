@@ -1,35 +1,105 @@
 /**
  * lib/navConfig.ts
- * OpusHunter — Single Source of Truth for Primary Navigation
- * 2026-07-09
- *
- * WHY THIS EXISTS: AdaptiveLayout.tsx (desktop Sidebar) and
- * app/(tabs)/_layout.tsx (mobile tab bar) each defined their own separate
- * NAV_ITEMS array with the same four screens. Adding Jobs meant editing
- * two files and keeping them in sync by hand — exactly the kind of drift
- * that caused the (admin)/(settings) route-rename bugs earlier. One array,
- * imported by both. Add or reorder a nav item here once; both platforms
- * pick it up automatically.
- *
- * Icons come from lucide-react-native, colors from lib/theme.ts's `C` at
- * the call site (not baked in here) — this file only owns WHICH screens
- * exist in primary nav and WHAT they're labeled, not how they're styled.
- * That split is what makes a future light theme (or any re-skin) a
- * lib/theme.ts change only, never a nav-structure change.
+ * OpusHunter — Single Source of Truth for Navigation.
+ * Drives adaptive layouts: Desktop Sidebar / Mobile Floating Tabs / Tablet Collapsible.
+ * Synced 2026-08-27. Works for iOS, Android, Web (Vercel).
  */
 
-import type { LucideIcon } from 'lucide-react-native';
-import { ServerCog, CloudCog, FolderCog, BrainCog } from 'lucide-react-native';
+import {
+  Search,
+  Kanban,
+  FolderOpen,
+  User,
+  Settings,
+  ShieldCheck,
+  LayoutDashboard,
+} from "lucide-react-native";
 
+/** Navigation item keys */
+export type NavItemKey =
+  "discover" | "pipeline" | "vault" | "profile" | "settings" | "admin";
+
+/** Navigation item interface */
 export interface NavItem {
-    name: string;
-    label: string;
-    Icon: LucideIcon;
+  key: NavItemKey;
+  label: string;
+  icon: React.ComponentType<any>;
+  route: string;
+  adminOnly?: boolean;
 }
 
-export const NAV_ITEMS: readonly NavItem[] = [
-    { name: 'dashboard', label: 'HOME', Icon: ServerCog },
-    { name: 'jobs', label: 'JOBS', Icon: BrainCog },
-    { name: 'configure', label: 'CONFIGURE', Icon: CloudCog },
-    { name: 'settings', label: 'SETTINGS', Icon: FolderCog },
-] as const;
+/** Main navigation items — add new tabs here, instantly reflected in UI */
+export const NAV_ITEMS: NavItem[] = [
+  { key: "discover", label: "Discover", icon: Search, route: "/(tabs)" },
+  {
+    key: "pipeline",
+    label: "Pipeline",
+    icon: Kanban,
+    route: "/(tabs)/pipeline",
+  },
+  {
+    key: "vault",
+    label: "Vault",
+    icon: FolderOpen,
+    route: "/(tabs)/settings/vault",
+  },
+  {
+    key: "profile",
+    label: "Profile",
+    icon: User,
+    route: "/(tabs)/settings/profile",
+  },
+  {
+    key: "settings",
+    label: "Settings",
+    icon: Settings,
+    route: "/(tabs)/settings",
+  },
+  {
+    key: "admin",
+    label: "Admin",
+    icon: ShieldCheck,
+    route: "/(tabs)/admin",
+    adminOnly: true,
+  },
+];
+
+/** Responsive breakpoints (Web) — matches theme.ts */
+export const BREAKPOINTS = {
+  mobile: 767, // < 768px — Floating tab bar
+  tablet: 1023, // 768–1023px — Collapsible sidebar
+  desktop: 1024, // ≥ 1024px — Fixed sidebar
+} as const;
+
+/** Layout constants for adaptive navigation */
+export const TAB_BAR_HEIGHT = 80;
+export const SIDEBAR_WIDTH = 240;
+export const SIDEBAR_COLLAPSED_WIDTH = 64;
+export const TAB_BAR_BLUR_RADIUS = 20;
+export const SIDEBAR_CONTENT_OFFSET = 120; // 24 + 72 + 24
+
+/** Auth routes */
+export const AUTH_ROUTES = {
+  onboarding: "/(auth)/onboarding",
+  auth: "/(auth)/auth",
+  profileSetup: "/(auth)/profile-setup",
+} as const;
+
+/** App routes */
+export const APP_ROUTES = {
+  discover: "/(tabs)",
+  pipeline: "/(tabs)/pipeline",
+  vault: "/(tabs)/settings/vault",
+  profile: "/(tabs)/settings/profile",
+  settings: "/(tabs)/settings",
+  jobDetail: "/job/[id]",
+  coverLetter: "/cover-letter/[id]",
+} as const;
+
+/** Admin routes */
+export const ADMIN_ROUTES = {
+  dashboard: "/(tabs)/admin",
+  users: "/(tabs)/admin/users",
+  apiKeys: "/(tabs)/admin/api-keys",
+  usageLogs: "/(tabs)/admin/usage-logs",
+} as const;

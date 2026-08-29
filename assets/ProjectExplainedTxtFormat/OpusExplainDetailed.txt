@@ -1,0 +1,1968 @@
+# OpusHunter — Complete Implementation Plan & Architecture Blueprint
+
+## Executive Summary
+
+You are building **OpusHunter**: a production-grade, cross-platform autonomous job application engine. This document is the complete architectural blueprint, implementation plan, phased timeline, and engineering specification. No code is written here — this is the master plan that every line of future code will follow.
+
+---
+
+## Part 1: Refined Project Vision & Competitive Differentiation
+
+### What Makes OpusHunter Genuinely Unique
+
+Most job application tools are glorified job boards with a cover letter template. OpusHunter is an **autonomous career intelligence engine**. The differentiation stack:
+
+**1. Tri-Strategy Cover Letter Intelligence**
+Rather than one prompt style, OpusHunter runs three parallel generation strategies and selects the optimal output via a configurable fallback chain:
+
+- **Strategy A — Mirror Matching:** Gemini analyzes the job description's exact language patterns, keyword density, and tone fingerprint, then mirrors that linguistic style in the cover letter. If the JD uses "drive impact at scale," the letter uses that exact register. ATS systems score higher when language mirrors the posting.
+- **Strategy B — Achievement Amplification:** Extracts the top 3 quantified achievements from the user's career context that are most semantically similar to the job requirements (using Gemini's embedding capabilities), then builds the letter around those specific proof points with before/after impact framing.
+- **Strategy C — Insider Narrative:** Gemini performs a simulated company research synthesis using the job description's implicit signals (company stage, team culture language, growth indicators) to craft a letter that demonstrates insider knowledge of the company's actual challenges — not generic "I admire your mission" filler.
+
+The fallback chain is configurable per user: default is A → B → C, but users can reorder or disable strategies. The system scores each generated output on a rubric (ATS keyword density, specificity score, filler phrase count) and presents the highest-scoring version, with the others available as alternatives.
+
+**2. Career Intelligence Graph**
+The `user_context` table is not a flat document dump — it's a structured career knowledge graph. Every document upload enriches a persistent semantic model of the user's career. Over time, the system learns which skills cluster together in the user's background, which achievements resonate most with which job types, and which tone produces the best application outcomes. This graph is the foundation for increasingly personalized outputs over time.
+
+**3. Application Outcome Learning Loop**
+When a user marks an application as `interview` or `offer`, the system logs which cover letter strategy, which skill emphasis, and which tone was used. Over time, this creates a personal feedback signal that biases future generation toward what actually works for this specific user in this specific market.
+
+**4. Parallel Multi-Source Intelligence with Cross-Source Deduplication**
+Most tools hit one API. OpusHunter fires JSearch and Adzuna simultaneously, deduplicates using deterministic hashing, and keeps the richer record when the same job appears on both sources. The scraper registry pattern means adding LinkedIn, Indeed, or any future source is a single adapter file — zero orchestration changes.
+
+**5. Autonomous Dispatch with Hard Links**
+The application doesn't just generate a cover letter — it packages the cover letter with direct apply links and, where the apply URL is a direct email, can pre-compose the application email. This is the "one tap to apply" promise.
+
+---
+
+## Part 2: Complete Monorepo Structure
+
+### Repository Architecture
+
+```
+opushunter/                                    # Monorepo root
+├── .github/
+│   ├── workflows/
+│   │   ├── ci.yml                             # Lint, type-check, test on every PR
+│   │   ├── deploy-web.yml                     # Vercel deployment on main merge
+│   │   ├── deploy-edge-functions.yml          # Supabase Edge Function deployment
+│   │   └── eas-build.yml                      # EAS build trigger for iOS/Android
+│   └── CODEOWNERS                             # Code ownership rules
+│
+├── apps/
+│   └── mobile/                                # Expo Router app (iOS + Android + Web)
+│       ├── app/                               # Expo Router filesystem routes
+│       │   ├── _layout.tsx                    # Root layout: providers, AnimatedBackground, font loading
+│       │   ├── +not-found.tsx                 # 404 route for web
+│       │   │
+│       │   ├── (auth)/                        # Unauthenticated route group
+│       │   │   ├── _layout.tsx                # Auth group layout: redirect if already authed
+│       │   │   ├── onboarding.tsx             # Animated 4-slide value proposition
+│       │   │   ├── login.tsx                  # Email/password + Google OAuth login
+│       │   │   ├── register.tsx               # Registration with name collection
+│       │   │   └── profile-setup.tsx          # 5-step mandatory profile completion wizard
+│       │   │
+│       │   ├── (app)/                         # Authenticated route group
+│       │   │   ├── _layout.tsx                # Auth gate + adaptive nav (sidebar/tabs)
+│       │   │   │
+│       │   │   ├── (tabs)/                    # Tab navigator routes
+│       │   │   │   ├── _layout.tsx            # Tab bar configuration
+│       │   │   │   ├── discover.tsx           # Job search + swipe deck screen
+│       │   │   │   ├── pipeline.tsx           # Kanban application tracker
+│       │   │   │   ├── vault.tsx              # Document management (CV + certs)
+│       │   │   │   ├── profile.tsx            # Career profile editor
+│       │   │   │   └── settings.tsx           # App settings + Gmail + API keys
+│       │   │   │
+│       │   │   ├── job/
+│       │   │   │   └── [id].tsx               # Job detail dynamic route
+│       │   │   │
+│       │   │   └── cover-letter/
+│       │   │       └── [id].tsx               # Cover letter view/edit/compare route
+│       │   │
+│       │   └── admin/                         # Admin panel (role-gated)
+│       │       ├── _layout.tsx                # Admin role verification gate
+│       │       ├── index.tsx                  # Admin dashboard with stats
+│       │       ├── users.tsx                  # User management table
+│       │       ├── api-keys.tsx               # System API key management
+│       │       └── usage-logs.tsx             # API usage log viewer
+│       │
+│       ├── components/
+│       │   ├── ui/                            # Atomic design system primitives
+│       │   │   ├── Button.tsx                 # Primary/secondary/destructive variants
+│       │   │   ├── Input.tsx                  # Dark surface input with glow focus
+│       │   │   ├── Card.tsx                   # Glass morphism card container
+│       │   │   ├── Badge.tsx                  # Status/type/source badges
+│       │   │   ├── Avatar.tsx                 # Company logo with initials fallback
+│       │   │   ├── Skeleton.tsx               # Shimmer loading skeleton
+│       │   │   ├── Modal.tsx                  # Bottom sheet modal (native) / centered (web)
+│       │   │   ├── Toast.tsx                  # Notification toast system
+│       │   │   ├── ProgressBar.tsx            # Animated progress indicator
+│       │   │   ├── Chip.tsx                   # Filter/tag chip component
+│       │   │   ├── Divider.tsx                # Section divider
+│       │   │   └── Typography.tsx             # Typed text components (H1–H4, Body, Caption)
+│       │   │
+│       │   ├── job/
+│       │   │   ├── SwipeDeck.tsx              # Gesture-driven swipeable card stack
+│       │   │   ├── JobCard.tsx                # Individual job card (swipe + kanban variant)
+│       │   │   ├── JobCardCompact.tsx         # Compact kanban card variant
+│       │   │   ├── KanbanBoard.tsx            # Drag-and-drop application pipeline
+│       │   │   ├── KanbanColumn.tsx           # Individual kanban column
+│       │   │   ├── SearchFilters.tsx          # Job search filter panel
+│       │   │   ├── SwipeOverlay.tsx           # Accept/reject/apply overlays on swipe
+│       │   │   ├── RateLimitBanner.tsx        # "Next scrape in X hours" countdown
+│       │   │   └── EmptyDeck.tsx              # Empty state with CTA
+│       │   │
+│       │   ├── cover-letter/
+│       │   │   ├── CoverLetterView.tsx        # Formatted cover letter display
+│       │   │   ├── CoverLetterEditor.tsx      # Inline editing with auto-save
+│       │   │   ├── StrategySelector.tsx       # A/B/C strategy comparison UI
+│       │   │   ├── ScoreCard.tsx              # ATS score + specificity metrics display
+│       │   │   ├── GenerationProgress.tsx     # Animated generation progress indicator
+│       │   │   └── CoverLetterActions.tsx     # Copy/share/edit/regenerate action bar
+│       │   │
+│       │   ├── profile/
+│       │   │   ├── ProfileForm.tsx            # Main profile editor form
+│       │   │   ├── StepIndicator.tsx          # Multi-step wizard progress dots
+│       │   │   ├── LocationAutocomplete.tsx   # GeoDB-powered city search input
+│       │   │   ├── SalaryRangeSlider.tsx      # Dual-handle salary range picker
+│       │   │   ├── SkillsInput.tsx            # Tag-style skills input
+│       │   │   ├── WorkTypeSelector.tsx       # Remote/hybrid/onsite multi-select
+│       │   │   └── SenioritySelector.tsx      # Seniority level picker
+│       │   │
+│       │   ├── vault/
+│       │   │   ├── DocumentUploader.tsx       # File picker + upload progress
+│       │   │   ├── CVCard.tsx                 # CV preview with extracted skills summary
+│       │   │   ├── CertCard.tsx               # Certification card with metadata
+│       │   │   ├── ExtractionProgress.tsx     # AI extraction progress indicator
+│       │   │   ├── ExtractedDataSummary.tsx   # Skills/experience extraction results
+│       │   │   └── DeleteConfirmDialog.tsx    # Confirmation dialog for document deletion
+│       │   │
+│       │   ├── admin/
+│       │   │   ├── StatsGrid.tsx              # Dashboard metrics grid
+│       │   │   ├── UserTable.tsx              # Paginated user management table
+│       │   │   ├── ApiKeyManager.tsx          # System key CRUD with masking
+│       │   │   ├── UsageLogTable.tsx          # Filterable usage log table
+│       │   │   └── RoleChanger.tsx            # User role assignment control
+│       │   │
+│       │   └── shared/
+│       │       ├── AnimatedBackground.tsx     # Root-level fluid orb animation
+│       │       ├── NavBar.tsx                 # Adaptive nav (sidebar/tabs) orchestrator
+│       │       ├── SidebarNav.tsx             # Desktop sidebar navigation
+│       │       ├── TabBarNav.tsx              # Mobile floating tab bar
+│       │       ├── GradientText.tsx           # Gradient-filled text component
+│       │       ├── HapticButton.tsx           # Button with haptic feedback wrapper
+│       │       ├── KeyboardAvoidingWrapper.tsx # Cross-platform keyboard handling
+│       │       └── SafeAreaWrapper.tsx        # Platform-aware safe area handling
+│       │
+│       ├── lib/
+│       │   ├── navConfig.ts                   # Single source of truth: all nav items + breakpoints
+│       │   ├── supabase.ts                    # Typed Supabase client (native + web)
+│       │   ├── queryClient.ts                 # TanStack Query client with retry/cache config
+│       │   ├── gemini.ts                      # Gemini client wrapper with strategy support
+│       │   ├── scoring.ts                     # Cover letter ATS scoring algorithm
+│       │   └── scrapers/
+│       │       ├── types.ts                   # Unified JobListing + ScraperAdapter interfaces
+│       │       ├── jsearch.ts                 # JSearch RapidAPI adapter
+│       │       ├── adzuna.ts                  # Adzuna multi-region adapter
+│       │       └── index.ts                   # Scraper registry + orchestrator
+│       │
+│       ├── stores/
+│       │   ├── authStore.ts                   # Zustand: user, session, profile, hydration
+│       │   ├── jobStore.ts                    # Zustand: current deck, filters, scrape state
+│       │   ├── coverLetterStore.ts            # Zustand: generation state, strategy selection
+│       │   └── uiStore.ts                     # Zustand: modals, toasts, loading states
+│       │
+│       ├── hooks/
+│       │   ├── useAuth.ts                     # Auth actions: signIn, signUp, signOut, OAuth
+│       │   ├── useProfile.ts                  # Profile CRUD with TanStack Query
+│       │   ├── useJobs.ts                     # Job fetching, scraping, status updates
+│       │   ├── useCoverLetter.ts              # Cover letter generation + strategy management
+│       │   ├── useDocuments.ts                # Document upload, extraction, deletion
+│       │   ├── useGeoSearch.ts                # GeoDB city autocomplete with debounce
+│       │   ├── useRateLimit.ts                # Scrape rate limit status + countdown
+│       │   ├── useAdaptiveLayout.ts           # Breakpoint detection for nav/layout switching
+│       │   └── useHaptics.ts                  # Cross-platform haptic feedback abstraction
+│       │
+│       ├── types/
+│       │   └── database.types.ts              # AUTO-GENERATED by Supabase CLI — never hand-edit
+│       │
+│       ├── constants/
+│       │   ├── theme.ts                       # All colors, typography, spacing, shadows
+│       │   ├── animations.ts                  # Reanimated timing configs, spring presets
+│       │   └── config.ts                      # App-wide constants (API URLs, limits, etc.)
+│       │
+│       ├── assets/
+│       │   ├── fonts/                         # Inter font family (4 weights)
+│       │   ├── images/                        # App logo, onboarding illustrations
+│       │   └── icons/                         # Custom SVG icons
+│       │
+│       ├── app.json                           # Expo app configuration
+│       ├── eas.json                           # EAS Build + Submit configuration
+│       ├── tailwind.config.js                 # NativeWind + Tailwind configuration
+│       ├── global.css                         # Tailwind base styles + web-specific overrides
+│       ├── metro.config.js                    # Metro bundler configuration
+│       ├── babel.config.js                    # Babel with NativeWind + Reanimated plugins
+│       └── tsconfig.json                      # TypeScript configuration with path aliases
+│
+├── supabase/
+│   ├── functions/
+│   │   ├── _shared/
+│   │   │   ├── keyResolver.ts                 # Triple-tier API key cascade resolver
+│   │   │   ├── supabaseAdmin.ts               # Service-Role Supabase client for Edge Functions
+│   │   │   ├── cors.ts                        # CORS headers for all Edge Functions
+│   │   │   ├── rateLimit.ts                   # Rate limit enforcement utilities
+│   │   │   └── types.ts                       # Shared Deno types for Edge Functions
+│   │   │
+│   │   ├── scrape-jobs/
+│   │   │   └── index.ts                       # Multi-source parallel job scraper
+│   │   │
+│   │   ├── extract-context/
+│   │   │   └── index.ts                       # AI career context extraction from documents
+│   │   │
+│   │   ├── generate-cover-letter/
+│   │   │   └── index.ts                       # Tri-strategy Gemini cover letter generation
+│   │   │
+│   │   ├── score-cover-letter/
+│   │   │   └── index.ts                       # ATS scoring + specificity analysis
+│   │   │
+│   │   ├── save-api-key/
+│   │   │   └── index.ts                       # Service-Role key storage (never client-side)
+│   │   │
+│   │   └── geo-autocomplete/
+│   │       └── index.ts                       # GeoDB Cities proxy with Swedish priority
+│   │
+│   ├── migrations/
+│   │   └── 20260801000000_initial_schema.sql  # Complete schema: all tables, RLS, functions
+│   │
+│   └── config.toml                            # Supabase project configuration
+│
+├── packages/                                  # Shared packages (future: design tokens, utils)
+│   └── .gitkeep
+│
+├── .env.example                               # Environment variable template
+├── .gitignore                                 # Git ignore rules
+├── package.json                               # Root workspace package.json
+├── turbo.json                                 # Turborepo pipeline configuration
+└── README.md                                  # Project setup and development guide
+```
+
+---
+
+## Part 3: Complete Database Schema Plan
+
+### Enums
+
+```
+seniority_level_enum:
+  junior | mid | senior | lead | principal | director | vp | c_level
+
+work_type_enum:
+  remote | hybrid | onsite | flexible
+
+job_source_enum:
+  jsearch | adzuna | linkedin | indeed | custom
+  (extensible — new sources added to enum only)
+
+application_status_enum:
+  discovered | saved | applied | interview | offer | rejected | withdrawn
+
+document_type_enum:
+  cv | certification | portfolio | reference
+
+user_role_enum:
+  member | premium | admin
+
+api_provider_enum:
+  rapidapi | gemini | openai | anthropic
+  (extensible for future AI providers)
+
+key_source_enum:
+  user | system
+
+cover_letter_strategy_enum:
+  mirror_matching | achievement_amplification | insider_narrative
+```
+
+### Tables (Complete Specification)
+
+**`profiles`**
+Links to `auth.users`. Created automatically via trigger on user signup.
+```
+id                    uuid PK FK → auth.users(id) ON DELETE CASCADE
+first_name            text NOT NULL
+last_name             text NOT NULL
+professional_title    text
+bio                   text
+years_experience      int CHECK (years_experience >= 0 AND years_experience <= 60)
+seniority_level       seniority_level_enum
+target_roles          text[] DEFAULT '{}'
+work_type_preferences work_type_enum[] DEFAULT '{}'
+location_radius_km    int DEFAULT 50
+target_countries      text[] DEFAULT '{}'
+target_cities         text[] DEFAULT '{}'
+salary_min            int
+salary_max            int
+salary_currency       text DEFAULT 'USD'
+languages             text[] DEFAULT '{}'
+role                  user_role_enum DEFAULT 'member'
+profile_complete      bool DEFAULT false
+last_scrape_at        timestamptz
+gmail_linked_email    text
+avatar_url            text
+created_at            timestamptz DEFAULT now()
+updated_at            timestamptz DEFAULT now()
+```
+
+**`user_documents`**
+```
+id                uuid PK DEFAULT gen_random_uuid()
+user_id           uuid NOT NULL FK → auth.users(id) ON DELETE CASCADE
+document_type     document_type_enum NOT NULL
+file_name         text NOT NULL
+storage_path      text NOT NULL UNIQUE
+mime_type         text NOT NULL
+file_size_bytes   bigint NOT NULL
+cert_name         text
+cert_issuer       text
+cert_date         date
+cert_tags         text[] DEFAULT '{}'
+extraction_status text DEFAULT 'pending' CHECK (extraction_status IN ('pending','processing','complete','failed'))
+uploaded_at       timestamptz DEFAULT now()
+```
+
+**`user_context`**
+One row per user, upserted on each extraction run.
+```
+id                      uuid PK DEFAULT gen_random_uuid()
+user_id                 uuid NOT NULL UNIQUE FK → auth.users(id) ON DELETE CASCADE
+extracted_skills        text[] DEFAULT '{}'
+extracted_experience    jsonb DEFAULT '[]'
+extracted_education     jsonb DEFAULT '[]'
+extracted_certifications jsonb DEFAULT '[]'
+career_summary          text
+key_achievements        text[] DEFAULT '{}'
+tone_preference         text DEFAULT 'professional'
+skill_clusters          jsonb DEFAULT '{}'
+achievement_embeddings  jsonb DEFAULT '[]'
+raw_context_json        jsonb
+last_extracted_at       timestamptz
+created_at              timestamptz DEFAULT now()
+updated_at              timestamptz DEFAULT now()
+```
+
+**`job_listings`**
+```
+id                uuid PK DEFAULT gen_random_uuid()
+user_id           uuid NOT NULL FK → auth.users(id) ON DELETE CASCADE
+source            job_source_enum NOT NULL
+external_id       text NOT NULL
+title             text NOT NULL
+company           text NOT NULL
+company_logo_url  text
+location          text
+country           text
+latitude          numeric(9,6)
+longitude         numeric(9,6)
+work_type         work_type_enum
+salary_min        int
+salary_max        int
+currency          text
+description       text
+apply_url         text NOT NULL
+posted_at         timestamptz
+scraped_at        timestamptz DEFAULT now()
+dedup_hash        text NOT NULL
+jd_language_fingerprint jsonb
+UNIQUE(user_id, dedup_hash)
+```
+
+**`job_applications`**
+```
+id               uuid PK DEFAULT gen_random_uuid()
+user_id          uuid NOT NULL FK → auth.users(id) ON DELETE CASCADE
+job_listing_id   uuid NOT NULL FK → job_listings(id) ON DELETE CASCADE
+status           application_status_enum DEFAULT 'discovered'
+cover_letter_id  uuid FK → cover_letters(id)
+applied_at       timestamptz
+notes            text
+outcome_signal   text
+created_at       timestamptz DEFAULT now()
+updated_at       timestamptz DEFAULT now()
+UNIQUE(user_id, job_listing_id)
+```
+
+**`cover_letters`**
+```
+id                      uuid PK DEFAULT gen_random_uuid()
+user_id                 uuid NOT NULL FK → auth.users(id) ON DELETE CASCADE
+job_listing_id          uuid NOT NULL FK → job_listings(id) ON DELETE CASCADE
+company_name            text NOT NULL
+role_title              text NOT NULL
+content                 text NOT NULL
+strategy_used           cover_letter_strategy_enum NOT NULL
+alternative_versions    jsonb DEFAULT '[]'
+tone                    text DEFAULT 'professional'
+ats_score               numeric(4,2)
+specificity_score       numeric(4,2)
+filler_phrase_count     int DEFAULT 0
+gemini_model_used       text NOT NULL
+tokens_used             int
+generation_duration_ms  int
+user_edited             bool DEFAULT false
+created_at              timestamptz DEFAULT now()
+updated_at              timestamptz DEFAULT now()
+```
+
+**`user_api_keys`** — Service-Role only, never client-readable
+```
+id            uuid PK DEFAULT gen_random_uuid()
+user_id       uuid NOT NULL FK → auth.users(id) ON DELETE CASCADE
+provider      api_provider_enum NOT NULL
+encrypted_key text NOT NULL
+is_active     bool DEFAULT true
+created_at    timestamptz DEFAULT now()
+UNIQUE(user_id, provider)
+```
+
+**`system_api_keys`** — Service-Role only, admin-managed
+```
+id             uuid PK DEFAULT gen_random_uuid()
+provider       api_provider_enum NOT NULL
+encrypted_key  text NOT NULL
+priority_order int NOT NULL DEFAULT 0
+is_active      bool DEFAULT true
+label          text NOT NULL
+last_used_at   timestamptz
+throttled_until timestamptz
+created_at     timestamptz DEFAULT now()
+```
+
+**`api_key_usage_logs`**
+```
+id                 uuid PK DEFAULT gen_random_uuid()
+user_id            uuid FK → auth.users(id) ON DELETE SET NULL
+provider           api_provider_enum NOT NULL
+key_source         key_source_enum NOT NULL
+tokens_used        int DEFAULT 0
+estimated_cost_usd numeric(10,6) DEFAULT 0
+function_name      text NOT NULL
+strategy_used      cover_letter_strategy_enum
+success            bool DEFAULT true
+error_code         text
+created_at         timestamptz DEFAULT now()
+```
+
+**`scrape_rate_limits`**
+```
+id               uuid PK DEFAULT gen_random_uuid()
+user_id          uuid NOT NULL UNIQUE FK → auth.users(id) ON DELETE CASCADE
+last_scrape_at   timestamptz
+scrape_count_today int DEFAULT 0
+reset_at         timestamptz
+```
+
+**`cover_letter_outcomes`** — Outcome learning loop
+```
+id               uuid PK DEFAULT gen_random_uuid()
+user_id          uuid NOT NULL FK → auth.users(id) ON DELETE CASCADE
+cover_letter_id  uuid NOT NULL FK → cover_letters(id) ON DELETE CASCADE
+job_listing_id   uuid NOT NULL FK → job_listings(id) ON DELETE CASCADE
+strategy_used    cover_letter_strategy_enum NOT NULL
+outcome          application_status_enum NOT NULL
+recorded_at      timestamptz DEFAULT now()
+```
+
+### Indexes
+
+```sql
+-- Performance indexes
+CREATE INDEX idx_job_listings_user_id ON job_listings(user_id);
+CREATE INDEX idx_job_listings_dedup_hash ON job_listings(dedup_hash);
+CREATE INDEX idx_job_listings_scraped_at ON job_listings(scraped_at DESC);
+CREATE INDEX idx_job_listings_source ON job_listings(source);
+CREATE INDEX idx_job_listings_country ON job_listings(country);
+CREATE INDEX idx_job_applications_user_id ON job_applications(user_id);
+CREATE INDEX idx_job_applications_status ON job_applications(status);
+CREATE INDEX idx_cover_letters_user_id ON cover_letters(user_id);
+CREATE INDEX idx_cover_letters_job_listing_id ON cover_letters(job_listing_id);
+CREATE INDEX idx_api_key_usage_logs_user_id ON api_key_usage_logs(user_id);
+CREATE INDEX idx_api_key_usage_logs_created_at ON api_key_usage_logs(created_at DESC);
+CREATE INDEX idx_api_key_usage_logs_provider ON api_key_usage_logs(provider);
+CREATE INDEX idx_user_documents_user_id ON user_documents(user_id);
+CREATE INDEX idx_system_api_keys_provider_priority ON system_api_keys(provider, priority_order ASC) WHERE is_active = true;
+```
+
+### RLS Policies (All Tables)
+
+**Standard user-scoped policy pattern (applied to: profiles, user_documents, user_context, job_listings, job_applications, cover_letters, scrape_rate_limits, cover_letter_outcomes):**
+```
+SELECT: auth.uid() = user_id
+INSERT: auth.uid() = user_id
+UPDATE: auth.uid() = user_id
+DELETE: auth.uid() = user_id
+```
+
+**Locked-down tables (user_api_keys, system_api_keys):**
+```
+ALL OPERATIONS: false (no client access — Service-Role only)
+```
+
+**Read-only for users (api_key_usage_logs):**
+```
+SELECT: auth.uid() = user_id
+INSERT: false (Service-Role only)
+UPDATE: false
+DELETE: false
+```
+
+### SECURITY DEFINER Functions
+
+```
+get_admin_dashboard_stats()
+  → Returns: total_users, total_applications, total_cover_letters, total_api_calls, cost_this_month
+  → Caller must have role = 'admin' (verified inside function)
+
+get_all_users_admin()
+  → Returns paginated user list with profile data
+  → Admin-only
+
+update_user_role_admin(target_user_id uuid, new_role user_role_enum)
+  → Admin-only role assignment
+
+get_all_api_usage_logs_admin(filters jsonb)
+  → Admin-only usage log access
+
+create_profile_on_signup()
+  → TRIGGER function: fires on auth.users INSERT
+  → Creates empty profiles row for new user
+
+update_updated_at_column()
+  → TRIGGER function: fires on UPDATE for all tables with updated_at
+  → Sets updated_at = now()
+
+check_admin_role(user_id uuid)
+  → Returns bool: true if user has admin role
+  → Used by admin route gate
+```
+
+---
+
+## Part 4: Edge Function Architecture (Detailed)
+
+### `_shared/keyResolver.ts` — Triple-Tier Key Cascade
+
+**Input:** `{ userId: string, provider: ApiProvider, serviceClient: SupabaseClient }`
+
+**Resolution Logic:**
+```
+Tier 1: Query user_api_keys WHERE user_id = userId AND provider = provider AND is_active = true
+  → If found: decrypt key, return { key, source: 'user' }
+
+Tier 2: Query system_api_keys WHERE provider = provider AND is_active = true
+         AND (throttled_until IS NULL OR throttled_until < now())
+         ORDER BY priority_order ASC
+  → For each key in order:
+      → Try the API call
+      → On 429: UPDATE system_api_keys SET throttled_until = now() + interval '1 hour'
+                 Continue to next key
+      → On success: UPDATE system_api_keys SET last_used_at = now()
+                    Return { key, source: 'system', keyId }
+
+Tier 3: All keys exhausted or throttled
+  → Return { error: 'quota_exhausted', retryAfter: earliest throttled_until timestamp }
+
+After every resolution attempt:
+  → INSERT into api_key_usage_logs with all metadata
+```
+
+### `scrape-jobs/index.ts` — Multi-Source Parallel Scraper
+
+**Request payload:**
+```typescript
+{
+  userId: string,
+  searchParams: {
+    keywords: string[],
+    workTypes: WorkType[],
+    countries: string[],
+    cities: string[],
+    radiusKm: number,
+    experienceLevel: SeniorityLevel,
+    datePosted: '24h' | '7d' | '30d',
+    page: number
+  }
+}
+```
+
+**Execution flow:**
+```
+1. Verify JWT → extract userId
+2. Check scrape_rate_limits:
+   - If member role AND last_scrape_at within 24h → return rate_limited error
+   - If premium with own API key → bypass limit
+3. Resolve API keys for rapidapi and adzuna via keyResolver
+4. Build adapter configs for each registered scraper
+5. Fire Promise.allSettled([jsearchAdapter.fetch(params), adzunaAdapter.fetch(params)])
+6. Collect fulfilled results, log rejected with error details
+7. Normalize all results to unified JobListing schema
+8. Compute dedup_hash = sha256(normalize(company.toLowerCase() + title.toLowerCase() + location.toLowerCase()))
+9. Filter out hashes already in job_listings for this user
+10. For cross-source duplicates (same hash from both sources): merge, keeping richer record
+11. Upsert up to 30 listings into job_listings
+12. Update scrape_rate_limits for this user
+13. Return { listings, total, page, sources: { jsearch: n, adzuna: n }, nextAvailableAt }
+```
+
+**Scraper Adapter Interface:**
+```typescript
+interface ScraperAdapter {
+  name: JobSource
+  fetch(params: SearchParams, apiKey: string): Promise<RawJobListing[]>
+  normalize(raw: RawJobListing): JobListing
+  getRegionalEndpoint(country: string): string
+}
+```
+
+**Sweden-specific handling:**
+- JSearch: `location=Stockholm, Sweden`, `country=SE`, `language=en`
+- Adzuna: endpoint `https://api.adzuna.com/v1/api/jobs/se/search/1`
+- Swedish cities mapped to lat/lng for haversine radius filtering:
+  ```
+  Stockholm:    59.3293, 18.0686
+  Göteborg:     57.7089, 11.9746
+  Malmö:        55.6050, 13.0038
+  Uppsala:      59.8586, 17.6389
+  Västerås:     59.6099, 16.5448
+  Örebro:       59.2741, 15.2066
+  Linköping:    58.4108, 15.6214
+  Helsingborg:  56.0465, 12.6945
+  Jönköping:    57.7826, 14.1618
+  Norrköping:   58.5877, 16.1924
+  ```
+- Post-fetch haversine filter: if `radiusKm` is set and listing has lat/lng, filter out listings beyond radius
+
+### `extract-context/index.ts` — Career Intelligence Extraction
+
+**Execution flow:**
+```
+1. Receive { userId, documentId, storagePath }
+2. Download binary from Supabase Storage via Service-Role client
+3. Detect MIME type:
+   - application/pdf → extract text via Deno PDF parser
+   - application/vnd.openxmlformats-officedocument.wordprocessingml.document → parse DOCX XML
+   - text/plain → use directly
+4. Resolve Gemini API key via keyResolver
+5. Send extraction prompt to Gemini requesting structured JSON output:
+   {
+     extracted_skills: string[],
+     extracted_experience: ExperienceEntry[],
+     extracted_education: EducationEntry[],
+     extracted_certifications: CertEntry[],
+     career_summary: string,
+     key_achievements: string[],
+     skill_clusters: { [cluster: string]: string[] },
+     tone_preference: string
+   }
+6. Validate JSON response structure
+7. Upsert into user_context (merge with existing if present — don't overwrite, enrich)
+8. Update user_documents.extraction_status = 'complete'
+9. Log token usage to api_key_usage_logs
+10. Return { success: true, contextId, skillCount, achievementCount }
+```
+
+**Skill cluster extraction (unique feature):**
+The prompt instructs Gemini to group skills into semantic clusters:
+```json
+{
+  "skill_clusters": {
+    "backend_engineering": ["Node.js", "PostgreSQL", "Redis"],
+    "cloud_infrastructure": ["AWS", "Terraform", "Docker"],
+    "leadership": ["Team management", "Hiring", "OKR planning"]
+  }
+}
+```
+These clusters are stored in `user_context.skill_clusters` and used by the cover letter generator to select the most relevant skill cluster for each job type.
+
+### `generate-cover-letter/index.ts` — Tri-Strategy Generation Engine
+
+**Execution flow:**
+```
+1. Receive { userId, jobListingId, strategy?: CoverLetterStrategy }
+2. Fetch in parallel:
+   - user_context for userId
+   - profiles for userId
+   - job_listings record for jobListingId
+3. If no strategy specified: run all three strategies in parallel
+4. For each strategy:
+
+   STRATEGY A — Mirror Matching:
+   → Analyze JD language: extract tone, register, key phrases, verb patterns
+   → Prompt: "Mirror the linguistic style of this job description exactly.
+              Use the same register, similar sentence structure, and echo
+              key phrases naturally. Do not copy — mirror."
+   → Include: user's top 5 skills matching JD keywords
+
+   STRATEGY B — Achievement Amplification:
+   → Score each key_achievement for semantic similarity to JD requirements
+   → Select top 3 highest-scoring achievements
+   → Prompt: "Build this letter around these three specific achievements
+              with before/after impact framing. Every paragraph must
+              reference measurable outcomes."
+   → Include: quantified metrics, percentages, team sizes, revenue impact
+
+   STRATEGY C — Insider Narrative:
+   → Analyze JD for implicit signals: company stage, team culture, growth phase
+   → Prompt: "Write as if you deeply understand this company's specific
+              challenges. Reference the implicit problems this role solves.
+              Demonstrate you've thought about their situation, not just
+              your qualifications."
+   → Include: company name used 2–3 times naturally, role-specific insight
+
+5. Score each output:
+   → ATS score: keyword match density vs JD
+   → Specificity score: ratio of specific claims to generic statements
+   → Filler phrase count: detect and penalize generic phrases
+
+6. Select highest-scoring strategy as primary
+7. Store all three versions in cover_letters.alternative_versions (jsonb array)
+8. Store primary in cover_letters.content
+9. Log generation metrics
+10. Return complete cover_letters record with all versions
+```
+
+**Cover letter quality rules (enforced in prompt):**
+```
+MANDATORY:
+- 4–5 paragraphs exactly
+- Opening: specific hook referencing exact role title and company name
+- No "I am writing to express my interest" or equivalent
+- No "I believe I would be a great fit"
+- No "passionate about" without specific evidence
+- Every achievement must have a number or measurable outcome
+- Closing: specific call to action, not "I look forward to hearing from you"
+- Total length: 280–380 words
+
+STRUCTURE:
+P1: Hook — specific role + company + one compelling credential
+P2: Top 3 skill/achievement matches to JD requirements (quantified)
+P3: Company-specific insight + why this role specifically
+P4: Technical depth + certifications relevant to this role
+P5: Confident close with specific next step
+```
+
+### `score-cover-letter/index.ts` — ATS Intelligence Scorer
+
+**This is a unique Edge Function that no competitor has:**
+```
+1. Receive { coverLetterId, jobListingId }
+2. Fetch cover letter content and job description
+3. Run scoring algorithm:
+
+   ATS Score (0–100):
+   → Extract keywords from JD (nouns, technical terms, role-specific phrases)
+   → Count keyword appearances in cover letter
+   → Score = (matched_keywords / total_jd_keywords) * 100
+   → Bonus: exact phrase matches score 2x
+
+   Specificity Score (0–100):
+   → Count sentences with numbers/percentages/proper nouns
+   → Count sentences with only generic claims
+   → Score = (specific_sentences / total_sentences) * 100
+
+   Filler Phrase Detection:
+   → Check against filler phrase dictionary (50+ phrases)
+   → Count occurrences
+   → Each occurrence -5 points from total
+
+4. Update cover_letters with scores
+5. Return { atsScore, specificityScore, fillerCount, suggestions: string[] }
+```
+
+### `geo-autocomplete/index.ts` — GeoDB Proxy
+
+```
+1. Receive { query: string, countryCode?: string }
+2. If query length < 2: return []
+3. Build GeoDB request with:
+   - namePrefix = query
+   - countryIds = countryCode if provided
+   - minPopulation = 10000 (filter tiny villages)
+   - limit = 10
+4. If countryCode = 'SE' or query matches Swedish patterns:
+   → Prepend Swedish cities from hardcoded priority list if they match query
+5. Return normalized city array
+```
+
+### `save-api-key/index.ts` — Secure Key Storage
+
+```
+1. Verify JWT
+2. Receive { provider, key } — key is plaintext from client
+3. Validate key format for provider (basic format check)
+4. Encrypt key using Supabase Vault or AES-256 with server-side secret
+5. Upsert into user_api_keys via Service-Role client
+6. Return { success: true } — never return the key
+```
+
+---
+
+## Part 5: UI/UX Design System Specification
+
+### Color System (`constants/theme.ts`)
+
+```
+BACKGROUNDS:
+  primary:     #0A0F1E  (deepest navy — main background)
+  secondary:   #0D1526  (slightly lighter — card surfaces)
+  tertiary:    #111827  (elevated surfaces)
+  overlay:     rgba(10, 15, 30, 0.85)  (modal overlays)
+
+GLASS MORPHISM:
+  glassBg:     rgba(255, 255, 255, 0.04)
+  glassBorder: rgba(255, 255, 255, 0.08)
+  glassHover:  rgba(255, 255, 255, 0.07)
+  glassShadow: 0 8px 32px rgba(0, 0, 0, 0.4)
+
+ACCENT — PRIMARY (Electric Indigo → Violet):
+  accent500:   #4F46E5  (primary buttons, active states)
+  accent600:   #4338CA  (button pressed state)
+  accent700:   #3730A3  (deep accent)
+  accentLight: #818CF8  (accent on dark backgrounds)
+  gradient:    linear-gradient(135deg, #4F46E5, #7C3AED)
+
+ACCENT — SECONDARY (Cyan):
+  cyan400:     #22D3EE  (highlights, links)
+  cyan500:     #06B6D4  (secondary accent)
+  cyan600:     #0891B2  (pressed state)
+
+ACCENT — TERTIARY (Violet):
+  violet500:   #7C3AED  (gradient end, premium features)
+  violet600:   #6D28D9  (pressed state)
+
+SEMANTIC:
+  success:     #10B981  (offer, applied states)
+  successBg:   rgba(16, 185, 129, 0.12)
+  warning:     #F59E0B  (interview state)
+  warningBg:   rgba(245, 158, 11, 0.12)
+  error:       #EF4444  (rejected, errors)
+  errorBg:     rgba(239, 68, 68, 0.12)
+  info:        #3B82F6  (discovered state)
+  infoBg:      rgba(59, 130, 246, 0.12)
+
+TEXT:
+  primary:     #FFFFFF
+  secondary:   #94A3B8
+  tertiary:    #64748B
+  disabled:    #334155
+  inverse:     #0A0F1E
+
+ANIMATED BACKGROUND ORBS:
+  orb1:        #4F46E5  (indigo, opacity 0.15)
+  orb2:        #7C3AED  (violet, opacity 0.12)
+  orb3:        #06B6D4  (cyan, opacity 0.10)
+  orb4:        #1E1B4B  (deep indigo, opacity 0.20)
+```
+
+### Typography Scale
+
+```
+FONT FAMILY: Inter (loaded via expo-font)
+  weights: 400 (Regular), 500 (Medium), 600 (SemiBold), 700 (Bold)
+
+SCALE:
+  display:  40px / Bold    / tracking: -0.02em  (hero text)
+  h1:       32px / Bold    / tracking: -0.01em
+  h2:       24px / SemiBold / tracking: -0.005em
+  h3:       20px / SemiBold / tracking: 0
+  h4:       16px / SemiBold / tracking: 0
+  bodyLg:   16px / Regular  / tracking: 0       / lineHeight: 24px
+  body:     14px / Regular  / tracking: 0       / lineHeight: 21px
+  bodySm:   13px / Regular  / tracking: 0       / lineHeight: 19px
+  caption:  12px / Medium   / tracking: 0.02em
+  label:    11px / SemiBold / tracking: 0.05em  / uppercase
+```
+
+### Spacing & Layout
+
+```
+SPACING SCALE (4px base):
+  xs:   4px
+  sm:   8px
+  md:   12px
+  lg:   16px
+  xl:   20px
+  2xl:  24px
+  3xl:  32px
+  4xl:  40px
+  5xl:  48px
+  6xl:  64px
+
+BORDER RADIUS:
+  sm:   6px
+  md:   10px
+  lg:   14px
+  xl:   20px
+  2xl:  28px
+  full: 9999px
+
+BREAKPOINTS:
+  mobile:  0–767px    → floating tab bar, single column
+  tablet:  768–1023px → collapsible sidebar, 2-column layouts
+  desktop: 1024px+    → fixed sidebar, multi-column layouts
+```
+
+### Component Specifications
+
+**Button variants:**
+```
+Primary:
+  background: gradient(#4F46E5 → #7C3AED)
+  text: white, 14px SemiBold
+  padding: 14px 24px
+  borderRadius: 10px
+  pressScale: 0.97 (Reanimated)
+  haptic: medium impact
+
+Secondary:
+  background: glassBg
+  border: 1px solid glassBorder
+  text: white, 14px SemiBold
+  hover: border → rgba(255,255,255,0.2)
+
+Destructive:
+  background: errorBg
+  border: 1px solid rgba(239,68,68,0.3)
+  text: #EF4444
+
+Ghost:
+  background: transparent
+  text: accentLight
+  underline on hover
+```
+
+**Input fields:**
+```
+background: rgba(255,255,255,0.04)
+border: 1px solid rgba(255,255,255,0.08)
+borderRadius: 10px
+padding: 14px 16px
+text: white, 14px Regular
+placeholder: #64748B
+focus border: #4F46E5 with box-shadow: 0 0 0 3px rgba(79,70,229,0.2)
+error border: #EF4444
+transition: 200ms ease
+```
+
+**Cards (Glass Morphism):**
+```
+background: rgba(255,255,255,0.04)
+border: 1px solid rgba(255,255,255,0.08)
+borderRadius: 14px
+backdropFilter: blur(20px)
+shadow: 0 8px 32px rgba(0,0,0,0.4)
+hover (web): scale(1.01), border → rgba(255,255,255,0.14), transition 200ms
+```
+
+**Job Card (Swipe Deck):**
+```
+height: 520px (mobile) / 580px (tablet+)
+width: 100% with 24px horizontal margin
+Sections:
+  Header (80px): company logo (48px circle) + company name + source badge
+  Title area: job title (h3) + location chip + work type badge
+  Salary: if available, shown as "SEK 45,000–65,000/mo" or "£50k–70k"
+  Description preview: 3 lines truncated with gradient fade
+  Footer: posted date + "Swipe to apply →" hint
+
+Swipe overlays:
+  Right (save): green gradient overlay, ✓ icon, "SAVE" label
+  Left (reject): red gradient overlay, ✗ icon, "SKIP" label
+  Up (apply): blue gradient overlay, ↑ icon, "APPLY" label
+```
+
+**Kanban Status Colors:**
+```
+discovered: #3B82F6 (blue)
+saved:      #8B5CF6 (purple)
+applied:    #F59E0B (amber)
+interview:  #06B6D4 (cyan)
+offer:      #10B981 (green)
+rejected:   #EF4444 (red)
+withdrawn:  #64748B (slate)
+```
+
+### Animated Background Specification
+
+**Implementation approach:**
+```
+Native (iOS/Android):
+  → Reanimated Worklet running on UI thread
+  → 4 circular gradient orbs
+  → Each orb: 300–500px diameter, radial gradient
+  → Animation: sinusoidal x/y position using withRepeat + withTiming
+  → Period: 8–12 seconds per cycle (each orb different period)
+  → Orb positions initialized at different quadrants
+  → Opacity: 0.12–0.20 (subtle, never distracting)
+  → Blur: applied via expo-blur BlurView wrapper
+
+Web:
+  → CSS keyframe animations (no JS overhead)
+  → Same orb positions and colors
+  → animation-duration: 10s–14s
+  → animation-timing-function: ease-in-out
+  → animation-iteration-count: infinite
+  → animation-direction: alternate
+
+Mounting:
+  → Rendered in app/_layout.tsx as absolute positioned layer
+  → zIndex: 0 (behind all content)
+  → All screen content has zIndex: 1+
+  → Never unmounts — persists across all navigation
+  → StyleSheet.absoluteFillObject positioning
+```
+
+### Navigation System (`lib/navConfig.ts`)
+
+**Nav items definition:**
+```typescript
+const NAV_ITEMS = [
+  {
+    key: 'discover',
+    label: 'Discover',
+    icon: 'search',
+    route: '/(app)/(tabs)/discover',
+    badge: null,  // dynamic: unread job count
+  },
+  {
+    key: 'pipeline',
+    label: 'Pipeline',
+    icon: 'kanban',
+    route: '/(app)/(tabs)/pipeline',
+    badge: null,  // dynamic: active applications count
+  },
+  {
+    key: 'vault',
+    label: 'Vault',
+    icon: 'folder',
+    route: '/(app)/(tabs)/vault',
+    badge: null,
+  },
+  {
+    key: 'profile',
+    label: 'Profile',
+    icon: 'user',
+    route: '/(app)/(tabs)/profile',
+    badge: null,
+  },
+  {
+    key: 'settings',
+    label: 'Settings',
+    icon: 'settings',
+    route: '/(app)/(tabs)/settings',
+    badge: null,
+  },
+  {
+    key: 'admin',
+    label: 'Admin',
+    icon: 'shield',
+    route: '/admin',
+    badge: null,
+    adminOnly: true,  // hidden unless role = 'admin'
+  },
+]
+```
+
+**Adaptive layout rules:**
+```
+Mobile (< 768px):
+  → Floating tab bar at bottom
+  → Height: 80px + safe area inset
+  → Background: rgba(10,15,30,0.85) + blur
+  → Border top: 1px solid rgba(255,255,255,0.08)
+  → Shows: icon + label for active, icon only for inactive
+  → Active indicator: gradient dot above icon
+
+Tablet (768–1023px):
+  → Collapsible sidebar, 64px collapsed / 240px expanded
+  → Toggle button at top
+  → Shows: icon always, label when expanded
+
+Desktop (1024px+):
+  → Fixed sidebar, always 240px wide
+  → Shows: icon + label always
+  → User avatar + name at bottom
+  → Logout button at bottom
+
+Mobile Web (Vercel, narrow viewport):
+  → Identical to native mobile tab bar
+  → CSS backdrop-filter for blur
+  → Touch-optimized tap targets (min 44px)
+```
+
+---
+
+## Part 6: Screen-by-Screen Implementation Plan
+
+### Auth Flow
+
+**`onboarding.tsx`**
+```
+4 slides, horizontal swipe navigation:
+
+Slide 1: "Your Career, Automated"
+  → Animated logo reveal
+  → Subtitle: "OpusHunter finds jobs, writes your cover letters, and applies — while you sleep."
+  → Background orbs pulse gently
+
+Slide 2: "AI That Knows Your Story"
+  → Illustration: document → AI → cover letter
+  → "Upload your CV once. Our AI extracts your full career narrative and uses it to write
+     hyper-personalized cover letters for every single application."
+
+Slide 3: "Three Strategies, One Winner"
+  → Illustration: three letter variants with scores
+  → "Our AI generates three different cover letter strategies per job, scores each one
+     for ATS compatibility and specificity, and presents you the best version."
+
+Slide 4: "Swipe. Apply. Get Hired."
+  → Illustration: swipe deck
+  → "Review jobs with a swipe. One tap generates and sends your application.
+     Track everything in your pipeline."
+  → CTA: "Get Started" button → /register
+
+Navigation: dot indicators, skip button (top right), swipe gesture between slides
+Transitions: Reanimated shared element transitions between slides
+```
+
+**`login.tsx`**
+```
+Layout:
+  → AnimatedBackground (inherited from root)
+  → Centered card (glass morphism)
+  → Logo at top
+  → "Welcome back" heading
+  → Email input
+  → Password input (with show/hide toggle)
+  → "Forgot password?" link
+  → Primary "Sign In" button
+  → Divider "or"
+  → Google OAuth button (white, Google logo)
+  → "Don't have an account? Register" link
+
+Validation (Zod):
+  → email: valid email format
+  → password: min 8 characters
+
+Error states:
+  → Invalid credentials: inline error below form
+  → Network error: toast notification
+  → Rate limited: specific message with retry time
+
+On success:
+  → If profile_complete = false → /profile-setup
+  → If profile_complete = true → /(app)/(tabs)/discover
+```
+
+**`register.tsx`**
+```
+Fields:
+  → First name (required — used in all cover letters)
+  → Last name (required — used in all cover letters)
+  → Email
+  → Password (with strength indicator)
+  → Confirm password
+  → Google OAuth option
+
+On success:
+  → Creates auth.users record
+  → Trigger creates profiles row with first_name, last_name
+  → Redirects to /profile-setup
+```
+
+**`profile-setup.tsx`** — 5-step wizard
+```
+Step 1: Professional Identity
+  → Professional title (text input with suggestions)
+  → Years of experience (number input)
+  → Seniority level (segmented control)
+  → Bio (textarea, optional)
+
+Step 2: Target Roles & Work Type
+  → Target roles (tag input, up to 5)
+  → Work type preferences (multi-select: Remote/Hybrid/Onsite/Flexible)
+  → Languages (tag input)
+
+Step 3: Location & Geography
+  → Target countries (multi-select with search)
+  → Target cities (GeoDB autocomplete, multi-select)
+  → Location radius (slider: 10–200km)
+
+Step 4: Salary Expectations
+  → Currency selector
+  → Salary range (dual-handle slider)
+  → "Prefer not to say" option
+
+Step 5: Review & Complete
+  → Summary of all entered data
+  → Edit buttons for each section
+  → "Complete Profile" button
+  → Sets profile_complete = true
+  → Redirects to /(app)/(tabs)/discover
+
+Progress: step indicator at top (1/5, 2/5, etc.)
+Back navigation: allowed between steps
+Cannot skip: "Complete Profile" button only appears on step 5
+```
+
+### Core App Screens
+
+**`discover.tsx`** — Job Search + Swipe Deck
+```
+Layout:
+  → Search/filter bar at top (collapsible)
+  → Rate limit banner (if applicable): "Next scrape in 14h 32m"
+  → SwipeDeck component (main content)
+  → Action buttons below deck: ✗ (reject) | ↑ (apply) | ✓ (save)
+  → "Run New Search" button (triggers scrape-jobs Edge Function)
+
+Filter panel (slides up from bottom):
+  → Keywords input
+  → Work type multi-select
+  → Countries multi-select
+  → Cities autocomplete (GeoDB)
+  → Radius slider
+  → Experience level
+  → Date posted filter
+  → "Search" button
+
+Scrape flow:
+  → Tap "Run New Search"
+  → Check rate limit → show error if exceeded
+  → Show loading state with progress animation
+  → Call scrape-jobs Edge Function
+  → Animate new cards into deck
+  → Show source breakdown: "Found 24 jobs (JSearch: 15, Adzuna: 9)"
+
+Empty deck state:
+  → Animated illustration
+  → "You've reviewed all available jobs"
+  → "Run a new search to find more" CTA
+```
+
+**`pipeline.tsx`** — Kanban Board
+```
+Desktop layout:
+  → Horizontal scrollable columns
+  → Each column: fixed 280px width
+  → Column header: status name + count badge (colored)
+  → Cards: compact JobCardCompact components
+  → Drag between columns → optimistic status update
+
+Mobile layout:
+  → One column visible at a time
+  → Horizontal swipe to navigate between columns
+  → Column selector tabs at top
+  → Pull-to-refresh
+
+Card actions (long press or swipe on card):
+  → View job details
+  → View/edit cover letter
+  → Move to different status
+  → Add notes
+  → Delete application
+```
+
+**`vault.tsx`** — Document Management
+```
+Sections:
+
+CV Section:
+  → Upload button (if no CV) or CV card (if uploaded)
+  → CV card shows:
+    - Filename + upload date
+    - Extraction status badge
+    - Extracted skills count: "47 skills extracted"
+    - "View extracted data" expandable
+    - Replace / Delete actions
+
+Certifications Section:
+  → "Add Certification" button
+  → Grid of CertCard components
+  → Each cert card:
+    - Cert name (large)
+    - Issuer + date
+    - Tags (chip row)
+    - Delete button
+
+Upload flow:
+  1. File picker opens (PDF, DOCX, DOC accepted)
+  2. File selected → show upload progress bar
+  3. Upload to Supabase Storage
+  4. Trigger extract-context Edge Function
+  5. Show "Extracting career data..." with animated progress
+  6. On complete: show extraction summary modal
+     - "Found 47 skills across 3 clusters"
+     - "Identified 8 key achievements"
+     - "Extracted 3 work experiences"
+  7. Update CV card with new data
+
+Extraction summary modal:
+  → Skills by cluster (expandable sections)
+  → Key achievements list
+  → Career summary preview
+  → "Looks good" / "Re-extract" buttons
+```
+
+**`cover-letter/[id].tsx`** — Cover Letter View
+```
+Header:
+  → Company name (h2)
+  → Role title (h3, secondary color)
+  → Generated: "2 hours ago" + model used
+  → Strategy badge: "Mirror Matching" / "Achievement Amplification" / "Insider Narrative"
+
+Score bar:
+  → ATS Score: 87/100 (green progress bar)
+  → Specificity: 92/100 (green progress bar)
+  → Filler phrases: 0 (green checkmark)
+
+Strategy tabs:
+  → Three tabs: A | B | C (with scores)
+  → Tap to switch between versions
+  → Active version highlighted
+
+Cover letter body:
+  → Full formatted text
+  → Proper paragraph spacing
+  → Selectable text
+
+Action bar (bottom):
+  → Copy to clipboard
+  → Share (native share sheet)
+  → Edit (switches to inline editor)
+  → Regenerate (re-runs generation)
+  → Apply Now (opens apply_url in browser)
+
+Edit mode:
+  → TextInput replaces formatted view
+  → Auto-save after 2 seconds of inactivity
+  → "Edited" badge appears on save
+  → Re-score button (re-runs score-cover-letter)
+```
+
+**`admin/index.tsx`** — Admin Dashboard
+```
+Stats grid (2x2 on mobile, 4x1 on desktop):
+  → Total Users: [count] (+X this week)
+  → Total Applications: [count]
+  → Cover Letters Generated: [count]
+  → API Cost This Month: $[amount]
+
+Charts (web only):
+  → Daily active users (7-day line chart)
+  → API usage by provider (bar chart)
+  → Application outcomes distribution (pie chart)
+
+Quick actions:
+  → View all users
+  → Manage API keys
+  → View usage logs
+  → Export data (CSV)
+```
+
+---
+
+## Part 7: State Management Architecture
+
+### Zustand Stores
+
+**`authStore.ts`**
+```typescript
+State:
+  user: User | null
+  session: Session | null
+  profile: Profile | null
+  isLoading: boolean
+  isHydrated: boolean
+
+Actions:
+  setUser(user)
+  setSession(session)
+  setProfile(profile)
+  setLoading(bool)
+  setHydrated(bool)
+  clearAuth()
+
+Persistence:
+  Native: expo-secure-store (encrypted)
+  Web: localStorage
+  Hydration guard: isHydrated prevents flash of wrong state
+```
+
+**`jobStore.ts`**
+```typescript
+State:
+  currentDeck: JobListing[]
+  filters: SearchFilters
+  isScrapingJobs: boolean
+  scrapeProgress: number
+  rateLimitStatus: { limited: boolean, nextAvailableAt: Date | null }
+  currentCardIndex: number
+
+Actions:
+  setDeck(listings)
+  appendToDeck(listings)
+  removeFromDeck(jobId)
+  setFilters(filters)
+  setScrapingState(bool)
+  setScrapeProgress(n)
+  setRateLimitStatus(status)
+  advanceCard()
+```
+
+**`coverLetterStore.ts`**
+```typescript
+State:
+  generatingForJobId: string | null
+  generationProgress: number
+  selectedStrategy: CoverLetterStrategy
+  currentVersions: { [strategy]: CoverLetterContent }
+
+Actions:
+  startGeneration(jobId)
+  setProgress(n)
+  setVersions(versions)
+  selectStrategy(strategy)
+  clearGeneration()
+```
+
+**`uiStore.ts`**
+```typescript
+State:
+  activeModal: string | null
+  toasts: Toast[]
+  isFilterPanelOpen: boolean
+  isSidebarExpanded: boolean
+
+Actions:
+  openModal(id)
+  closeModal()
+  addToast(toast)
+  removeToast(id)
+  toggleFilterPanel()
+  toggleSidebar()
+```
+
+### TanStack Query Configuration
+
+```typescript
+Query keys (typed, hierarchical):
+  ['profile', userId]
+  ['jobs', userId, filters]
+  ['job', jobId]
+  ['applications', userId]
+  ['application', applicationId]
+  ['cover-letter', coverId]
+  ['cover-letters', userId]
+  ['documents', userId]
+  ['user-context', userId]
+  ['rate-limit', userId]
+  ['admin', 'stats']
+  ['admin', 'users', page]
+  ['admin', 'usage-logs', filters]
+
+Cache configuration:
+  staleTime: 5 minutes (most queries)
+  gcTime: 30 minutes
+  retry: 3 with exponential backoff
+  refetchOnWindowFocus: true (web), false (native)
+
+Optimistic mutations:
+  updateApplicationStatus: instant UI update, rollback on error
+  saveJob: instant deck removal, rollback on error
+  editCoverLetter: instant content update, rollback on error
+```
+
+---
+
+## Part 8: Cross-Platform Compatibility Matrix
+
+### Platform-Specific Handling
+
+| Feature | iOS | Android | Mobile Web | Desktop Web | iPad |
+|---|---|---|---|---|---|
+| Navigation | Floating tab bar | Floating tab bar | Floating tab bar | Fixed sidebar | Collapsible sidebar |
+| Swipe gestures | PanGesture (native) | PanGesture (native) | Touch events | Mouse drag | PanGesture (native) |
+| File upload | expo-document-picker | expo-document-picker | HTML input[file] | HTML input[file] | expo-document-picker |
+| Haptics | expo-haptics | expo-haptics | Vibration API | None | expo-haptics |
+| Secure storage | expo-secure-store | expo-secure-store | localStorage | localStorage | expo-secure-store |
+| Blur effects | expo-blur | expo-blur | CSS backdrop-filter | CSS backdrop-filter | expo-blur |
+| Animated bg | Reanimated Worklet | Reanimated Worklet | CSS animations | CSS animations | Reanimated Worklet |
+| OAuth redirect | expo-auth-session | expo-auth-session | Supabase redirect | Supabase redirect | expo-auth-session |
+| Share | expo-sharing | expo-sharing | Web Share API | Clipboard | expo-sharing |
+| Drag-and-drop | Draggable FlatList | Draggable FlatList | HTML5 DnD | HTML5 DnD | Draggable FlatList |
+
+### Web-Specific Considerations
+
+```
+Vercel deployment:
+  → expo export --platform web
+  → Output: static files + API routes
+  → Vercel config: rewrites for SPA routing
+  → Environment variables: EXPO_PUBLIC_* prefix for client-side
+
+Mobile web optimization:
+  → Viewport meta: width=device-width, initial-scale=1, maximum-scale=1
+  → Touch-action: manipulation on interactive elements
+  → -webkit-overflow-scrolling: touch on scroll containers
+  → Prevent double-tap zoom on buttons
+  → Tab bar: position fixed, bottom: 0, z-index: 100
+
+SEO (web):
+  → expo-router head component for meta tags
+  → Open Graph tags on landing/auth pages
+  → robots.txt: noindex on /admin, /app routes
+```
+
+---
+
+## Part 9: Security Architecture
+
+### Zero-Trust Security Model
+
+```
+Client-side (never trusted):
+  → All sensitive operations go through Edge Functions
+  → API keys never touch client code
+  → User role never trusted from client — always verified server-side
+  → JWT verified on every Edge Function call
+
+RLS enforcement:
+  → Every table has RLS enabled
+  → Default deny: no policy = no access
+  → user_api_keys: RLS blocks all client access (Service-Role only)
+  → system_api_keys: RLS blocks all client access (Service-Role only)
+  → Admin data: only accessible via SECURITY DEFINER functions
+
+Edge Function security:
+  → Verify JWT on every request: const { data: { user } } = await supabase.auth.getUser(jwt)
+  → Never trust userId from request body — always extract from verified JWT
+  → Service-Role client only used inside Edge Functions, never returned to client
+  → CORS: restrict to app domains only
+
+Key encryption:
+  → API keys encrypted before storage using Supabase Vault
+  → Keys never logged, never returned after initial save
+  → Only last 4 characters shown in UI after saving
+
+Admin verification:
+  → Admin routes: check profiles.role = 'admin' via SECURITY DEFINER function
+  → Double-checked: client-side (hide UI) + server-side (block data)
+  → Admin Edge Functions verify role before any data access
+```
+
+---
+
+## Part 10: EAS Build Configuration
+
+### `eas.json` Structure
+
+```json
+{
+  "cli": { "version": ">= 10.0.0" },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": { "simulator": true },
+      "android": { "buildType": "apk" },
+      "env": { "APP_ENV": "development" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": { "simulator": false },
+      "android": { "buildType": "apk" },
+      "env": { "APP_ENV": "preview" }
+    },
+    "production": {
+      "distribution": "store",
+      "ios": { "buildConfiguration": "Release" },
+      "android": { "buildType": "app-bundle" },
+      "env": { "APP_ENV": "production" }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": { "appleId": "...", "ascAppId": "..." },
+      "android": { "serviceAccountKeyPath": "./google-service-account.json" }
+    }
+  }
+}
+```
+
+### CI/CD Pipeline
+
+```
+On PR:
+  1. Lint (ESLint + Prettier)
+  2. Type check (tsc --noEmit)
+  3. Unit tests (Jest)
+  4. Supabase migration dry-run
+
+On merge to main:
+  1. Deploy Supabase Edge Functions
+  2. Run Supabase migrations
+  3. Regenerate database.types.ts
+  4. Build web (expo export --platform web)
+  5. Deploy to Vercel
+  6. Trigger EAS build (preview channel)
+
+On release tag:
+  1. EAS build (production)
+  2. EAS submit (App Store + Play Store)
+```
+
+---
+
+## Part 11: Implementation Timeline
+
+### Phase 1 — Foundation (Week 1–2)
+
+**Week 1: Infrastructure**
+```
+Day 1–2:
+  → Initialize monorepo with Turborepo
+  → Configure Expo SDK, Expo Router, NativeWind, Reanimated
+  → Set up Supabase project
+  → Write complete SQL migration script
+  → Run migration, generate database.types.ts
+  → Configure EAS, Vercel
+
+Day 3–4:
+  → Implement constants/theme.ts
+  → Implement lib/navConfig.ts
+  → Implement lib/supabase.ts
+  → Implement stores/authStore.ts
+  → Implement lib/queryClient.ts
+
+Day 5–7:
+  → Implement AnimatedBackground.tsx
+  → Implement all atomic UI components (Button, Input, Card, Badge, etc.)
+  → Implement Typography.tsx
+  → Implement app/_layout.tsx with providers
+  → Test on iOS simulator, Android emulator, web browser
+```
+
+**Week 2: Auth Flow**
+```
+Day 8–9:
+  → Implement onboarding.tsx with Reanimated slide transitions
+  → Implement login.tsx with Zod validation
+  → Implement register.tsx
+
+Day 10–11:
+  → Implement profile-setup.tsx (5-step wizard)
+  → Implement hooks/useAuth.ts
+  → Implement app/(app)/_layout.tsx auth gate
+
+Day 12–14:
+  → Implement geo-autocomplete Edge Function
+  → Implement LocationAutocomplete.tsx component
+  → End-to-end auth flow testing on all platforms
+  → Fix platform-specific issues
+```
+
+### Phase 2 — Core Engine (Week 3–4)
+
+**Week 3: Edge Functions**
+```
+Day 15–16:
+  → Implement _shared/keyResolver.ts
+  → Implement _shared/supabaseAdmin.ts
+  → Implement save-api-key Edge Function
+  → Test key resolution cascade
+
+Day 17–18:
+  → Implement scrape-jobs Edge Function
+  → Implement JSearch adapter
+  → Implement Adzuna adapter (with Swedish endpoint)
+  → Test parallel scraping with real API keys
+  → Verify deduplication logic
+
+Day 19–21:
+  → Implement extract-context Edge Function
+  → Test PDF extraction
+  → Test DOCX extraction
+  → Verify user_context upsert logic
+  → Test with real CV documents
+```
+
+**Week 4: Cover Letter Engine**
+```
+Day 22–23:
+  → Implement generate-cover-letter Edge Function
+  → Implement Strategy A (Mirror Matching)
+  → Implement Strategy B (Achievement Amplification)
+  → Implement Strategy C (Insider Narrative)
+
+Day 24–25:
+  → Implement score-cover-letter Edge Function
+  → Implement ATS scoring algorithm
+  → Implement specificity scoring
+  → Implement filler phrase detection
+
+Day 26–28:
+  → End-to-end cover letter generation testing
+  → Quality review of generated letters
+  → Prompt refinement based on output quality
+  → Performance testing (generation time targets: < 8 seconds)
+```
+
+### Phase 3 — UI Implementation (Week 5–6)
+
+**Week 5: Job Discovery**
+```
+Day 29–30:
+  → Implement SwipeDeck.tsx with Reanimated gestures
+  → Implement JobCard.tsx
+  → Implement SwipeOverlay.tsx
+  → Implement EmptyDeck.tsx
+
+Day 31–32:
+  → Implement discover.tsx screen
+  → Implement SearchFilters.tsx
+  → Implement RateLimitBanner.tsx
+  → Connect to scrape-jobs Edge Function
+  → Test swipe gestures on iOS + Android
+
+Day 33–35:
+  → Implement KanbanBoard.tsx
+  → Implement KanbanColumn.tsx
+  → Implement JobCardCompact.tsx
+  → Implement pipeline.tsx screen
+  → Test drag-and-drop on all platforms
+```
+
+**Week 6: Vault + Cover Letters**
+```
+Day 36–37:
+  → Implement DocumentUploader.tsx
+  → Implement CVCard.tsx
+  → Implement CertCard.tsx
+  → Implement ExtractionProgress.tsx
+  → Implement vault.tsx screen
+
+Day 38–39:
+  → Implement CoverLetterView.tsx
+  → Implement CoverLetterEditor.tsx
+  → Implement StrategySelector.tsx
+  → Implement ScoreCard.tsx
+  → Implement cover-letter/[id].tsx screen
+
+Day 40–42:
+  → Implement profile.tsx screen
+  → Implement settings.tsx screen (Gmail linking, API keys)
+  → Implement job/[id].tsx screen
+  → Connect all screens to real data
+```
+
+### Phase 4 — Admin + Polish (Week 7–8)
+
+**Week 7: Admin Panel**
+```
+Day 43–44:
+  → Implement admin route guard
+  → Implement admin/index.tsx dashboard
+  → Implement StatsGrid.tsx
+
+Day 45–46:
+  → Implement admin/users.tsx
+  → Implement UserTable.tsx
+  → Implement RoleChanger.tsx
+
+Day 47–49:
+  → Implement admin/api-keys.tsx
+  → Implement ApiKeyManager.tsx
+  → Implement admin/usage-logs.tsx
+  → Implement UsageLogTable.tsx
+```
+
+**Week 8: Polish + Launch Prep**
+```
+Day 50–51:
+  → Performance audit: 120fps gesture verification
+  → Memory leak audit
+  → Bundle size optimization
+
+Day 52–53:
+  → Cross-platform visual QA (iOS, Android, mobile web, desktop web, iPad)
+  → Fix any platform-specific rendering issues
+  → Accessibility audit (screen reader, contrast ratios)
+
+Day 54–56:
+  → Error boundary implementation
+  → Crash reporting setup (Sentry)
+  → Analytics setup
+  → Final end-to-end testing
+  → EAS production build
+  → Vercel production deployment
+  → App Store + Play Store submission
+```
+
+---
+
+## Part 12: Environment Variables
+
+### Required Environment Variables
+
+```bash
+# Supabase
+EXPO_PUBLIC_SUPABASE_URL=https://[project-ref].supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=[anon-key]
+SUPABASE_SERVICE_ROLE_KEY=[service-role-key]  # Edge Functions only
+
+# API Keys (stored in system_api_keys table, not env vars)
+# These are seeded into the database, not hardcoded in env
+
+# Gemini (Edge Function env)
+GEMINI_API_KEY=[key]  # Fallback only — primary via keyResolver
+
+# RapidAPI (Edge Function env)
+RAPIDAPI_KEY=[key]  # Fallback only — primary via keyResolver
+
+# GeoDB Cities
+GEODB_API_KEY=[key]
+
+# Encryption
+KEY_ENCRYPTION_SECRET=[32-byte-hex-string]  # For encrypting stored API keys
+
+# App Config
+EXPO_PUBLIC_APP_ENV=production
+EXPO_PUBLIC_APP_URL=https://opushunter.vercel.app
+
+# Vercel
+VERCEL_TOKEN=[token]
+
+# EAS
+EXPO_TOKEN=[token]
+```
+
+---
+
+## Part 13: Testing Strategy
+
+### Test Coverage Plan
+
+**Unit Tests (Jest):**
+```
+lib/scrapers/jsearch.ts → normalize() function
+lib/scrapers/adzuna.ts → normalize() function + getRegionalEndpoint()
+lib/scoring.ts → ATS score calculation
+supabase/functions/_shared/keyResolver.ts → cascade logic (mocked Supabase)
+Deduplication hash computation
+Haversine distance calculation
+```
+
+**Integration Tests:**
+```
+Auth flow: register → profile-setup → discover
+Scrape flow: trigger → rate limit check → parallel fetch → dedup → upsert
+Cover letter flow: swipe up → generate → score → display
+Document flow: upload → extract → context update
+```
+
+**E2E Tests (Detox for native, Playwright for web):**
+```
+Complete onboarding flow
+Login and logout
+Profile setup completion
+Job scraping and swipe deck
+Cover letter generation and viewing
+Document upload
+Admin panel access (admin role)
+Admin panel blocked (member role)
+```
+
+---
+
+## Part 14: Key Engineering Decisions & Rationale
+
+### Why Tri-Strategy Cover Letters?
+
+Single-strategy AI cover letters are a commodity. Every tool does it. The tri-strategy approach with scoring creates a defensible moat:
+1. Users get objectively better letters (highest-scoring version)
+2. The scoring system is transparent and educational
+3. Users can see why one version scored higher
+4. The outcome learning loop means the system improves per-user over time
+5. No competitor has this — it's a genuine product differentiator
+
+### Why the Scraper Registry Pattern?
+
+The `const scrapers: ScraperAdapter[] = [jsearchAdapter, adzunaAdapter]` pattern means:
+- Adding LinkedIn scraper = create `linkedin.ts` + add to array
+- Zero changes to orchestration, deduplication, or storage logic
+- Each adapter is independently testable
+- Failed adapters don't block others (Promise.allSettled)
+
+### Why Deterministic Dedup Hashing?
+
+`sha256(normalize(company + title + location))` ensures:
+- Same job from JSearch and Adzuna = one record (richer one kept)
+- Re-scraping doesn't create duplicates
+- Hash is deterministic across scrape runs
+- Normalization (lowercase, trim, remove punctuation) handles minor variations
+
+### Why SECURITY DEFINER for Admin Functions?
+
+Admin users should not have direct table access — they should only access data through controlled functions that:
+1. Verify the caller is actually an admin (double-check)
+2. Return only the data needed (no SELECT *)
+3. Log the access
+4. Can be audited and modified without changing RLS policies
+
+### Why Outcome Learning Loop?
+
+The `cover_letter_outcomes` table creates a feedback signal that no static tool can replicate. When a user gets an interview after using Strategy B with Achievement Amplification, that signal biases future generation for similar job types toward Strategy B. Over time, the system learns what works for each user in each market — this is the long-term moat.
+
+---
+
+## Summary: What Gets Built, In Order
+
+```
+1. SQL migration (complete schema, all tables, all RLS, all triggers)
+2. database.types.ts (CLI-generated from migration)
+3. constants/theme.ts + constants/animations.ts
+4. lib/navConfig.ts
+5. lib/supabase.ts
+6. stores/authStore.ts + stores/jobStore.ts + stores/coverLetterStore.ts + stores/uiStore.ts
+7. components/shared/AnimatedBackground.tsx
+8. All atomic UI components (Button, Input, Card, Badge, Avatar, Skeleton, Modal, Toast, Typography)
+9. app/_layout.tsx
+10. app/(auth)/onboarding.tsx
+11. app/(auth)/login.tsx <--- register can be here, als sicne its the same page/tab, smooth card change in the same .
+13. app/(auth)/profile-setup.tsx
+14. app/(app)/_layout.tsx
+15. supabase/functions/_shared/* (keyResolver, supabaseAdmin, cors, rateLimit)
+16. supabase/functions/geo-autocomplete/index.ts
+17. supabase/functions/save-api-key/index.ts
+18. supabase/functions/scrape-jobs/index.ts
+19. supabase/functions/extract-context/index.ts
+20. supabase/functions/generate-cover-letter/index.ts
+21. supabase/functions/score-cover-letter/index.ts
+22. All hooks (useAuth, useProfile, useJobs, useCoverLetter, useDocuments, useGeoSearch, useRateLimit, useAdaptiveLayout, useHaptics)
+23. components/job/* (SwipeDeck, JobCard, KanbanBoard, etc.)
+24. components/cover-letter/* (CoverLetterView, StrategySelector, ScoreCard, etc.)
+25. components/vault/* (DocumentUploader, CVCard, CertCard, etc.)
+26. components/profile/* (ProfileForm, LocationAutocomplete, etc.)
+27. app/(app)/(tabs)/discover.tsx
+28. app/(app)/(tabs)/pipeline.tsx
+29. app/(app)/(tabs)/vault.tsx
+30. app/(app)/(tabs)/profile.tsx
+31. app/(app)/(tabs)/settings.tsx
+32. app/(app)/job/[id].tsx
+33. app/(app)/cover-letter/[id].tsx
+34. components/admin/* + app/admin/* (all admin screens)
+35. EAS configuration, CI/CD pipelines, deployment configuration
+```
+
+This is the complete master plan. Every architectural decision is documented, every file is accounted for, every engineering tradeoff is explained. The implementation sequence is ordered by dependency — nothing is built before its dependencies exist. When you are ready to begin code generation, start with item 1 and proceed in order.

@@ -4,8 +4,8 @@
     "strict": true,
     "module": "esnext",
     "ignoreDeprecations": "6.0",
-    "baseUrl": ".",
     "paths": {
+      "*": ["./*"],
       "@/app/*": ["./app/*"],
       "@/assets/*": ["./assets/*"],
       "@/components/*": ["./components/*"],
@@ -13,7 +13,7 @@
       "@/hooks/*": ["./hooks/*"],
       "@/lib/*": ["./lib/*"],
       "@/services/*": ["./services/*"],
-      "@/store/*": ["stores/*"],
+      "@/store/*": ["./stores/*"],
       "@/types/*": ["./types/*"],
       "@/utils/*": ["./utils/*"]
     }

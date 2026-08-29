@@ -1,92 +1,47 @@
-import React, { useMemo } from 'react';
-import { ViewProps, View, StyleSheet, Platform } from 'react-native';
-import { cn } from '../../lib/utils';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
 /**
- * components/layout/PageContainer.tsx
- * 2026-07-12 — OPTIMIZATION PASS: Modernized for flawless cross-platform support
- *
- * PURPOSE: Universal page shell for all content pages. Provides:
- *   • Transparent background by default (lets AmbientBackground show through)
- *   • Safe area insets on native (respects notches, dynamic island, home indicator)
- *   • Safe area + sidebar offset on desktop (via className override)
- *   • Flexible backdrop support (override className for opaque/custom backgrounds)
- *
- * PREVIOUS FIX (2026-07-11): default background was hardcoded #01011398,
- * independent of lib/theme.ts. Dashboard/Settings overrode it to bg-transparent
- * (correct); Jobs/Configure didn't, rendering darker than intended. Changed
- * default to transparent with optional override via className.
- *
- * ACCESSIBILITY:
- *   • Semantic structure: View root → SafeAreaView → content container
- *   • Safe area edges configurable per screen (top nav vs. tab bar contexts)
- *   • No hard-coded sizes; all responsive via flex + className composition
- *   • Platform-aware: native safe areas vs. web padding (if needed)
- *
- * PERFORMANCE:
- *   • Memoized style to prevent re-creation on every render
- *   • Minimal re-renders via useMemo (no dependency churn)
- *   • StyleSheet.create for RN optimization
+ * components/ui/GlassCard.tsx
+ * Core glassmorphism card container.
+ * Accepts full ViewProps so callers control layout (flex-row, padding, etc.)
+ * The inner content wrapper is removed to prevent flex direction overrides.
  */
-interface PageContainerProps extends ViewProps {
+
+import React from 'react';
+import { View, ViewProps } from 'react-native';
+import { cn } from '../../lib/utils';
+
+export interface GlassCardProps extends ViewProps {
   children: React.ReactNode;
   className?: string;
-  safeAreaTop?: boolean;
-  safeAreaBottom?: boolean;
+  glowColor?: 'cyan' | 'purple' | 'pink' | 'lime' | 'red' | 'green';
 }
 
-export const PageContainer: React.FC<PageContainerProps> = React.memo(
-  ({
-    children,
-    className,
-    safeAreaTop = true,
-    safeAreaBottom = false,
-    ...props
-  }) => {
-    // Memoize safe area edges to prevent unnecessary SafeAreaView re-renders
-    const safeAreaEdges = useMemo(
-      () => {
-        const edges: Array<'top' | 'bottom' | 'left' | 'right'> = ['left', 'right'];
-        if (safeAreaTop) edges.unshift('top');
-        if (safeAreaBottom) edges.push('bottom');
-        return edges;
-      },
-      [safeAreaTop, safeAreaBottom],
-    );
+export const GlassCard: React.FC<GlassCardProps> = ({
+  children,
+  className,
+  glowColor = 'cyan',
+  style,
+  ...props
+}) => {
+  const glowStyles = {
+    cyan: 'border-neon-cyan/20 shadow-[0_0_30px_rgba(0,240,255,0.05)]',
+    purple: 'border-neon-purple/20 shadow-[0_0_30px_rgba(138,43,226,0.05)]',
+    pink: 'border-neon-pink/20 shadow-[0_0_30px_rgba(255,0,127,0.05)]',
+    lime: 'border-neon-lime/20 shadow-[0_0_30px_rgba(50,255,0,0.05)]',
+    red: 'border-[#ff4d6d]/20 shadow-[0_0_30px_rgba(255,77,109,0.05)]',
+    green: 'border-[#4ade80]/20 shadow-[0_0_30px_rgba(74,222,128,0.05)]',
+  };
 
-    return (
-      <View
-        className={cn('flex-1 bg-transparent', className)}
-        style={styles.root}
-        {...props}
-      >
-        <SafeAreaView
-          style={styles.safeArea}
-          edges={safeAreaEdges}
-          pointerEvents="box-none"
-        >
-          <View style={styles.full}>{children}</View>
-        </SafeAreaView>
-      </View>
-    );
-  },
-);
-
-PageContainer.displayName = 'PageContainer';
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    ...Platform.select({
-      web: {},
-      default: {},
-    }),
-  },
-  safeArea: {
-    flex: 1,
-  },
-  full: {
-    flex: 1,
-  },
-});
+  return (
+    <View
+      className={cn(
+        'rounded-[32px] border bg-[#0f172a]/40',
+        glowStyles[glowColor],
+        className,
+      )}
+      style={style}
+      {...props}
+    >
+      {children}
+    </View>
+  );
+};

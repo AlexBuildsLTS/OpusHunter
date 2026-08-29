@@ -1,97 +1,101 @@
 {
-    "expo": {
-        "name": "OpusHunter",
-        "slug": "opushunter",
-        "version": "1.0.0",
-        "scheme": "opushunter",
-        "orientation": "portrait",
-        "userInterfaceStyle": "dark",
-        "platforms": [
-            "ios",
-            "android",
-            "web"
-        ],
-        "icon": "./assets/icon.png",
-        "ios": {
-            "supportsTablet": true,
-            "bundleIdentifier": "com.opushunter.app",
-            "infoPlist": {
-                "ITSAppUsesNonExemptEncryption": false,
-                "NSCameraUsageDescription": "OpusHunter needs camera access to capture certification documents or profile pictures.",
-                "NSPhotoLibraryUsageDescription": "OpusHunter needs photo library access to upload your profile picture and saved certifications.",
-                "UIBackgroundModes": [
-                    "fetch",
-                    "processing"
-                ]
-            }
-        },
-        "android": {
-            "package": "com.opushunter.app",
-            "adaptiveIcon": {
-                "foregroundImage": "./assets/adaptive-icon-foreground.png",
-                "backgroundImage": "./assets/adaptive-icon-background.png",
-                "backgroundColor": "#020507"
-            },
-            "permissions": [
-                "android.permission.INTERNET",
-                "android.permission.ACCESS_NETWORK_STATE",
-                "android.permission.ACCESS_WIFI_STATE",
-                "android.permission.VIBRATE",
-                "android.permission.WAKE_LOCK",
-                "android.permission.READ_EXTERNAL_STORAGE",
-                "android.permission.WRITE_EXTERNAL_STORAGE",
-                "android.permission.CAMERA"
-            ]
-        },
-        "web": {
-            "bundler": "metro",
-            "output": "static",
-            "favicon": "./assets/favicon.png",
-            "backgroundColor": "#020507",
-            "themeColor": "#00D4FF"
-        },
-        "plugins": [
-            "expo-router",
-            "expo-secure-store",
-            "expo-document-picker",
-            "expo-asset",
-            "expo-file-system",
-            "expo-web-browser",
-            "expo-image",
-            "expo-sharing",
-            [
-                "expo-splash-screen",
-                {
-                    "image": "./assets/splash-icon.png",
-                    "resizeMode": "contain",
-                    "backgroundColor": "#020507"
-                }
-            ],
-            [
-                "expo-build-properties",
-                {
-                    "android": {
-                        "kotlinVersion": "2.1.20",
-                        "kspVersion": "2.1.20-1.0.29",
-                        "largeHeap": true,
-                        "minSdkVersion": 26,
-                        "packagingOptions": {
-                            "pickFirst": [
-                                "lib/x86/libc++_shared.so",
-                                "lib/x86_64/libc++_shared.so",
-                                "lib/armeabi-v7a/libc++_shared.so",
-                                "lib/arm64-v8a/libc++_shared.so"
-                            ]
-                        }
-                    }
-                }
-            ]
-        ],
-        "experiments": {
-            "typedRoutes": true
-        },
-        "extra": {
-            "router": {}
+  "expo": {
+    "name": "OpusHunter",
+    "slug": "opushunter",
+    "version": "1.0.0",
+    "scheme": "opushunter",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "icon": "./assets/icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.opushunter.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "OpusHunter needs camera access to capture certification documents or profile pictures.",
+        "NSPhotoLibraryUsageDescription": "OpusHunter needs photo library access to upload your profile picture and saved certifications.",
+        "UIBackgroundModes": [
+          "fetch",
+          "processing"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.opushunter.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon-foreground.png",
+        "backgroundImage": "./assets/adaptive-icon-background.png",
+        "backgroundColor": "#020507"
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png",
+      "backgroundColor": "#020507",
+      "themeColor": "#00D4FF"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-document-picker",
+      "expo-asset",
+      "expo-file-system",
+      "expo-web-browser",
+      "expo-image",
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#020507"
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.1.20",
+            "kspVersion": "2.1.20-1.0.29",
+            "largeHeap": true,
+            "minSdkVersion": 26,
+            "packagingOptions": {
+              "pickFirst": [
+                "lib/x86/libc++_shared.so",
+                "lib/x86_64/libc++_shared.so",
+                "lib/armeabi-v7a/libc++_shared.so",
+                "lib/arm64-v8a/libc++_shared.so"
+              ]
+            }
+          }
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-status-bar",
+      "expo-mail-composer",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {}
     }
+  }
 }

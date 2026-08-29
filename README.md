@@ -158,7 +158,7 @@ This section is actively updated to prevent reverse-engineering of project progr
 - **Auto-Apply Execution:** Automated application generation operates as a highly personalized cover-letter draft creator and hard-link dispatcher. Playwright-based automated form filing on ATS platforms (Greenhouse/Lever) remains to be confirmed.
 - **API Cost Analytics:** The Admin panel manages active shared API keys but does not currently log specific tokens consumed or monthly costs.
 
-### 🚀 (Strategic Roadmap) WHEN we made sure everythign else works 
+### 🚀 (Strategic Roadmap) WHEN we made sure everythign else works
 
 1. **Apply Service Verification:** Validate Playwright's headless execution state and synchronize auto-submission capability with the UI.
 2. **Cost & Usage Surveillance:** Deploy an `api_key_usage_logs` schema, capture Gemini's exact `usageMetadata` tokens, and render real-time cost-tracking statistics inside the Admin Panel.
@@ -216,3 +216,194 @@ opushunter/
 ## ⚖️ License
 
 All rights reserved by project owner unless stated otherwise in repository policy.
+
+---
+
+```opushunter
+
+└── 📁OpusHunter
+
+    └── 📁.expo
+        └── 📁dev
+            └── 📁logs
+                ├── start.log
+        └── 📁static-tmp
+            ├── _error.js
+        └── 📁types
+            ├── router.d.ts
+        └── 📁web
+            └── 📁cache
+                └── 📁production
+                    └── 📁images
+                        └── 📁favicon
+                            └── 📁favicon-d3bf733a86eefe9cd8ced00fec99002c68f1eb6aa88d9f55a5de56888e9ecdcc-contain-transparent
+                                ├── favicon-48.png
+        ├── devices.json
+        ├── README.md
+    └── 📁.vscode
+        └── 📁.react
+        ├── settings.json
+    └── 📁app
+        └── 📁(auth)
+            ├── _layout.tsx
+            ├── auth.tsx
+            ├── onboarding.tsx
+            ├── profile-setup.tsx
+        └── 📁(tabs)
+            └── 📁(dashboard)
+                └── 📁admin
+                    ├── _layout.tsx
+                    ├── api-keys.tsx
+                    ├── index.tsx
+                    ├── users.tsx
+                └── 📁configuration
+                    ├── _layout.tsx
+                    ├── cover-letter.tsx
+                    ├── job.tsx
+                └── 📁settings
+                    ├── DocumentUploader.tsx
+                    ├── index.tsx
+                    ├── profile.tsx
+                    ├── vault.tsx
+                ├── _layout.tsx
+                ├── index.tsx
+            ├── _layout.tsx
+            ├── index.tsx
+            ├── pipeline.tsx
+            ├── profile.tsx
+            ├── vault.tsx
+        ├── _layout.tsx
+        ├── +not-found.tsx
+        ├── index.tsx
+    └── 📁assets
+        ├── adaptive-icon-background.png
+        ├── adaptive-icon-foreground.png
+        ├── favicon.png
+        ├── google-logo.png
+        ├── icon.png
+        ├── splash-icon.png
+        ├── splash.png
+    └── 📁components
+        └── 📁jobcardsetup
+            ├── EmptyState.tsx
+            ├── KanbanBoard.tsx
+            ├── RateLimitBanner.tsx
+            ├── SwipeDeck.tsx
+        └── 📁layout
+            ├── AdaptiveLayout.tsx
+            ├── PageContainer.tsx
+        └── 📁shared
+            ├── AnimatedBackground.tsx
+            ├── FadeIn.tsx
+            ├── KeyboardAvoidingWrapper.tsx
+            ├── ProfileDropdown.tsx
+            ├── ResponsiveNavShell.tsx
+            ├── SafeAreaWrapper.tsx
+        └── 📁ui
+            ├── Badge.tsx
+            ├── Button.tsx
+            ├── Chip.tsx
+            ├── GlassCard.tsx
+            ├── Input.tsx
+            ├── LoadingOverlay.tsx
+            ├── Modal.tsx
+            ├── Skeleton.tsx
+            ├── Toast.tsx
+            ├── Typography.tsx
+    └── 📁constants
+        ├── animations.ts
+        ├── theme.ts
+    └── 📁hooks
+        ├── useAdaptiveLayout.ts
+        ├── useGmail.ts
+        ├── useJobs.ts
+    └── 📁lib
+        ├── navConfig.ts
+        ├── queryClient.ts
+        ├── secureStorage.ts
+        ├── supabase.ts
+        ├── theme.ts
+        ├── utils.ts
+    └── 📁stores
+        ├── authStore.ts
+        ├── coverLetterStore.ts
+        ├── jobStore.ts
+        ├── uiStore.ts
+        ├── usePipelineStore.ts
+    └── 📁supabase
+            └── 📁start-secrets
+                └── 📁supabase_edge_runtime_OpusHunter
+                    └── 📁env
+                        ├── docker.env
+                    └── 📁main
+                        ├── index.ts
+            ├── cli-latest
+            ├── gotrue-version
+            ├── linked-project.json
+            ├── pooler-url
+            ├── postgres-version
+            ├── project-ref
+            ├── rest-version
+            ├── storage-migration
+            ├── storage-version
+        └── 📁functions
+            └── 📁_shared
+                ├── ambient.d.ts
+                ├── cors.ts
+                ├── geo.ts
+                ├── keyResolver.ts
+                ├── rateLimit.ts
+                ├── supabaseAdmin.ts
+            └── 📁auto-apply
+                ├── index.ts
+            └── 📁extract-context
+                ├── index.ts
+            └── 📁generate-cover-letter
+                ├── index.ts
+            └── 📁geo-autocomplete
+                ├── index.ts
+            └── 📁save-api-key
+                ├── index.ts
+            └── 📁score-cover-letter
+                ├── index.ts
+            └── 📁scrape-jobs
+                ├── index.ts
+            ├── deno.json
+        └── 📁import 'react-native-url-polyfill
+        └── 📁migrations
+            ├── 20260827214533_migration_test.sql
+            ├── total_data.sql
+            ├── total_structure.sql
+        └── 📁snippets
+        ├── .env
+        ├── .gitignore
+        ├── config.toml
+        ├── polyfill.native.ts
+        ├── polyfill.ts
+    └── 📁types
+        ├── app.types.ts
+        ├── database.types.ts
+    ├── .directory
+    ├── .env
+    ├── .gitignore
+    ├── .npmrc
+    ├── .prettierrc
+    ├── .repomixignore
+    ├── app.json
+    ├── babel.config.cjs
+    ├── eslint.config.js
+    ├── expo-env.d.ts
+    ├── global.css
+    ├── INFO.md
+    ├── metro.config.cjs
+    ├── nativewind-env.d.ts
+    ├── package.json
+    ├── pnpm-lock.yaml
+    ├── pnpm-workspace.yaml
+    ├── README.md
+    ├── repomix-output.xml
+    ├── tailwind.config.js
+    ├── tsconfig.json
+    └── vercel.json
+
+```

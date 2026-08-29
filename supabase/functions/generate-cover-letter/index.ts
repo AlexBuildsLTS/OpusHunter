@@ -1,320 +1,138 @@
-import { createAdminClient } from "../_shared/supabaseAdmin.ts";
-import { resolveKey, markKeyUsed } from "../_shared/keyResolver.ts";
-import { verifyUser } from "../_shared/auth.ts";
-import { getCorsHeaders } from "../_shared/cors.ts";
+/**
+ * supabase/functions/generate-cover-letter/index.ts
+ * OpusHunter — AI Cover Letter Generation (Gemini 2.5 Flash Lite).
+ * Refined: Matches cover_letters table exactly, measures generation time, robust prompts.
+ */
 
-declare const Deno: {
-  serve: (handler: (req: Request) => Promise<Response>) => void;
-};
+import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { resolveKey } from "../_shared/keyResolver.ts";
+import { corsHeaders } from "../_shared/cors.ts";
 
-const GEMINI_MODEL = "gemini-3.1-flash-lite";
-const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
-const CV_BUCKET = "cv_vault";
-const MAX_CERTS = 10;
+const supabase = getSupabaseAdmin();
 
-interface DocumentAsset {
-  name: string;
-  content: string;
-}
-
-async function fetchNormalizedDocument(
-  adminClient: any,
-  path: string,
-): Promise<string> {
-  try {
-    const { data, error } = await adminClient.storage
-      .from(CV_BUCKET)
-      .download(path);
-    if (error || !data) return "";
-
-    const buffer = await data.arrayBuffer();
-    const decoder = new TextDecoder("utf-8", { fatal: false });
-    return decoder
-      .decode(buffer)
-      .replace(/[^\x20-\x7E\n]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  } catch {
-    return "";
-  }
-}
-
-async function executeInference(
-  prompt: string,
-  apiKey: string,
-): Promise<string> {
-  const response = await fetch(
-    `${GEMINI_BASE}/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: {
-          parts: [
-            {
-              text: "You are a professional career coach. You must ONLY output the exact text of the cover letter. Do not include any conversational text, warnings, or markdown blocks. Never hallucinate or provide security warnings.",
-            },
-          ],
-        },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.65,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 800,
-        },
-        safetySettings: [
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_NONE",
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_NONE",
-          },
-        ],
-      }),
-      signal: AbortSignal.timeout(25000),
-    },
-  );
-
-  if (!response.ok) {
-    const errPayload = await response.text();
-    throw new Error(
-      `Inference Engine Failure: ${errPayload.substring(0, 300)}`,
-    );
-  }
-
-  const data = await response.json();
-  const generatedText: string =
-    data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-
-  if (!generatedText)
-    throw new Error("Inference Engine returned an empty payload.");
-  return generatedText.trim();
-}
-
-const DEFAULT_TEMPLATE = `Dear Hiring Team at [COMPANY],
-
-I am writing to express my strong interest in the [ROLE] position. With my background in [SKILLS], I am confident I would make a meaningful contribution to your team.
-
-I am particularly excited about this opportunity at [COMPANY] and believe my experience aligns well with what you are looking for.
-
-I would welcome the chance to discuss how I can contribute to your success.
-
-Best regards,
-[NAME]`;
-
-function applyTemplate(tpl: string, v: Record<string, string>): string {
-  return tpl
-    .replace(/\[COMPANY\]/gi, v.company ?? "the company")
-    .replace(/\[ROLE\]/gi, v.role ?? "this position")
-    .replace(/\[NAME\]/gi, v.name ?? "Candidate")
-    .replace(/\[SKILLS\]/gi, v.skills ?? "my relevant skills");
-}
-
-Deno.serve(async (req: Request) => {
-  const cors = getCorsHeaders();
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+Deno.serve(async (req) => {
+  // CORS preflight
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   try {
-    const admin = createAdminClient();
-    const user = await verifyUser(req);
-    const body = await req.json();
+    const { userId, jobListingId, strategy } = await req.json();
+    if (!userId || !jobListingId) throw new Error("Missing required fields");
 
-    let jobId = body.job_id;
-    if (!jobId && body.job_application_id) {
-      const { data: app } = await admin
-        .from("job_applications")
-        .select("job_id")
-        .eq("id", body.job_application_id)
-        .eq("user_id", user.id)
-        .single();
-      jobId = app?.job_id;
-    }
+    const startTime = performance.now();
 
-    if (!jobId) {
-      return new Response(JSON.stringify({ error: "job_id is required." }), {
-        status: 400,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
+    // 1. Fetch Job + User Context + Profile in parallel
+    const [jobResult, contextResult, profileResult] = await Promise.all([
+      supabase.from("job_vault").select("*").eq("id", jobListingId).single(),
+      supabase
+        .from("user_context")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase.from("profiles").select("*").eq("id", userId).single(),
+    ]);
 
-    const { data: job } = await admin
-      .from("job_vault")
-      .select("id, title, company, description, tech_stack")
-      .eq("id", jobId)
-      .single();
-    if (!job) {
-      return new Response(JSON.stringify({ error: "Job not found." }), {
-        status: 404,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
+    if (jobResult.error || !jobResult.data) throw new Error("Job not found");
+    if (contextResult.error || !contextResult.data)
+      throw new Error("User context not found. Upload a CV first.");
+    if (profileResult.error || !profileResult.data)
+      throw new Error("Profile not found");
 
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("full_name, cv_storage_path")
-      .eq("id", user.id)
-      .single();
-    const { data: certs } = await admin
-      .from("certifications")
-      .select("file_name, storage_path")
-      .eq("user_id", user.id)
-      .order("uploaded_at", { ascending: false })
-      .limit(MAX_CERTS);
+    const job = jobResult.data;
+    const context = contextResult.data;
+    const profile = profileResult.data;
 
-    const fetchPromises: Promise<void>[] = [];
-    let cvText = "";
-    const extractedCerts: DocumentAsset[] = [];
+    // 2. Resolve Gemini API key
+    const geminiKey = (await resolveKey(supabase, userId, "gemini")).key;
 
-    if (profile?.cv_storage_path) {
-      fetchPromises.push(
-        fetchNormalizedDocument(admin, profile.cv_storage_path).then((t) => {
-          cvText = t;
+    // 3. Construct Strict Prompt
+    const prompt = `
+You are an expert career coach writing a cover letter for ${job.company}.
+The role is "${job.title}" located in ${job.location || "Remote"}.
+Job description:
+${job.description || "No description provided."}
+
+Candidate's full name: ${profile.first_name} ${profile.last_name}
+Career summary: ${context.career_summary || "N/A"}
+Key skills: ${context.extracted_skills?.join(", ") || "N/A"}
+Key achievements: ${context.key_achievements?.join("; ") || "N/A"}
+Certifications: ${context.extracted_certifications?.map((c: { name?: string }) => c.name).join(", ") || "N/A"}
+
+Write a professional, concise 4-5 paragraph cover letter with these exact rules:
+- Opening: Hook referencing the specific role and company.
+- Paragraph 2: Match the candidate's top 3 skills/achievements to the job requirements, with quantified impact.
+- Paragraph 3: Demonstrate genuine knowledge of the company and why this specific role.
+- Paragraph 4: Mention certifications or technical depth relevant to this role.
+- Closing: Confident call to action, not generic "I look forward to hearing from you."
+- No filler phrases like "I am writing to express my interest", "I believe I would be a great fit", or "passionate about".
+- Total length: 280-380 words.
+- Tone: professional, direct, confident.
+
+Return ONLY the cover letter text, no explanations.`;
+
+    // 4. Call Gemini 3.1 Flash
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
         }),
-      );
-    }
-
-    if (certs) {
-      for (const cert of certs) {
-        if (cert.storage_path) {
-          fetchPromises.push(
-            fetchNormalizedDocument(admin, cert.storage_path).then((t) => {
-              if (t) extractedCerts.push({ name: cert.file_name, content: t });
-            }),
-          );
-        }
-      }
-    }
-
-    await Promise.all(fetchPromises);
-
-    const { data: rules } = await admin
-      .from("automation_rules")
-      .select("keywords, base_cover_letter")
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-      .order("created_at", { ascending: false })
-      .limit(5);
-    const jobStack = (job.tech_stack ?? []).map((s: string) => s.toLowerCase());
-
-    let bestRule = rules?.[0] ?? null;
-    if (rules && rules.length > 1) {
-      let best = -1;
-      for (const r of rules) {
-        const overlap = (r.keywords ?? []).filter((k: string) =>
-          jobStack.some((s: string) => s.includes(k.toLowerCase())),
-        ).length;
-        if (overlap > best) {
-          best = overlap;
-          bestRule = r;
-        }
-      }
-    }
-
-    const baseTpl = bestRule?.base_cover_letter?.trim() || DEFAULT_TEMPLATE;
-    const keywords = bestRule?.keywords ?? (job.tech_stack ?? []).slice(0, 6);
-    const resolvedKey = await resolveKey(admin, user.id, "gemini");
-
-    let coverLetter = "";
-    let generatedBy = "template";
-
-    if (resolvedKey) {
-      try {
-        const certBlock =
-          extractedCerts.length > 0
-            ? extractedCerts
-                .map((c) => `[CERT: ${c.name}]\n${c.content.substring(0, 300)}`)
-                .join("\n\n")
-            : "None";
-        const prompt = `Write a compelling cover letter.
-Candidate: ${profile?.full_name || "Candidate"}
-Keywords: ${keywords.join(", ")}
-CV Excerpt: ${cvText.substring(0, 1200)}
-Certifications: ${certBlock}
-
-Job Role: ${job.title}
-Company: ${job.company}
-Job Description: ${job.description?.substring(0, 1500) || ""}
-
-Base Template:
-${baseTpl.substring(0, 500)}
-
-Rules:
-- 3 short paragraphs.
-- Output ONLY the final letter. No formatting.`;
-
-        coverLetter = await executeInference(prompt, resolvedKey.key);
-        generatedBy = `gemini:${resolvedKey.source}`;
-        await markKeyUsed(admin, resolvedKey);
-      } catch {
-        coverLetter = applyTemplate(baseTpl, {
-          company: job.company,
-          role: job.title,
-          name: profile?.full_name || "Candidate",
-          skills: keywords.slice(0, 3).join(", "),
-        });
-        generatedBy = "template_fallback";
-      }
-    } else {
-      coverLetter = applyTemplate(baseTpl, {
-        company: job.company,
-        role: job.title,
-        name: profile?.full_name || "Candidate",
-        skills: keywords.slice(0, 3).join(", "),
-      });
-    }
-
-    let coverLetterId: string | null = null;
-    if (!body.preview) {
-      const { data: saved } = await admin
-        .from("cover_letters")
-        .insert({
-          user_id: user.id,
-          title: `${job.title} @ ${job.company}`,
-          body: coverLetter,
-          company: job.company,
-          job_title: job.title,
-          generated_by: generatedBy,
-          is_default: false,
-        })
-        .select("id")
-        .single();
-
-      coverLetterId = saved?.id ?? null;
-
-      if (body.job_application_id) {
-        await admin
-          .from("job_applications")
-          .update({ cover_letter_used: coverLetter })
-          .eq("id", body.job_application_id)
-          .eq("user_id", user.id);
-      }
-    }
-
-    return new Response(
-      JSON.stringify({
-        cover_letter: coverLetter,
-        cover_letter_id: coverLetterId,
-        generated_by: generatedBy,
-      }),
-      {
-        status: 200,
-        headers: { ...getCorsHeaders, "Content-Type": "application/json" },
       },
     );
-  } catch (err: unknown) {
-    return new Response(
-      JSON.stringify({
-        error: err instanceof Error ? err.message : "Unknown error",
-      }),
-      {
-        status: 500,
-        headers: { ...getCorsHeaders, "Content-Type": "application/json" },
-      },
+
+    if (!geminiResponse.ok)
+      throw new Error(`Gemini error: ${geminiResponse.status}`);
+    const geminiData = await geminiResponse.json();
+    const content =
+      geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    if (!content) throw new Error("Gemini returned empty content");
+
+    const durationMs = Math.round(performance.now() - startTime);
+
+    // 5. Save to cover_letters table
+    const { data: coverLetter, error: saveError } = await supabase
+      .from("cover_letters")
+      .insert({
+        user_id: userId,
+        job_id: jobListingId,
+        company: job.company,
+        job_title: job.title,
+        body: content,
+        tone: "professional",
+        strategy_used: strategy || "mirror_matching",
+        generated_by: "gemini-2.5-flash-lite",
+        tokens_used: geminiData.usageMetadata?.totalTokenCount || 0,
+        generation_duration_ms: durationMs,
+        title: `${job.title} — ${job.company}`,
+      })
+      .select()
+      .single();
+
+    if (saveError) throw saveError;
+
+    // 6. Log usage
+    await supabase.from("api_key_usage_logs").insert({
+      user_id: userId,
+      provider: "gemini",
+      key_source: "system",
+      tokens_used: geminiData.usageMetadata?.totalTokenCount || 0,
+      function_name: "generate-cover-letter",
+      strategy_used: strategy || "mirror_matching",
+      success: true,
+    });
+
+    return Response.json(
+      { cover_letter_id: coverLetter.id, body: coverLetter.body },
+      { headers: corsHeaders },
+    );
+  } catch (error: unknown) {
+    console.error("Generate cover letter error:", error);
+    return Response.json(
+      { error: "generation_failed", message: error instanceof Error ? error.message : String(error) },
+      { status: 500, headers: corsHeaders },
     );
   }
 });
