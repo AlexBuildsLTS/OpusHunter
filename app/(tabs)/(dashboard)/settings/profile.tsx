@@ -82,7 +82,8 @@ export default function ProfileScreen() {
     last_name: profile?.last_name || "",
     professional_title: profile?.professional_title || "",
     bio: profile?.bio || "",
-    years_experience: profile?.years_experience != null ? String(profile.years_experience) : "",
+    years_experience:
+      profile?.years_experience != null ? String(profile.years_experience) : "",
     seniority_levels: (profile?.seniority_level
       ? [profile.seniority_level as SeniorityLevel]
       : ["mid" as SeniorityLevel]) as SeniorityLevel[],
@@ -108,17 +109,24 @@ export default function ProfileScreen() {
         last_name: profile.last_name || "",
         professional_title: profile.professional_title || "",
         bio: profile.bio || "",
-        years_experience: profile.years_experience != null ? String(profile.years_experience) : "",
+        years_experience:
+          profile.years_experience != null
+            ? String(profile.years_experience)
+            : "",
         seniority_levels: profile.seniority_level
           ? [profile.seniority_level as SeniorityLevel]
           : ["mid"],
         target_roles: profile.target_roles || [],
-        work_type_preferences: (profile.work_type_preferences || ["remote"]) as WorkType[],
+        work_type_preferences: (profile.work_type_preferences || [
+          "remote",
+        ]) as WorkType[],
         target_cities: profile.target_cities || [],
         target_countries: profile.target_countries || ["Sweden"],
         location_radius_km: profile.location_radius_km || 50,
-        salary_min: profile.salary_min != null ? String(profile.salary_min) : "",
-        salary_max: profile.salary_max != null ? String(profile.salary_max) : "",
+        salary_min:
+          profile.salary_min != null ? String(profile.salary_min) : "",
+        salary_max:
+          profile.salary_max != null ? String(profile.salary_max) : "",
         salary_currency: profile.salary_currency || "SEK",
         languages: profile.languages || ["English"],
       });
@@ -146,10 +154,15 @@ export default function ProfileScreen() {
 
   const handleGenerateBio = () => {
     setGeneratingBio(true);
-    const fullName = [form.first_name, form.last_name].filter(Boolean).join(" ");
+    const fullName = [form.first_name, form.last_name]
+      .filter(Boolean)
+      .join(" ");
     const namePrefix = fullName ? `${fullName} is a ` : "Accomplished ";
-    const title = form.professional_title || "Software Engineering Professional";
-    const years = form.years_experience ? `${form.years_experience}+ years of dedicated` : "established";
+    const title =
+      form.professional_title || "Software Engineering Professional";
+    const years = form.years_experience
+      ? `${form.years_experience}+ years of dedicated`
+      : "established";
     const skills =
       userContext?.extracted_skills?.slice(0, 6).join(", ") ||
       "distributed systems, cloud architecture, and modern full-stack development";
@@ -157,8 +170,7 @@ export default function ProfileScreen() {
       form.target_roles.length > 0
         ? form.target_roles.join(" / ")
         : "Software Engineering Leadership";
-    const primarySeniority =
-      form.seniority_levels[0] || "Senior";
+    const primarySeniority = form.seniority_levels[0] || "Senior";
     const seniorityFormatted =
       primarySeniority.charAt(0).toUpperCase() + primarySeniority.slice(1);
 
@@ -258,7 +270,8 @@ export default function ProfileScreen() {
     setSaving(true);
     setSaveError(null);
     try {
-      const primarySeniority = (form.seniority_levels[0] || "mid") as Database["public"]["Enums"]["seniority_level_enum"];
+      const primarySeniority = (form.seniority_levels[0] ||
+        "mid") as Database["public"]["Enums"]["seniority_level_enum"];
 
       const { error } = await supabase
         .from("profiles")
@@ -267,7 +280,9 @@ export default function ProfileScreen() {
           last_name: form.last_name.trim() || null,
           professional_title: form.professional_title.trim() || null,
           bio: form.bio.trim() || null,
-          years_experience: form.years_experience ? parseInt(form.years_experience) : null,
+          years_experience: form.years_experience
+            ? parseInt(form.years_experience)
+            : null,
           seniority_level: primarySeniority,
           target_roles: form.target_roles,
           work_type_preferences: form.work_type_preferences,
@@ -312,15 +327,19 @@ export default function ProfileScreen() {
       >
         {/* Symmetrical Centered Box Wrapper */}
         <View style={styles.centeredContainer}>
-          
           {/* Header Title */}
           <View style={styles.header}>
             <View>
               <Typography variant="h2" weight="bold" color="primary">
                 Profile & Targeting
               </Typography>
-              <Typography variant="caption" color="secondary" style={styles.headerSubtitle}>
-                Manage your professional identity, candidate criteria, and AI generation context.
+              <Typography
+                variant="caption"
+                color="secondary"
+                style={styles.headerSubtitle}
+              >
+                Manage your professional identity, candidate criteria, and AI
+                generation context.
               </Typography>
             </View>
             <Button
@@ -339,7 +358,11 @@ export default function ProfileScreen() {
           {saved && (
             <View style={styles.saveAlertSuccess}>
               <CheckCircle2 size={16} color={colors.accent.green} />
-              <Typography variant="bodySm" weight="medium" style={{ color: colors.accent.green }}>
+              <Typography
+                variant="bodySm"
+                weight="medium"
+                style={{ color: colors.accent.green }}
+              >
                 Profile settings successfully saved and synced!
               </Typography>
             </View>
@@ -348,7 +371,11 @@ export default function ProfileScreen() {
           {saveError && (
             <View style={styles.saveAlertError}>
               <AlertCircle size={16} color={colors.accent.red} />
-              <Typography variant="bodySm" weight="medium" style={{ color: colors.accent.red }}>
+              <Typography
+                variant="bodySm"
+                weight="medium"
+                style={{ color: colors.accent.red }}
+              >
                 {saveError}
               </Typography>
             </View>
@@ -359,7 +386,12 @@ export default function ProfileScreen() {
             <View style={styles.cardHeader}>
               <View style={styles.cardHeaderLeft}>
                 <Lock size={16} color={colors.accent.cyan} />
-                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="secondary"
+                  style={styles.sectionTag}
+                >
                   ACCOUNT & UNIQUE IDENTITY
                 </Typography>
               </View>
@@ -373,7 +405,12 @@ export default function ProfileScreen() {
                 </Typography>
                 <View style={styles.protectedValueBox}>
                   <ShieldCheck size={14} color={colors.accent.green} />
-                  <Typography variant="bodySm" weight="semiBold" color="primary" numberOfLines={1}>
+                  <Typography
+                    variant="bodySm"
+                    weight="semiBold"
+                    color="primary"
+                    numberOfLines={1}
+                  >
                     {profile?.email || user?.email || "No email on record"}
                   </Typography>
                 </View>
@@ -384,17 +421,31 @@ export default function ProfileScreen() {
                   ACCOUNT ROLE & ID
                 </Typography>
                 <View style={styles.protectedValueBox}>
-                  <Typography variant="caption" weight="semiBold" style={{ color: colors.accent.cyan }}>
+                  <Typography
+                    variant="caption"
+                    weight="semiBold"
+                    style={{ color: colors.accent.cyan }}
+                  >
                     {profile?.role?.toUpperCase() || "MEMBER"}
                   </Typography>
-                  <Typography variant="caption" color="dim" numberOfLines={1} style={{ flex: 1 }}>
+                  <Typography
+                    variant="caption"
+                    color="dim"
+                    numberOfLines={1}
+                    style={{ flex: 1 }}
+                  >
                     · {profile?.id?.slice(0, 8)}...
                   </Typography>
                 </View>
               </View>
             </View>
-            <Typography variant="caption" color="dim" style={styles.protectedNote}>
-              Unique email and account identifiers are hardware/auth-sealed. Professional names and attributes below are freely customizable.
+            <Typography
+              variant="caption"
+              color="dim"
+              style={styles.protectedNote}
+            >
+              Unique email and account identifiers are hardware/auth-sealed.
+              Professional names and attributes below are freely customizable.
             </Typography>
           </Card>
 
@@ -403,7 +454,12 @@ export default function ProfileScreen() {
             <View style={styles.cardHeader}>
               <View style={styles.cardHeaderLeft}>
                 <User size={16} color={colors.accent.cyan} />
-                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="secondary"
+                  style={styles.sectionTag}
+                >
                   PROFESSIONAL IDENTITY
                 </Typography>
               </View>
@@ -433,7 +489,9 @@ export default function ProfileScreen() {
                 <Input
                   label="Professional Title"
                   value={form.professional_title}
-                  onChangeText={(t) => setForm({ ...form, professional_title: t })}
+                  onChangeText={(t) =>
+                    setForm({ ...form, professional_title: t })
+                  }
                   placeholder="e.g. Staff Full Stack Engineer"
                   icon={<Briefcase size={16} color={colors.text.dim} />}
                 />
@@ -442,7 +500,9 @@ export default function ProfileScreen() {
                 <Input
                   label="Years of Experience"
                   value={form.years_experience}
-                  onChangeText={(t) => setForm({ ...form, years_experience: t })}
+                  onChangeText={(t) =>
+                    setForm({ ...form, years_experience: t })
+                  }
                   placeholder="e.g. 7"
                   keyboardType="numeric"
                 />
@@ -455,7 +515,12 @@ export default function ProfileScreen() {
             <View style={styles.cardHeader}>
               <View style={styles.cardHeaderLeft}>
                 <Briefcase size={16} color={colors.accent.cyan} />
-                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="secondary"
+                  style={styles.sectionTag}
+                >
                   SENIORITY TIERS (MULTI-SELECT)
                 </Typography>
               </View>
@@ -466,21 +531,37 @@ export default function ProfileScreen() {
                   isAllSenioritySelected && styles.selectAllBtnActive,
                 ]}
               >
-                <Check size={12} color={isAllSenioritySelected ? colors.text.inverse : colors.accent.cyan} />
+                <Check
+                  size={12}
+                  color={
+                    isAllSenioritySelected
+                      ? colors.text.inverse
+                      : colors.accent.cyan
+                  }
+                />
                 <Typography
                   variant="caption"
                   weight="bold"
                   style={{
-                    color: isAllSenioritySelected ? colors.text.inverse : colors.accent.cyan,
+                    color: isAllSenioritySelected
+                      ? colors.text.inverse
+                      : colors.accent.cyan,
                   }}
                 >
-                  {isAllSenioritySelected ? "Open to All Levels ✓" : "Select All Levels"}
+                  {isAllSenioritySelected
+                    ? "Open to All Levels ✓"
+                    : "Select All Levels"}
                 </Typography>
               </Pressable>
             </View>
 
-            <Typography variant="caption" color="secondary" style={{ marginBottom: 12 }}>
-              Choose specific target seniorities or toggle all to allow the scraper to capture broad opportunities.
+            <Typography
+              variant="caption"
+              color="secondary"
+              style={{ marginBottom: 12 }}
+            >
+              Choose specific target seniorities or toggle all to allow the
+              scraper to capture broad opportunities.
             </Typography>
 
             <View style={styles.chipGrid}>
@@ -503,7 +584,12 @@ export default function ProfileScreen() {
             <View style={styles.cardHeader}>
               <View style={styles.cardHeaderLeft}>
                 <Sparkles size={16} color={colors.accent.cyan} />
-                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="secondary"
+                  style={styles.sectionTag}
+                >
                   PROFESSIONAL BIO & AI SYNTHESIS
                 </Typography>
               </View>
@@ -511,7 +597,11 @@ export default function ProfileScreen() {
 
             {/* Tone Selector */}
             <View style={styles.toneSelectorContainer}>
-              <Typography variant="caption" color="dim" style={{ marginBottom: 6 }}>
+              <Typography
+                variant="caption"
+                color="dim"
+                style={{ marginBottom: 6 }}
+              >
                 AI GENERATION TONE:
               </Typography>
               <View style={styles.toneRow}>
@@ -534,7 +624,9 @@ export default function ProfileScreen() {
                         variant="caption"
                         weight={active ? "bold" : "medium"}
                         style={{
-                          color: active ? colors.accent.cyan : colors.text.secondary,
+                          color: active
+                            ? colors.accent.cyan
+                            : colors.text.secondary,
                         }}
                       >
                         {t.label}
@@ -571,7 +663,12 @@ export default function ProfileScreen() {
             <View style={styles.cardHeader}>
               <View style={styles.cardHeaderLeft}>
                 <Globe size={16} color={colors.accent.cyan} />
-                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="secondary"
+                  style={styles.sectionTag}
+                >
                   CAREER SCOPE & WORK MODES
                 </Typography>
               </View>
@@ -603,7 +700,9 @@ export default function ProfileScreen() {
                     key={type}
                     label={type.toUpperCase()}
                     selected={isSelected}
-                    onPress={() => toggleArrayItem("work_type_preferences", type)}
+                    onPress={() =>
+                      toggleArrayItem("work_type_preferences", type)
+                    }
                   />
                 );
               })}
@@ -615,7 +714,12 @@ export default function ProfileScreen() {
             <View style={styles.cardHeader}>
               <View style={styles.cardHeaderLeft}>
                 <MapPin size={16} color={colors.accent.cyan} />
-                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="secondary"
+                  style={styles.sectionTag}
+                >
                   GEOGRAPHIC TARGETS (SWEDEN / EU)
                 </Typography>
               </View>
@@ -661,7 +765,9 @@ export default function ProfileScreen() {
                   onPress={() => toggleArrayItem("target_cities", city)}
                 />
               ))}
-              {PRESET_SWEDISH_CITIES.filter((c) => !form.target_cities.includes(c)).map((city) => (
+              {PRESET_SWEDISH_CITIES.filter(
+                (c) => !form.target_cities.includes(c),
+              ).map((city) => (
                 <Chip
                   key={city}
                   label={`+ ${city}`}
@@ -691,7 +797,12 @@ export default function ProfileScreen() {
             <View style={styles.cardHeader}>
               <View style={styles.cardHeaderLeft}>
                 <Coins size={16} color={colors.accent.cyan} />
-                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="secondary"
+                  style={styles.sectionTag}
+                >
                   COMPENSATION & SPOKEN LANGUAGES
                 </Typography>
               </View>
@@ -746,27 +857,42 @@ export default function ProfileScreen() {
           </Card>
 
           {/* 8. AI Extracted Context (Read-Only CV Ingestion) */}
-          <Card variant="glass" style={styles.cardSection}>
+          <Card variant="default" style={styles.cardSection}>
             <View style={styles.cardHeader}>
               <View style={styles.cardHeaderLeft}>
                 <Sparkles size={16} color={colors.accent.cyan} />
-                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="secondary"
+                  style={styles.sectionTag}
+                >
                   INGESTED CV CONTEXT (AUTO-EXTRACTED)
                 </Typography>
               </View>
-              <Badge label="From Vault" variant="neutral" size="sm" />
+              <Badge label="From Vault" variant="default" size="sm" />
             </View>
 
-            <Typography variant="caption" color="dim" style={{ marginBottom: 8 }}>
+            <Typography
+              variant="caption"
+              color="dim"
+              style={{ marginBottom: 8 }}
+            >
               EXTRACTED TOP SKILLS
             </Typography>
             <View style={styles.chipGrid}>
               {userContext?.extracted_skills?.slice(0, 12).map((skill) => (
-                <Chip key={skill} label={skill} selected={false} onPress={() => {}} />
+                <Chip
+                  key={skill}
+                  label={skill}
+                  selected={false}
+                  onPress={() => {}}
+                />
               ))}
               {(!userContext || !userContext.extracted_skills?.length) && (
                 <Typography variant="caption" color="dim">
-                  Upload your CV in the Vault tab to automatically index technical skills.
+                  Upload your CV in the Vault tab to automatically index
+                  technical skills.
                 </Typography>
               )}
             </View>
@@ -785,7 +911,6 @@ export default function ProfileScreen() {
               {saved ? "Profile Changes Saved! ✓" : "Save Profile Changes"}
             </Button>
           </View>
-
         </View>
       </ScrollView>
     </SafeAreaWrapper>
@@ -952,7 +1077,10 @@ const styles = StyleSheet.create({
     marginLeft: "auto",
   },
   bioTextArea: {
-    minHeight: 90,
+    minHeight: 180,
+    paddingTop: 14,
+    textAlignVertical: "top",
+    lineHeight: 22,
   },
   subHeading: {
     marginTop: 14,
@@ -985,4 +1113,3 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
-
