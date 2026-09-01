@@ -36,6 +36,7 @@ interface ScrapeParams {
     linkedin?: boolean;
   };
   adzunaAppId?: string;
+  batchSize?: number;
   page?: number;
 }
 
@@ -46,15 +47,21 @@ interface NormalizedJob {
   location: string;
   country_code: string;
   description: string;
-  apply_url: string;
+  url: string;
   posted_at?: string;
   work_type?: string;
+  is_remote?: boolean;
+  salary?: string;
   salary_min?: number;
   salary_max?: number;
   currency?: string;
   source: string;
   external_job_id?: string;
   source_url?: string;
+  latitude?: number;
+  longitude?: number;
+  tech_stack?: string[];
+  match_score?: number;
 }
 
 // ── 1. JSearch Adapter ────────────────────────────────────────────────────────
@@ -151,37 +158,41 @@ async function fetchJSearch(
 
       const rawItems = (data.data || []) as Array<Record<string, unknown>>;
       console.log(`[JSearch] Successfully fetched ${rawItems.length} jobs`);
-      return rawItems.map((raw) => ({
-        title: String(raw.job_title || "Untitled Role"),
-        company: String(raw.employer_name || "Unknown Company"),
-        company_logo_url: raw.employer_logo
-          ? String(raw.employer_logo)
-          : undefined,
-        location:
-          [raw.job_city, raw.job_state, raw.job_country]
-            .filter(Boolean)
-            .map(String)
-            .join(", ") || primaryCity,
-        country_code: String(raw.job_country || primaryCountry),
-        description: String(raw.job_description || ""),
-        apply_url: String(raw.job_apply_link || raw.job_google_link || ""),
-        posted_at: String(
-          raw.job_posted_at_datetime_utc || new Date().toISOString(),
-        ),
-        work_type: raw.job_is_remote ? "remote" : "onsite",
-        salary_min:
-          typeof raw.job_min_salary === "number"
-            ? raw.job_min_salary
+      return rawItems.map((raw) => {
+        const jobUrl = String(raw.job_apply_link || raw.job_google_link || "");
+        return {
+          title: String(raw.job_title || "Untitled Role"),
+          company: String(raw.employer_name || "Unknown Company"),
+          company_logo_url: raw.employer_logo
+            ? String(raw.employer_logo)
             : undefined,
-        salary_max:
-          typeof raw.job_max_salary === "number"
-            ? raw.job_max_salary
-            : undefined,
-        currency: String(raw.job_salary_currency || "SEK"),
-        source: "jsearch",
-        external_job_id: raw.job_id ? String(raw.job_id) : undefined,
-        source_url: raw.job_apply_link ? String(raw.job_apply_link) : "",
-      }));
+          location:
+            [raw.job_city, raw.job_state, raw.job_country]
+              .filter(Boolean)
+              .map(String)
+              .join(", ") || primaryCity,
+          country_code: String(raw.job_country || primaryCountry),
+          description: String(raw.job_description || ""),
+          url: jobUrl,
+          posted_at: String(
+            raw.job_posted_at_datetime_utc || new Date().toISOString(),
+          ),
+          work_type: raw.job_is_remote ? "remote" : "onsite",
+          is_remote: !!raw.job_is_remote,
+          salary_min:
+            typeof raw.job_min_salary === "number"
+              ? raw.job_min_salary
+              : undefined,
+          salary_max:
+            typeof raw.job_max_salary === "number"
+              ? raw.job_max_salary
+              : undefined,
+          currency: String(raw.job_salary_currency || "SEK"),
+          source: "jsearch",
+          external_job_id: raw.job_id ? String(raw.job_id) : undefined,
+          source_url: String(raw.job_apply_link || jobUrl),
+        };
+      });
     } catch (err) {
       console.warn("[JSearch] Fetch error with key:", err);
     }
@@ -315,6 +326,7 @@ async function fetchAdzuna(
           typeof raw.description === "string"
             ? raw.description.replace(/<\/?[^>]+(>|$)/g, "")
             : "";
+        const jobUrl = String(raw.redirect_url || "");
 
         return {
           title: titleStr,
@@ -323,9 +335,10 @@ async function fetchAdzuna(
           location: locObj?.display_name || locationName,
           country_code: country.toUpperCase(),
           description: descStr,
-          apply_url: String(raw.redirect_url || ""),
+          url: jobUrl,
           posted_at: String(raw.created || new Date().toISOString()),
           work_type: "onsite",
+          is_remote: false,
           salary_min:
             typeof raw.salary_min === "number" ? raw.salary_min : undefined,
           salary_max:
@@ -337,7 +350,7 @@ async function fetchAdzuna(
               : "EUR",
           source: "adzuna",
           external_job_id: raw.id ? String(raw.id) : undefined,
-          source_url: String(raw.redirect_url || ""),
+          source_url: jobUrl,
         };
       });
     } catch (err) {
@@ -423,35 +436,48 @@ async function fetchLinkedIn(
         console.log(
           `[LinkedInScraperAPI] Successfully fetched ${items.length} jobs`,
         );
-        return items.map((raw) => ({
-          title: String(raw.job_title || raw.title || "Untitled Role"),
-          company: String(raw.company_name || raw.company || "Unknown Company"),
-          company_logo_url: raw.company_logo
-            ? String(raw.company_logo)
-            : undefined,
-          location: String(raw.location || locationStr),
-          country_code: params.countries?.[0] || "SE",
-          description: String(
-            raw.job_description ||
-              raw.description ||
-              "LinkedIn live opportunity.",
-          ),
-          apply_url: String(raw.job_url || raw.apply_url || raw.url || ""),
-          posted_at: String(
-            raw.posted_date || raw.posted_at || new Date().toISOString(),
-          ),
-          work_type: String(raw.work_type || "onsite"),
-          salary_min: undefined,
-          salary_max: undefined,
-          currency: "SEK",
-          source: "linkedin",
-          external_job_id: raw.job_id
+        return items.map((raw) => {
+          const rawUrl = String(raw.job_url || raw.apply_url || raw.url || "");
+          const extId = raw.job_id
             ? String(raw.job_id)
             : raw.id
               ? String(raw.id)
+              : undefined;
+          const fallbackUrl = extId
+            ? `https://www.linkedin.com/jobs/view/${extId}`
+            : "https://www.linkedin.com";
+          const finalJobUrl = rawUrl || fallbackUrl;
+          const workTypeStr = String(raw.work_type || "onsite");
+
+          return {
+            title: String(raw.job_title || raw.title || "Untitled Role"),
+            company: String(
+              raw.company_name || raw.company || "Unknown Company",
+            ),
+            company_logo_url: raw.company_logo
+              ? String(raw.company_logo)
               : undefined,
-          source_url: String(raw.job_url || raw.url || ""),
-        }));
+            location: String(raw.location || locationStr),
+            country_code: params.countries?.[0] || "SE",
+            description: String(
+              raw.job_description ||
+                raw.description ||
+                "LinkedIn live opportunity.",
+            ),
+            url: finalJobUrl,
+            posted_at: String(
+              raw.posted_date || raw.posted_at || new Date().toISOString(),
+            ),
+            work_type: workTypeStr,
+            is_remote: workTypeStr.toLowerCase().includes("remote"),
+            salary_min: undefined,
+            salary_max: undefined,
+            currency: "SEK",
+            source: "linkedin",
+            external_job_id: extId,
+            source_url: finalJobUrl,
+          };
+        });
       }
     } catch (err) {
       console.warn("[LinkedInScraperAPI] Fetch error with key:", err);
@@ -562,15 +588,92 @@ Deno.serve(async (req: Request) => {
     const finalListings = deduped.slice(0, batchCap);
 
     if (finalListings.length > 0) {
-      const { error: upsertError } = await supabase.from("job_vault").upsert(
-        finalListings.map((listing) => ({
-          ...listing,
+      const rowsToUpsert = finalListings.map((listing) => {
+        const validSources = [
+          "jsearch",
+          "adzuna",
+          "linkedin",
+          "indeed",
+          "custom",
+        ];
+        const source = validSources.includes(listing.source)
+          ? (listing.source as
+              "jsearch" | "adzuna" | "linkedin" | "indeed" | "custom")
+          : "custom";
+
+        let workType: "remote" | "hybrid" | "onsite" | "flexible" | null = null;
+        if (listing.work_type) {
+          const wt = listing.work_type.toLowerCase();
+          if (wt.includes("remote")) workType = "remote";
+          else if (wt.includes("hybrid")) workType = "hybrid";
+          else if (wt.includes("onsite") || wt.includes("on-site"))
+            workType = "onsite";
+          else if (wt.includes("flexible")) workType = "flexible";
+        }
+
+        const isRemote = workType === "remote" || listing.is_remote === true;
+        const jobUrl =
+          listing.url ||
+          listing.source_url ||
+          (listing.external_job_id
+            ? `https://www.linkedin.com/jobs/view/${listing.external_job_id}`
+            : "https://opushunter.com");
+
+        return {
           user_id: userId,
+          source,
+          external_job_id:
+            listing.external_job_id ||
+            listing.dedup_hash ||
+            crypto.randomUUID(),
+          title: listing.title || "Untitled Role",
+          company: listing.company || "Unknown Company",
+          company_logo_url: listing.company_logo_url || null,
+          location: listing.location || null,
+          country_code: listing.country_code || null,
+          latitude:
+            typeof listing.latitude === "number" ? listing.latitude : null,
+          longitude:
+            typeof listing.longitude === "number" ? listing.longitude : null,
+          is_remote: isRemote,
+          work_type: workType,
+          salary: listing.salary || null,
+          salary_min:
+            typeof listing.salary_min === "number"
+              ? Math.round(listing.salary_min)
+              : null,
+          salary_max:
+            typeof listing.salary_max === "number"
+              ? Math.round(listing.salary_max)
+              : null,
+          currency: listing.currency || "SEK",
+          description: listing.description || null,
+          tech_stack: Array.isArray(listing.tech_stack)
+            ? listing.tech_stack
+            : [],
+          match_score:
+            typeof listing.match_score === "number"
+              ? listing.match_score
+              : null,
+          url: jobUrl,
+          source_url: listing.source_url || jobUrl,
+          dedup_hash: listing.dedup_hash,
+          posted_at: listing.posted_at || null,
           scraped_at: new Date().toISOString(),
-        })),
-        { onConflict: "user_id,dedup_hash" },
-      );
-      if (upsertError) throw upsertError;
+        };
+      });
+
+      const { error: upsertError } = await supabase
+        .from("job_vault")
+        .upsert(rowsToUpsert, { onConflict: "user_id,dedup_hash" });
+
+      if (upsertError) {
+        console.error(
+          "[Scrape-Jobs] Upsert error into job_vault:",
+          upsertError,
+        );
+        throw upsertError;
+      }
     }
 
     // 5. Update rate limit

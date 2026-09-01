@@ -54,7 +54,8 @@ export function ActiveTargetCard({
   isAdmin = false,
 }: ActiveTargetCardProps) {
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 1024;
+  const isDesktop = width >= 768;
+  const isMobile = width < 600;
   const { profile } = useAuthStore();
   const { triggerScrape, isScraping, rateLimitStatus, checkRateLimit } =
     useJobs();
@@ -119,10 +120,7 @@ export function ActiveTargetCard({
   return (
     <Animated.View
       entering={FadeInUp.duration(400)}
-      style={[
-        styles.cardBoxWrapper,
-        isDesktop && { maxWidth: 860, alignSelf: "center", width: "100%" },
-      ]}
+      style={styles.cardBoxWrapper}
     >
       {/* Background Glow Effect */}
       <View style={styles.glowUnderlay} />
@@ -134,7 +132,7 @@ export function ActiveTargetCard({
             <View style={styles.statusPulseDot}>
               <View style={styles.pulseInner} />
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <View style={styles.tierTagRow}>
                 <Text style={styles.cardSuperTitle}>
                   RADAR PIPELINE TARGET 01
@@ -151,7 +149,9 @@ export function ActiveTargetCard({
                   </View>
                 )}
               </View>
-              <Text style={styles.targetJobTitle}>{title}</Text>
+              <Text style={styles.targetJobTitle} numberOfLines={2}>
+                {title}
+              </Text>
             </View>
           </View>
 
@@ -170,7 +170,9 @@ export function ActiveTargetCard({
         {/* Target Parameters Grid */}
         <View style={styles.paramsGrid}>
           {/* Geolocation */}
-          <View style={styles.paramItem}>
+          <View
+            style={[styles.paramItem, { width: isMobile ? "100%" : "48.5%" }]}
+          >
             <View style={styles.paramIconBox}>
               <MapPin size={14} color={colors.accent.cyan} />
             </View>
@@ -183,7 +185,9 @@ export function ActiveTargetCard({
           </View>
 
           {/* Workplace & Seniority */}
-          <View style={styles.paramItem}>
+          <View
+            style={[styles.paramItem, { width: isMobile ? "100%" : "48.5%" }]}
+          >
             <View style={styles.paramIconBox}>
               <Briefcase size={14} color={colors.accent.blue} />
             </View>
@@ -197,7 +201,9 @@ export function ActiveTargetCard({
           </View>
 
           {/* Alternate Roles */}
-          <View style={styles.paramItem}>
+          <View
+            style={[styles.paramItem, { width: isMobile ? "100%" : "48.5%" }]}
+          >
             <View style={styles.paramIconBox}>
               <Layers size={14} color="#38BDF8" />
             </View>
@@ -210,7 +216,9 @@ export function ActiveTargetCard({
           </View>
 
           {/* Compensation & Rate */}
-          <View style={styles.paramItem}>
+          <View
+            style={[styles.paramItem, { width: isMobile ? "100%" : "48.5%" }]}
+          >
             <View style={styles.paramIconBox}>
               <DollarSign size={14} color="#34D399" />
             </View>
@@ -250,9 +258,18 @@ export function ActiveTargetCard({
         )}
 
         {/* Action Button Strip */}
-        <View style={styles.actionStrip}>
+        <View
+          style={[
+            styles.actionStrip,
+            { flexDirection: isMobile ? "column" : "row" },
+          ]}
+        >
           <TouchableOpacity
-            style={[styles.startScrapeBtn, isScraping && styles.btnDisabled]}
+            style={[
+              styles.startScrapeBtn,
+              isScraping && styles.btnDisabled,
+              isMobile && { width: "100%" },
+            ]}
             onPress={handleStartScrape}
             disabled={isScraping}
             activeOpacity={0.85}
@@ -278,7 +295,10 @@ export function ActiveTargetCard({
 
           {onViewPipeline && (
             <TouchableOpacity
-              style={styles.viewPipelineBtn}
+              style={[
+                styles.viewPipelineBtn,
+                isMobile && { width: "100%", justifyContent: "center" },
+              ]}
               onPress={onViewPipeline}
               activeOpacity={0.8}
             >
@@ -425,16 +445,16 @@ const styles = StyleSheet.create({
   paramsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 12,
+    justifyContent: "space-between",
+    gap: 10,
     marginBottom: 16,
   },
   paramItem: {
-    width: "48%",
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(15, 23, 42, 0.65)",
     borderRadius: radius.md,
-    padding: 10,
+    padding: 12,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.06)",
     gap: 10,

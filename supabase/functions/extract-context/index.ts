@@ -16,10 +16,10 @@ import { corsHeaders } from "../_shared/cors.ts";
 const supabase = getSupabaseAdmin();
 
 const GEMINI_MODELS = [
-  "gemini-omni-1.1-flash",
-  "gemini-3.7-flash",
-  "gemini-3.6-flash",
-  "gemini-3.1-pro-preview",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-2.5-pro",
 ];
 
 Deno.serve(async (req) => {

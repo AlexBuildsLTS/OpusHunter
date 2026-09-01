@@ -64,7 +64,7 @@ function MetricCard({
   return (
     <Animated.View
       entering={FadeInDown.delay(delay).springify()}
-      style={{ flex: 1 }}
+      style={styles.metricCardWrapper}
     >
       <Card style={styles.metricCard}>
         <View
@@ -162,6 +162,7 @@ export default function DashboardScreen() {
   return (
     <SafeAreaWrapper edges={["top"]} style={styles.container}>
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={[
           styles.scroll,
           isDesktop && styles.scrollDesktop,
@@ -355,6 +356,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "transparent",
+    minHeight: 0,
+  },
+  scrollView: {
+    flex: 1,
   },
   scroll: {
     paddingHorizontal: 16,
@@ -377,13 +382,16 @@ const styles = StyleSheet.create({
   metricsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 20,
+    gap: 12,
+    marginBottom: 24,
+  },
+  metricCardWrapper: {
+    flex: 1,
+    minWidth: 140,
   },
   metricCard: {
     padding: 16,
-    minWidth: 140,
-    flex: 1,
+    width: "100%",
   },
   metricIcon: {
     width: 34,

@@ -56,7 +56,20 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
   const pathname = usePathname();
 
-  const isDesktop = width >= 1024;
+  const isDesktop = width >= 768;
+
+  const isItemActive = (item: (typeof NAV_ITEMS)[0]) => {
+    if (item.id === "discover") {
+      return (
+        pathname === "/" ||
+        pathname === "/(tabs)" ||
+        pathname === "/(tabs)/index" ||
+        pathname === "/(tabs)/(dashboard)" ||
+        pathname === "/(tabs)/(dashboard)/index"
+      );
+    }
+    return pathname.includes(item.id) || pathname.startsWith(item.path);
+  };
 
   return (
     <View style={styles.root}>
@@ -72,12 +85,12 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
         />
       )}
 
-      {/* ── DESKTOP SIDEBAR (≥1024px) ────────────────────────────── */}
+      {/* ── DESKTOP & TABLET SIDEBAR (≥768px) ────────────────────── */}
       {isDesktop && (
         <View style={styles.sidebar}>
           <View style={{ width: "100%", alignItems: "center", gap: 32 }}>
             <TouchableOpacity
-              onPress={() => router.push("./(tabs)")}
+              onPress={() => router.push("/(tabs)/index" as any)}
               activeOpacity={0.8}
             >
               <View style={styles.brandLogo}>
@@ -87,8 +100,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
 
             <View style={{ width: "100%", alignItems: "center", gap: 16 }}>
               {NAV_ITEMS.map((item) => {
-                const isActive =
-                  pathname === item.path || pathname.startsWith(item.path);
+                const isActive = isItemActive(item);
                 return (
                   <TouchableOpacity
                     key={item.id}
@@ -128,20 +140,14 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
           <ProfileDropdown />
         </View>
 
-        {/* ── SCROLLABLE CHILDREN ─────────────────────────────────── */}
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{
-            paddingBottom: isDesktop ? 40 : 120,
-            paddingTop: 16,
-            flexGrow: 1,
-          }}
-          showsVerticalScrollIndicator={false}
+        {/* ── CHILDREN BODY ───────────────────────────────────────── */}
+        <View
+          style={[styles.contentBody, { paddingBottom: isDesktop ? 20 : 90 }]}
         >
           {children}
-        </ScrollView>
+        </View>
 
-        {/* ── MOBILE BOTTOM FLOATING TAB BAR (<1024px) ────────────── */}
+        {/* ── MOBILE BOTTOM FLOATING TAB BAR (<768px) ─────────────── */}
         {!isDesktop && (
           <View
             style={[
@@ -155,8 +161,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
               style={styles.mobileTabBar}
             >
               {NAV_ITEMS.map((item) => {
-                const isActive =
-                  pathname === item.path || pathname.startsWith(item.path);
+                const isActive = isItemActive(item);
                 return (
                   <TouchableOpacity
                     key={item.id}
@@ -182,9 +187,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     backgroundColor: "transparent",
+    height: "100%",
+    minHeight: 0,
   },
   sidebar: {
     width: 96,
+    height: "100%",
     backgroundColor: "rgba(6, 9, 19, 0.85)",
     borderRightWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.05)",
@@ -227,6 +235,14 @@ const styles = StyleSheet.create({
     flex: 1,
     position: "relative",
     zIndex: 10,
+    height: "100%",
+    minHeight: 0,
+    overflow: "hidden",
+  },
+  contentBody: {
+    flex: 1,
+    minHeight: 0,
+    height: "100%",
   },
   topHeader: {
     height: 68,

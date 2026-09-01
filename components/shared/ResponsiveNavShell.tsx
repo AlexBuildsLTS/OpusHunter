@@ -7,12 +7,13 @@ import {
   StyleSheet,
   Platform,
 } from "react-native";
-import { useRouter, useSegments } from "expo-router";
+import { useRouter, usePathname } from "expo-router";
 import { BlurView } from "expo-blur";
 import {
   Home,
   Compass,
   Inbox,
+  SlidersHorizontal,
   Bot,
   User,
   Settings,
@@ -103,16 +104,26 @@ export default function ResponsiveNavShell({
   children: React.ReactNode;
 }) {
   const { width } = useWindowDimensions();
-  const segments = useSegments();
+  const pathname = usePathname();
   const router = useRouter();
-  const isDesktop = width > 1024;
+  const isDesktop = width >= 768;
   const [profileOpen, setProfileOpen] = useState(false);
 
   const isAdmin = true;
-  const currentRoute = segments[segments.length - 1] || "pipeline";
 
   const NAV_ITEMS = [
-    { id: "discover", label: "Discover", icon: Compass, route: "/(tabs)" },
+    {
+      id: "discover",
+      label: "Discover",
+      icon: Compass,
+      route: "/(tabs)/index",
+    },
+    {
+      id: "rules",
+      label: "Rules",
+      icon: SlidersHorizontal,
+      route: "/(tabs)/rules",
+    },
     {
       id: "pipeline",
       label: "Pipeline",
@@ -125,17 +136,30 @@ export default function ResponsiveNavShell({
       icon: Home,
       route: "/(tabs)/settings/vault",
     },
-    {
-      id: "settings",
-      label: "Settings",
-      icon: Settings,
-      route: "/(tabs)/settings",
-    },
   ];
 
+  const isItemActive = (item: (typeof NAV_ITEMS)[0]) => {
+    if (item.id === "discover") {
+      return (
+        pathname === "/" ||
+        pathname === "/(tabs)" ||
+        pathname === "/(tabs)/index" ||
+        pathname === "/(tabs)/(dashboard)" ||
+        pathname === "/(tabs)/(dashboard)/index"
+      );
+    }
+    return pathname.includes(item.id) || pathname.startsWith(item.route);
+  };
+
   return (
-    <View className="flex-1 bg-transparent">
-      <View className={`flex-1 ${isDesktop ? "flex-row" : "flex-col"}`}>
+    <View
+      className="flex-1 bg-transparent"
+      style={{ height: "100%", minHeight: 0 }}
+    >
+      <View
+        className={`flex-1 ${isDesktop ? "flex-row" : "flex-col"}`}
+        style={{ height: "100%", minHeight: 0 }}
+      >
         {/* Desktop Sidebar */}
         {isDesktop && (
           <BlurView
@@ -145,7 +169,7 @@ export default function ResponsiveNavShell({
           >
             <View>
               <Pressable
-                onPress={() => router.push("./(tabs)")}
+                onPress={() => router.push("/(tabs)/index" as any)}
                 className="mb-12 cursor-pointer flex-row items-center px-2"
               >
                 <View className="mr-4 h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/50 bg-cyan-500/20 shadow-[0_0_15px_rgba(34,211,238,0.3)]">
@@ -158,7 +182,7 @@ export default function ResponsiveNavShell({
 
               <View className="gap-y-2">
                 {NAV_ITEMS.map((item) => {
-                  const active = currentRoute === item.id;
+                  const active = isItemActive(item);
                   const Icon = item.icon;
                   return (
                     <Pressable
@@ -204,7 +228,10 @@ export default function ResponsiveNavShell({
         )}
 
         {/* Main Content Area */}
-        <View className="relative flex-1">
+        <View
+          className="relative flex-1"
+          style={{ minHeight: 0, height: "100%", overflow: "hidden" }}
+        >
           {/* Mobile Header */}
           {!isDesktop && (
             <BlurView
@@ -213,7 +240,7 @@ export default function ResponsiveNavShell({
               className="z-40 h-16 flex-row items-center justify-between border-b border-white/5 bg-black/40 px-4"
             >
               <Pressable
-                onPress={() => router.push("./(tabs)")}
+                onPress={() => router.push("/(tabs)/index" as any)}
                 className="cursor-pointer flex-row items-center gap-3"
               >
                 <View className="h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/50 bg-cyan-500/20">
@@ -253,7 +280,12 @@ export default function ResponsiveNavShell({
           )}
 
           {/* Content Slot */}
-          <View className="z-10 flex-1">{children}</View>
+          <View
+            className="z-10 flex-1"
+            style={{ minHeight: 0, height: "100%" }}
+          >
+            {children}
+          </View>
         </View>
 
         {/* Mobile Bottom Tab Bar */}
@@ -264,7 +296,7 @@ export default function ResponsiveNavShell({
             className="z-40 h-20 flex-row items-center justify-around border-t border-white/5 bg-black/60 px-2 pb-4 pt-2"
           >
             {NAV_ITEMS.map((item) => {
-              const active = currentRoute === item.id;
+              const active = isItemActive(item);
               const Icon = item.icon;
               return (
                 <Pressable

@@ -16,16 +16,17 @@ import { corsHeaders } from "../_shared/cors.ts";
 const supabase = getSupabaseAdmin();
 
 const STANDARD_MODELS = [
-  "gemini-3.5-flash-lite",
-  "gemini-3.5-flash",
-  "gemini-3.6-flash",
-  "gemini-3.7-flash",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-2.0-flash-lite",
 ];
 
 const EXECUTIVE_MODELS = [
-  "gemini-3.7-flash",
-  "gemini-3.1-pro-preview",
-  "gemini-3.6-flash",
+  "gemini-2.5-pro",
+  "gemini-2.5-flash",
+  "gemini-1.5-pro",
+  "gemini-2.0-flash",
 ];
 
 Deno.serve(async (req) => {
@@ -79,30 +80,56 @@ Deno.serve(async (req) => {
       throw new Error("quota_exhausted: No Gemini API keys found");
     }
 
-    // 3. Construct Strict Prompt
+    // Determine tone guidelines based on strategy
+    let toneGuidance = "Professional, concise, direct, and outcome-oriented.";
+    if (strategy === "formal_corporate" || strategy === "formal") {
+      toneGuidance =
+        "Highly formal, polished corporate language, traditional executive courtesy, precise and structured.";
+    } else if (strategy === "technical_deep_dive" || strategy === "technical") {
+      toneGuidance =
+        "Deeply technical, architecture-conscious, systems-minded, focusing on exact implementation mechanics, resilience, and engineering rigor.";
+    } else if (strategy === "executive_brief" || strategy === "executive") {
+      toneGuidance =
+        "High-level strategic impact, organizational velocity, leadership perspective, and high-ROI outcomes.";
+    } else if (strategy === "storytelling") {
+      toneGuidance =
+        "Compelling narrative flow linking past engineering challenges to this company's mission.";
+    }
+
+    // 3. Construct Strict Prompt with Zero-Hallucination & Concrete Project Selection
     const prompt = `
-You are an expert career coach writing a cover letter for ${job.company}.
-The role is "${job.title}" located in ${job.location || "Remote"}.
-Job description:
+You are an elite executive career strategist and technical recruiter.
+Write a top-tier, highly customized cover letter for:
+Company: ${job.company}
+Role: "${job.title}" (${job.location || "Remote"})
+Job Description:
 ${job.description || "No description provided."}
 
-Candidate's full name: ${profile.first_name} ${profile.last_name}
-Career summary: ${context.career_summary || "N/A"}
-Key skills: ${context.extracted_skills?.join(", ") || "N/A"}
-Key achievements: ${context.key_achievements?.join("; ") || "N/A"}
+CANDIDATE GROUND TRUTH (STRICT SOURCE OF FACT — NEVER FABRICATE OUTSIDE THIS):
+Candidate Name: ${profile.first_name || ""} ${profile.last_name || ""}
+Professional Title: ${profile.professional_title || "Full-Stack / Systems Engineer"}
+Bio: ${profile.bio || "Systems-minded Full-Stack Engineer combining deep Linux administration with robust Java and TypeScript ecosystems."}
+Career Summary: ${context.career_summary || "Full-Stack / Systems Engineer"}
+Verified Skills: ${context.extracted_skills?.join(", ") || "Java, Spring Boot, React Native, TypeScript, PostgreSQL, Deno, Linux, Supabase, Git, Docker"}
+Key Achievements: ${context.key_achievements?.join("; ") || "Architected production-grade microservices and reactive cross-platform applications."}
+Experience & Real Projects:
+${formattedExperience}
 Certifications: ${context.extracted_certifications?.map((c: { name?: string }) => c.name).join(", ") || "N/A"}
 
-Write a professional, concise 4-5 paragraph cover letter with these exact rules:
-- Opening: Hook referencing the specific role and company.
-- Paragraph 2: Match the candidate's top 3 skills/achievements to the job requirements, with quantified impact.
-- Paragraph 3: Demonstrate genuine knowledge of the company and why this specific role.
-- Paragraph 4: Mention certifications or technical depth relevant to this role.
-- Closing: Confident call to action, not generic "I look forward to hearing from you."
-- No filler phrases like "I am writing to express my interest", "I believe I would be a great fit", or "passionate about".
-- Total length: 280-380 words.
-- Tone: professional, direct, confident.
+CRITICAL ANTI-HALLUCINATION & APPLICATION INTEGRITY RULES:
+1. STRICT FACTUAL ACCURACY (ZERO HALLUCINATION): You must ONLY reference technologies, tools, frameworks, and projects explicitly present in the candidate's verified background above. NEVER invent unverified cloud platforms (e.g. NEVER mention AWS or GCP unless explicitly listed in verified skills), fake employers, or invented metrics.
+2. SELECT THE BEST REAL PROJECT EXAMPLE: From the candidate's real experience and projects, identify the single most relevant concrete proof point that matches this job. Cite actual architectural decisions or technical implementations from that project (e.g., Spring Boot microservices, Deno Edge nodes, React Native cross-platform state, PostgreSQL RLS) to prove capability.
+3. ATS KEYWORD TARGETING: Carefully analyze the job requirements and mirror the matching technical keywords from the candidate's genuine skill set so ATS automated parsers score this application in the top 1%.
+4. BYPASS AI DETECTION / WRITE WITH AUTHENTIC HUMAN INTELLECT:
+   - Do NOT use typical AI clichés: "I am writing to express my enthusiasm", "thrilled to apply", "testament to", "delve into", "pivotal role", "beacon of", "in today's fast-paced world", "dynamic landscape".
+   - Write with authentic human authority, varying sentence structure and cadence.
+   - Root every claim in the candidate's real engineering, architecture, and systems experience.
+5. TONE & FORMALITY STRATEGY:
+   - Style: ${toneGuidance}
+   - Length: 250 - 350 words across 3-4 structured paragraphs.
+   - Closing: Direct, confident call to action to discuss architectural alignment and engineering execution.
 
-Return ONLY the cover letter text, no explanations.`;
+Return ONLY the raw cover letter text with no conversational intro, markdown wrappers, or commentary.`;
 
     // 4. Call Gemini with fallback chain based on strategy tone
     const isExecutiveTone =

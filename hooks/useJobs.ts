@@ -64,11 +64,31 @@ export function useJobs() {
     });
 
     if (error) {
-      const msg = error.message || "Scrape failed";
-      if (msg.includes("rate_limited")) {
-        setRateLimit({ limited: true, nextAvailableAt: msg });
+      let detailedMsg = error.message || "Scrape failed";
+      // FunctionsHttpError contains the response context from the Edge Function
+      if ("context" in error && error.context) {
+        try {
+          const body = await (error as any).context.json();
+          if (body?.error === "rate_limited") {
+            setRateLimit({
+              limited: true,
+              nextAvailableAt: body.nextAvailableAt || null,
+            });
+            detailedMsg =
+              "Scrape rate limit reached. Please wait for cooldown.";
+          } else if (body?.message) {
+            detailedMsg = body.message;
+          }
+        } catch {
+          // fallback to error.message
+        }
       }
-      throw error;
+
+      if (detailedMsg.includes("rate_limited")) {
+        setRateLimit({ limited: true, nextAvailableAt: detailedMsg });
+      }
+
+      throw new Error(detailedMsg);
     }
 
     await queryClient.invalidateQueries({ queryKey: ["jobs", user.id] });
