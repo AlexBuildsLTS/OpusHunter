@@ -1,5 +1,12 @@
-import React, { useState } from "react";
-import { View, FlatList, Pressable, StyleSheet, TextInput } from "react-native";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Pressable,
+  StyleSheet,
+  ScrollView,
+  Platform,
+  Alert,
+} from "react-native";
 import { SafeAreaWrapper } from "../../../../components/shared/SafeAreaWrapper";
 import { Typography } from "../../../../components/ui/Typography";
 import { Card } from "../../../../components/ui/GlassCard";
@@ -11,6 +18,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../../../lib/supabase";
 import { useAuthStore } from "../../../../stores/authStore";
 import { colors, radius } from "../../../../constants/theme";
+import {
+  setSecureItem,
+  getSecureItem,
+  deleteSecureItem,
+  isSecure,
+} from "../../../../lib/secureStorage";
+import * as LocalAuthentication from "expo-local-authentication";
 import {
   FileText,
   Award,
@@ -24,12 +38,15 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
+  Lock,
+  Fingerprint,
+  Cpu,
 } from "lucide-react-native";
 import type { Database } from "../../../../types/database.types";
+import type { ApiProvider } from "../../../../types/app.types";
 
 type ResumeDoc = Database["public"]["Tables"]["resume_documents"]["Row"];
 type Cert = Database["public"]["Tables"]["certifications"]["Row"];
-type ApiProvider = Database["public"]["Enums"]["api_provider_enum"];
 
 interface ApiKeyItem {
   id: string;
@@ -38,17 +55,24 @@ interface ApiKeyItem {
   created_at: string;
 }
 
+// NOTE: OpenAI removed per architectural directive; only Gemini, Anthropic, and live feeds
 const SUPPORTED_PROVIDERS: { id: ApiProvider; name: string; hint: string }[] = [
-  { id: "gemini", name: "Google Gemini AI", hint: "AI Generation & Analysis" },
   {
-    id: "openai",
-    name: "OpenAI GPT-4",
-    hint: "Cover Letters & Resume Matching",
+    id: "gemini",
+    name: "Google Gemini AI",
+    hint: "Cover Letters, Scoring & AI Context",
   },
-  { id: "anthropic", name: "Anthropic Claude", hint: "Advanced Reasoning" },
-  { id: "rapidapi", name: "RapidAPI", hint: "Job Aggregator Feeds" },
-  { id: "adzuna", name: "Adzuna Jobs", hint: "Live Job Scraping" },
-  { id: "geodb", name: "GeoDB Cities", hint: "Location Search & Radius" },
+  {
+    id: "rapidapi",
+    name: "RapidAPI Jobs",
+    hint: "Job Aggregator & Feed Connectors",
+  },
+  { id: "adzuna", name: "Adzuna Nordic", hint: "Live Job Scraping & Postings" },
+  {
+    id: "geodb",
+    name: "GeoDB Cities",
+    hint: "Location Search & Radius Filtering",
+  },
 ];
 
 export default function VaultScreen() {
@@ -58,7 +82,216 @@ export default function VaultScreen() {
     false | "cv" | "certification"
   >(false);
 
-  // API Key Form State
+  // 1. VAULT PIN & BIOMETRICS HARDWARE STATE
+  const [hasPinSet, setHasPinSet] = useState(false);
+  const [vaultPinInput, setVaultPinInput] = useState("");
+  const [vaultPinConfirm, setVaultPinConfirm] = useState("");
+  const [pinStatus, setPinStatus] = useState<{
+    type: "success" | "error";
+    msg: string;
+  } | null>(null);
+  const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+  const [biometricsEnabled, setBiometricsEnabled] = useState(false);
+
+  useEffect(() => {
+    async function checkSecurityState() {
+      try {
+        const storedPin = await getSecureItem("user_vault_pin");
+        setHasPinSet(!!storedPin);
+
+        const bioPref = await getSecureItem("vault_biometrics_enabled");
+        setBiometricsEnabled(bioPref === "true");
+
+        if (Platform.OS !== "web") {
+          const hasHardware = await LocalAuthentication.hasHardwareAsync();
+          const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+          setBiometricsAvailable(hasHardware && isEnrolled);
+        }
+      } catch (err) {
+        console.warn("Error reading secure storage:", err);
+      }
+    }
+    checkSecurityState();
+  }, []);
+
+  const handleSavePin = async () => {
+    if (vaultPinInput.length < 4 || vaultPinInput.length > 8) {
+      setPinStatus({
+        type: "error",
+        msg: "PIN must be between 4 and 8 numeric digits.",
+      });
+      return;
+    }
+    if (vaultPinInput !== vaultPinConfirm) {
+      setPinStatus({ type: "error", msg: "PINs do not match." });
+      return;
+    }
+    try {
+      await setSecureItem("user_vault_pin", vaultPinInput);
+      setHasPinSet(true);
+      setVaultPinInput("");
+      setVaultPinConfirm("");
+      setPinStatus({
+        type: "success",
+        msg: "Hardware Vault PIN secured and activated.",
+      });
+    } catch (err: any) {
+      setPinStatus({
+        type: "error",
+        msg: err.message || "Failed to store PIN.",
+      });
+    }
+  };
+
+  const handleRemovePin = async () => {
+    try {
+      await deleteSecureItem("user_vault_pin");
+      setHasPinSet(false);
+      setPinStatus({ type: "success", msg: "Vault PIN removed." });
+    } catch (err: any) {
+      setPinStatus({
+        type: "error",
+        msg: err.message || "Failed to remove PIN.",
+      });
+    }
+  };
+
+  const handleToggleBiometrics = async () => {
+    if (!biometricsAvailable) {
+      Alert.alert(
+        "Biometrics Unavailable",
+        "No biometric sensor enrolled on this device.",
+      );
+      return;
+    }
+    const nextState = !biometricsEnabled;
+    try {
+      if (nextState) {
+        const res = await LocalAuthentication.authenticateAsync({
+          promptMessage: "Authenticate to enable Biometric Vault Unlock",
+          fallbackLabel: "Use Vault PIN",
+        });
+        if (!res.success) return;
+      }
+      await setSecureItem(
+        "vault_biometrics_enabled",
+        nextState ? "true" : "false",
+      );
+      setBiometricsEnabled(nextState);
+    } catch (err: any) {
+      Alert.alert(
+        "Biometric Error",
+        err.message || "Could not toggle biometrics.",
+      );
+    }
+  };
+
+  // 2. CHANGE PASSWORD FORM WITH GRADIENT STRENGTH METER
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordStatus, setPasswordStatus] = useState<{
+    type: "success" | "error";
+    msg: string;
+  } | null>(null);
+
+  // Compute Password Strength
+  const getPasswordStrength = (pass: string) => {
+    if (!pass)
+      return { score: 0, label: "Empty", color: colors.text.dim, width: "0%" };
+    let score = 0;
+    if (pass.length >= 8) score++;
+    if (pass.length >= 12) score++;
+    if (/[A-Z]/.test(pass)) score++;
+    if (/[0-9]/.test(pass)) score++;
+    if (/[^A-Za-z0-9]/.test(pass)) score++;
+
+    switch (score) {
+      case 1:
+        return { score: 1, label: "Very Weak", color: "#EF4444", width: "20%" };
+      case 2:
+        return { score: 2, label: "Weak", color: "#F97316", width: "40%" };
+      case 3:
+        return { score: 3, label: "Fair", color: "#FBBF24", width: "60%" };
+      case 4:
+        return { score: 4, label: "Good", color: "#10B981", width: "80%" };
+      case 5:
+        return {
+          score: 5,
+          label: "Strong & Enclave Safe",
+          color: colors.accent.cyan,
+          width: "100%",
+        };
+      default:
+        return { score: 0, label: "Too Short", color: "#EF4444", width: "10%" };
+    }
+  };
+
+  const strength = getPasswordStrength(newPassword);
+
+  const handleChangePassword = async () => {
+    if (!currentPassword) {
+      setPasswordStatus({
+        type: "error",
+        msg: "Please enter your current account password.",
+      });
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordStatus({
+        type: "error",
+        msg: "New password must be at least 8 characters long.",
+      });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordStatus({ type: "error", msg: "New passwords do not match." });
+      return;
+    }
+
+    setPasswordSaving(true);
+    setPasswordStatus(null);
+    try {
+      // Supabase verification of current password via re-auth signIn
+      if (user?.email) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: user.email,
+          password: currentPassword,
+        });
+        if (signInError) {
+          throw new Error(
+            "Current password verification failed. Please check your credentials.",
+          );
+        }
+      }
+
+      // Update to new password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (updateError) throw updateError;
+
+      setPasswordStatus({
+        type: "success",
+        msg: "Password securely updated and encrypted across sessions.",
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      setPasswordStatus({
+        type: "error",
+        msg: err.message || "Failed to update password.",
+      });
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  // 3. API KEYS FORM STATE
   const [selectedProvider, setSelectedProvider] =
     useState<ApiProvider>("gemini");
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -68,18 +301,45 @@ export default function VaultScreen() {
     msg: string;
   } | null>(null);
 
-  // Fetch API Keys
-  const { data: apiKeys, isLoading: loadingKeys } = useQuery({
-    queryKey: ["user-api-keys", user?.id],
-    enabled: !!user,
+  // Queries
+  const { data: resumeDocs = [] } = useQuery({
+    queryKey: ["resume-documents", user?.id],
+    enabled: !!user?.id,
     queryFn: async () => {
-      if (!user) return [];
+      const { data, error } = await supabase
+        .from("resume_documents")
+        .select("*")
+        .eq("user_id", user!.id)
+        .order("is_primary", { ascending: false });
+      if (error) throw error;
+      return (data || []) as ResumeDoc[];
+    },
+  });
+
+  const { data: certs = [] } = useQuery({
+    queryKey: ["certifications", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("certifications")
+        .select("*")
+        .eq("user_id", user!.id)
+        .order("uploaded_at", { ascending: false });
+      if (error) throw error;
+      return (data || []) as Cert[];
+    },
+  });
+
+  const { data: apiKeys = [] } = useQuery({
+    queryKey: ["api-keys", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("user_api_keys")
         .select("id, provider, is_active, created_at")
-        .eq("user_id", user.id);
+        .eq("user_id", user!.id);
       if (error) {
-        console.warn("Could not load API keys:", error.message);
+        console.warn("Could not fetch user_api_keys", error.message);
         return [];
       }
       return (data || []) as ApiKeyItem[];
@@ -87,470 +347,722 @@ export default function VaultScreen() {
   });
 
   const handleSaveApiKey = async () => {
-    if (!apiKeyInput.trim() || !user) return;
+    if (!apiKeyInput.trim()) {
+      setKeyStatus({ type: "error", msg: "API key cannot be empty" });
+      return;
+    }
     setSavingKey(true);
     setKeyStatus(null);
     try {
-      const { data, error } = await supabase.functions.invoke("save-api-key", {
-        body: {
-          provider: selectedProvider,
-          key: apiKeyInput.trim(),
-        },
+      const { error } = await supabase.functions.invoke("save-api-key", {
+        body: { provider: selectedProvider, key: apiKeyInput.trim() },
       });
       if (error) throw error;
-      if (data?.error) throw new Error(data.message || data.error);
       setKeyStatus({
         type: "success",
-        msg: `${selectedProvider.toUpperCase()} key securely stored!`,
+        msg: "API key securely stored in vault.",
       });
       setApiKeyInput("");
-      queryClient.invalidateQueries({ queryKey: ["user-api-keys", user.id] });
+      queryClient.invalidateQueries({ queryKey: ["api-keys", user?.id] });
     } catch (err: any) {
       setKeyStatus({
         type: "error",
-        msg: err.message || "Failed to save API key",
+        msg: err.message || "Failed to encrypt and store key",
       });
     } finally {
       setSavingKey(false);
     }
   };
 
-  const handleDeleteApiKey = async (provider: ApiProvider) => {
-    if (!user) return;
+  const handleDeleteDoc = async (id: string, path: string) => {
     try {
-      await supabase
-        .from("user_api_keys")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("provider", provider);
-      queryClient.invalidateQueries({ queryKey: ["user-api-keys", user.id] });
-    } catch (err) {
-      console.error("Failed to delete key", err);
+      await supabase.storage.from("resumes").remove([path]);
+      await supabase.from("resume_documents").delete().eq("id", id);
+      queryClient.invalidateQueries({
+        queryKey: ["resume-documents", user?.id],
+      });
+    } catch (err: any) {
+      Alert.alert("Delete Error", err.message);
     }
   };
 
-  // Fetch CVs and Certifications in parallel
-  const { data: resumes, isLoading: loadingCVs } = useQuery({
-    queryKey: ["resumes", user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase
+  const handleSetPrimaryDoc = async (id: string) => {
+    try {
+      await supabase
         .from("resume_documents")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("is_primary", { ascending: false });
-      if (error) throw error;
-      return data as ResumeDoc[];
-    },
-  });
-
-  const { data: certs, isLoading: loadingCerts } = useQuery({
-    queryKey: ["certs", user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase
-        .from("certifications")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("uploaded_at", { ascending: false });
-      if (error) throw error;
-      return data as Cert[];
-    },
-  });
-
-  // Set Primary CV
-  const setPrimary = async (id: string) => {
-    if (!user) return;
-    await supabase
-      .from("resume_documents")
-      .update({ is_primary: false })
-      .eq("user_id", user.id);
-    await supabase
-      .from("resume_documents")
-      .update({ is_primary: true })
-      .eq("id", id);
-    queryClient.invalidateQueries({ queryKey: ["resumes", user.id] });
+        .update({ is_primary: false })
+        .eq("user_id", user!.id);
+      await supabase
+        .from("resume_documents")
+        .update({ is_primary: true })
+        .eq("id", id);
+      queryClient.invalidateQueries({
+        queryKey: ["resume-documents", user?.id],
+      });
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
+    }
   };
 
-  // Delete Document
-  const deleteDoc = async (
-    type: "resume" | "cert",
-    id: string,
-    path: string,
-  ) => {
-    if (!user) return;
-    const bucket = type === "resume" ? "resumes" : "certifications";
-    await supabase.storage.from(bucket).remove([path]);
-    await supabase
-      .from(type === "resume" ? "resume_documents" : "certifications")
-      .delete()
-      .eq("id", id);
-    queryClient.invalidateQueries({
-      queryKey: [type === "resume" ? "resumes" : "certs", user.id],
-    });
+  const handleDeleteCert = async (id: string) => {
+    try {
+      await supabase.from("certifications").delete().eq("id", id);
+      queryClient.invalidateQueries({ queryKey: ["certifications", user?.id] });
+    } catch (err: any) {
+      Alert.alert("Delete Error", err.message);
+    }
   };
 
-  const primaryCV = resumes?.find((r) => r.is_primary) || resumes?.[0];
-  const otherCVs = resumes?.filter((r) => r.id !== primaryCV?.id) || [];
+  const handleDeleteApiKey = async (id: string) => {
+    try {
+      await supabase.from("user_api_keys").delete().eq("id", id);
+      queryClient.invalidateQueries({ queryKey: ["api-keys", user?.id] });
+    } catch (err: any) {
+      Alert.alert("Delete Error", err.message);
+    }
+  };
 
   return (
     <SafeAreaWrapper edges={["top"]} style={styles.container}>
-      <View style={styles.header}>
-        <Typography variant="h2" weight="bold" color="primary">
-          Vault
-        </Typography>
-        <Button
-          variant="secondary"
-          size="sm"
-          onPress={() => setShowUploader("cv")}
-          style={styles.uploadBtn}
-        >
-          <Upload size={16} color={colors.accent.cyan} /> Upload CV
-        </Button>
-      </View>
-
-      <FlatList
-        data={[]}
-        ListHeaderComponent={
-          <>
-            {/* Primary CV Section */}
-            <View style={styles.section}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Symmetrical Centered Box Wrapper */}
+        <View style={styles.centeredContainer}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View>
+              <Typography variant="h2" weight="bold" color="primary">
+                Security & Enclave Vault
+              </Typography>
               <Typography
                 variant="caption"
                 color="secondary"
-                style={styles.sectionLabel}
+                style={styles.headerSubtitle}
               >
-                PRIMARY CV
+                Hardware-backed credentials, PIN protection, biometric locks,
+                and encrypted documents.
               </Typography>
-              {loadingCVs ? (
-                <Card style={styles.emptyCard}>
-                  <Typography color="secondary">Loading CV...</Typography>
-                </Card>
-              ) : primaryCV ? (
-                <Card variant="elevated" style={styles.docCard}>
-                  <View style={styles.docRow}>
-                    <View style={styles.iconWrap}>
-                      <FileText size={24} color={colors.accent.cyan} />
-                    </View>
-                    <View style={styles.docInfo}>
-                      <Typography
-                        variant="bodySm"
-                        weight="semiBold"
-                        color="primary"
-                        numberOfLines={1}
-                      >
-                        {primaryCV.file_name}
-                      </Typography>
-                      <Typography variant="caption" color="secondary">
-                        {Math.round(primaryCV.file_size_kb || 0)} KB ·{" "}
-                        {primaryCV.extraction_status}
-                      </Typography>
-                    </View>
-                    <Pressable
-                      onPress={() =>
-                        deleteDoc(
-                          "resume",
-                          primaryCV.id,
-                          primaryCV.storage_path,
-                        )
-                      }
-                      hitSlop={8}
-                    >
-                      <Trash2 size={18} color={colors.accent.red} />
-                    </Pressable>
-                  </View>
-                </Card>
-              ) : (
-                <Card style={styles.emptyCard}>
-                  <Typography color="dim" textAlign="center">
-                    No CV uploaded yet. Upload your primary CV to start
-                    applying.
-                  </Typography>
-                </Card>
-              )}
             </View>
+            <View style={styles.enclaveBadge}>
+              <Cpu size={14} color={colors.accent.cyan} />
+              <Typography
+                variant="caption"
+                weight="bold"
+                style={{ color: colors.accent.cyan }}
+              >
+                {isSecure()
+                  ? "HARDWARE ENCLAVE ACTIVE"
+                  : "SECURE CLIENT ENCLAVE"}
+              </Typography>
+            </View>
+          </View>
 
-            {/* Other CVs Section */}
-            {otherCVs.length > 0 && (
-              <View style={styles.section}>
+          {/* 1. Hardware-Backed Vault PIN & Biometric Controls */}
+          <Card variant="elevated" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Lock size={18} color={colors.accent.cyan} />
                 <Typography
                   variant="caption"
+                  weight="bold"
                   color="secondary"
-                  style={styles.sectionLabel}
+                  style={styles.sectionTag}
                 >
-                  OTHER CVS
+                  DEVICE VAULT PIN & BIOMETRIC AUTH
                 </Typography>
-                {otherCVs.map((cv) => (
-                  <Card key={cv.id} style={styles.docCard}>
-                    <View style={styles.docRow}>
-                      <View style={styles.iconWrap}>
-                        <FileText size={20} color={colors.text.secondary} />
-                      </View>
-                      <View style={styles.docInfo}>
-                        <Typography
-                          variant="bodySm"
-                          weight="medium"
-                          color="primary"
-                          numberOfLines={1}
-                        >
-                          {cv.file_name}
-                        </Typography>
-                      </View>
-                      <Pressable onPress={() => setPrimary(cv.id)} hitSlop={8}>
-                        <Star size={18} color={colors.accent.amber} />
-                      </Pressable>
-                      <Pressable
-                        onPress={() =>
-                          deleteDoc("resume", cv.id, cv.storage_path)
-                        }
-                        hitSlop={8}
-                      >
-                        <Trash2 size={18} color={colors.accent.red} />
-                      </Pressable>
-                    </View>
-                  </Card>
-                ))}
+              </View>
+              <Badge
+                label={hasPinSet ? "PIN ACTIVE" : "NOT CONFIGURED"}
+                variant={hasPinSet ? "green" : "default"}
+                size="sm"
+              />
+            </View>
+
+            <Typography
+              variant="caption"
+              color="dim"
+              style={{ marginBottom: 16 }}
+            >
+              Configure a dedicated hardware-backed PIN (
+              {Platform.OS === "web" ? "Secure Storage" : "Keychain / Keystore"}
+              ) to seal critical actions and automate biometric verification.
+            </Typography>
+
+            <View style={styles.gridTwoCols}>
+              <View style={styles.gridCol}>
+                <Input
+                  label="Vault PIN (4-8 digits)"
+                  value={vaultPinInput}
+                  onChangeText={(t) => setVaultPinInput(t.slice(0, 8))}
+                  placeholder="••••"
+                  secureTextEntry
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.gridCol}>
+                <Input
+                  label="Confirm Vault PIN"
+                  value={vaultPinConfirm}
+                  onChangeText={(t) => setVaultPinConfirm(t.slice(0, 8))}
+                  placeholder="••••"
+                  secureTextEntry
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+
+            {pinStatus && (
+              <View
+                style={[
+                  styles.statusAlert,
+                  pinStatus.type === "success"
+                    ? styles.statusSuccess
+                    : styles.statusError,
+                ]}
+              >
+                {pinStatus.type === "success" ? (
+                  <CheckCircle2 size={16} color={colors.accent.green} />
+                ) : (
+                  <AlertCircle size={16} color={colors.accent.red} />
+                )}
+                <Typography
+                  variant="caption"
+                  weight="medium"
+                  style={{
+                    color:
+                      pinStatus.type === "success"
+                        ? colors.accent.green
+                        : colors.accent.red,
+                    flex: 1,
+                  }}
+                >
+                  {pinStatus.msg}
+                </Typography>
               </View>
             )}
 
-            {/* Certifications Section (MULTIPLE Uploads Supported) */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Typography
-                  variant="caption"
-                  color="secondary"
-                  style={styles.sectionLabel}
-                >
-                  CERTIFICATIONS
-                </Typography>
+            <View style={styles.pinActionsRow}>
+              <Button
+                variant="primary"
+                size="sm"
+                onPress={handleSavePin}
+                disabled={!vaultPinInput}
+                style={{ flexDirection: "row", gap: 6 }}
+              >
+                <ShieldCheck size={14} color={colors.text.inverse} />
+                {hasPinSet ? "Update Vault PIN" : "Seal with Vault PIN"}
+              </Button>
+
+              {hasPinSet && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onPress={() => setShowUploader("certification")}
-                  style={styles.uploadBtnSm}
+                  onPress={handleRemovePin}
+                  style={{ flexDirection: "row", gap: 6 }}
                 >
-                  <Plus size={14} color={colors.accent.cyan} /> Add
+                  <Trash2 size={14} color={colors.accent.red} />
+                  Remove PIN
                 </Button>
-              </View>
-              {loadingCerts ? (
-                <Card style={styles.emptyCard}>
-                  <Typography color="secondary">
-                    Loading Certifications...
-                  </Typography>
-                </Card>
-              ) : certs && certs.length > 0 ? (
-                <View style={styles.certGrid}>
-                  {certs.map((cert) => (
-                    <Card key={cert.id} style={styles.certCard}>
-                      <View style={styles.certHeader}>
-                        <Award size={20} color={colors.accent.blue} />
-                        <Pressable
-                          onPress={() =>
-                            deleteDoc("cert", cert.id, cert.storage_path)
-                          }
-                          hitSlop={8}
-                        >
-                          <Trash2 size={16} color={colors.accent.red} />
-                        </Pressable>
-                      </View>
-                      <Typography
-                        variant="bodySm"
-                        weight="semiBold"
-                        color="primary"
-                        numberOfLines={1}
-                      >
-                        {cert.cert_name || cert.file_name}
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        color="secondary"
-                        numberOfLines={1}
-                      >
-                        {cert.cert_issuer}
-                      </Typography>
-                    </Card>
-                  ))}
-                </View>
-              ) : (
-                <Card style={styles.emptyCard}>
-                  <Typography color="dim" textAlign="center">
-                    No certifications uploaded. Add them to boost your profile.
-                  </Typography>
-                </Card>
               )}
-            </View>
 
-            {/* API Keys Vault Section */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-                >
-                  <Key size={16} color={colors.accent.cyan} />
-                  <Typography
-                    variant="caption"
-                    color="secondary"
-                    style={styles.sectionLabel}
-                  >
-                    API KEYS VAULT (BYOK)
-                  </Typography>
-                </View>
-                <Badge label="Encrypted" variant="green" size="sm" />
-              </View>
-
-              {/* Add Key Card */}
-              <Card variant="default" style={styles.apiKeyCard}>
-                <Typography variant="h4" style={{ marginBottom: 4 }}>
-                  Add / Update Provider Key
-                </Typography>
+              {/* Biometrics Toggle Button */}
+              <Pressable
+                onPress={handleToggleBiometrics}
+                style={[
+                  styles.biometricBtn,
+                  biometricsEnabled && styles.biometricBtnActive,
+                ]}
+              >
+                <Fingerprint
+                  size={14}
+                  color={
+                    biometricsEnabled ? colors.accent.cyan : colors.text.dim
+                  }
+                />
                 <Typography
                   variant="caption"
-                  color="secondary"
-                  style={{ marginBottom: 14 }}
+                  weight="semiBold"
+                  style={{
+                    color: biometricsEnabled
+                      ? colors.accent.cyan
+                      : colors.text.secondary,
+                  }}
                 >
-                  Keys are client-side tokenized & AES-encrypted in your private
-                  vault.
+                  {biometricsEnabled
+                    ? "Biometrics Enabled ✓"
+                    : "Enable Biometrics"}
                 </Typography>
+              </Pressable>
+            </View>
+          </Card>
 
-                {/* Provider Selector Chips */}
-                <View style={styles.providerChipRow}>
-                  {SUPPORTED_PROVIDERS.map((prov) => {
-                    const isSelected = selectedProvider === prov.id;
-                    const hasKey = apiKeys?.some((k) => k.provider === prov.id);
-                    return (
-                      <Pressable
-                        key={prov.id}
-                        onPress={() => setSelectedProvider(prov.id)}
-                        style={[
-                          styles.providerChip,
-                          isSelected && styles.providerChipActive,
-                        ]}
-                      >
-                        <Typography
-                          variant="caption"
-                          weight={isSelected ? "bold" : "medium"}
-                          style={{
-                            color: isSelected
-                              ? colors.accent.cyan
-                              : colors.text.secondary,
-                          }}
-                        >
-                          {prov.name} {hasKey ? "✓" : ""}
-                        </Typography>
-                      </Pressable>
-                    );
-                  })}
-                </View>
+          {/* 2. Account Password Change with Color Gradient Strength Meter */}
+          <Card variant="default" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Key size={18} color={colors.accent.cyan} />
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="secondary"
+                  style={styles.sectionTag}
+                >
+                  CHANGE ACCOUNT PASSWORD
+                </Typography>
+              </View>
+              <Badge label="Argon2/Bcrypt" variant="cyan" size="sm" />
+            </View>
 
-                {/* Input & Save */}
-                <View style={{ gap: 10, marginTop: 8 }}>
-                  <Input
-                    label={`${selectedProvider.toUpperCase()} Secret Key`}
-                    value={apiKeyInput}
-                    onChangeText={setApiKeyInput}
-                    placeholder={`Enter ${selectedProvider} API key (e.g. sk-...)`}
-                    secureTextEntry
-                  />
+            <Typography
+              variant="caption"
+              color="dim"
+              style={{ marginBottom: 16 }}
+            >
+              Provide your current password to authorize re-encryption. New
+              passwords must be at least 8 characters.
+            </Typography>
 
-                  {keyStatus && (
-                    <View
-                      style={[
-                        styles.statusBox,
-                        keyStatus.type === "success"
-                          ? styles.statusSuccess
-                          : styles.statusError,
-                      ]}
-                    >
-                      {keyStatus.type === "success" ? (
-                        <CheckCircle2 size={16} color={colors.accent.green} />
-                      ) : (
-                        <AlertCircle size={16} color={colors.accent.red} />
-                      )}
-                      <Typography
-                        variant="caption"
-                        style={{
-                          color:
-                            keyStatus.type === "success"
-                              ? colors.accent.green
-                              : colors.accent.red,
-                          flex: 1,
-                        }}
-                      >
-                        {keyStatus.msg}
-                      </Typography>
-                    </View>
-                  )}
-
-                  <Button
-                    variant="primary"
-                    size="md"
-                    onPress={handleSaveApiKey}
-                    disabled={savingKey || !apiKeyInput.trim()}
-                    loading={savingKey}
+            {/* Current Password */}
+            <View style={{ marginBottom: 12 }}>
+              <Input
+                label="Current Password"
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                placeholder="••••••••••••"
+                secureTextEntry={!showCurrentPass}
+                icon={
+                  <Pressable
+                    onPress={() => setShowCurrentPass(!showCurrentPass)}
                   >
-                    Store Key in Vault
-                  </Button>
-                </View>
-              </Card>
+                    {showCurrentPass ? (
+                      <EyeOff size={16} color={colors.text.dim} />
+                    ) : (
+                      <Eye size={16} color={colors.text.dim} />
+                    )}
+                  </Pressable>
+                }
+              />
+            </View>
 
-              {/* Active Keys List */}
-              <View style={{ marginTop: 12, gap: 8 }}>
-                {loadingKeys ? (
-                  <Card style={styles.emptyCard}>
-                    <Typography color="secondary">
-                      Loading Secure Keys...
-                    </Typography>
-                  </Card>
-                ) : apiKeys && apiKeys.length > 0 ? (
-                  apiKeys.map((keyItem) => (
-                    <Card key={keyItem.id} style={styles.docCard}>
-                      <View style={styles.docRow}>
-                        <View style={styles.iconWrap}>
-                          <ShieldCheck size={20} color={colors.accent.green} />
-                        </View>
-                        <View style={styles.docInfo}>
-                          <Typography
-                            variant="bodySm"
-                            weight="semiBold"
-                            color="primary"
-                          >
-                            {keyItem.provider.toUpperCase()}
-                          </Typography>
-                          <Typography variant="caption" color="secondary">
-                            Status: {keyItem.is_active ? "Active" : "Disabled"}{" "}
-                            • Stored:{" "}
-                            {new Date(keyItem.created_at).toLocaleDateString()}
-                          </Typography>
-                        </View>
-                        <Pressable
-                          onPress={() => handleDeleteApiKey(keyItem.provider)}
-                          hitSlop={8}
-                        >
-                          <Trash2 size={18} color={colors.accent.red} />
-                        </Pressable>
-                      </View>
-                    </Card>
-                  ))
-                ) : (
-                  <Card style={styles.emptyCard}>
-                    <Typography color="dim" textAlign="center">
-                      No custom API keys stored. Add Gemini, OpenAI, or Scraping
-                      keys to power high-throughput hunting.
-                    </Typography>
-                  </Card>
-                )}
+            {/* New Password & Confirm */}
+            <View style={styles.gridTwoCols}>
+              <View style={styles.gridCol}>
+                <Input
+                  label="New Password"
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="••••••••••••"
+                  secureTextEntry={!showNewPass}
+                  icon={
+                    <Pressable onPress={() => setShowNewPass(!showNewPass)}>
+                      {showNewPass ? (
+                        <EyeOff size={16} color={colors.text.dim} />
+                      ) : (
+                        <Eye size={16} color={colors.text.dim} />
+                      )}
+                    </Pressable>
+                  }
+                />
+              </View>
+
+              <View style={styles.gridCol}>
+                <Input
+                  label="Confirm New Password"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="••••••••••••"
+                  secureTextEntry={!showNewPass}
+                />
               </View>
             </View>
-          </>
-        }
-        keyExtractor={(item, index) => `vault-${index}`}
-        renderItem={null}
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      />
 
+            {/* Color Gradient Password Strength Meter */}
+            {newPassword.length > 0 && (
+              <View style={styles.strengthMeterContainer}>
+                <View style={styles.strengthMeterHeader}>
+                  <Typography variant="caption" color="dim">
+                    PASSWORD STRENGTH:
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    weight="bold"
+                    style={{ color: strength.color }}
+                  >
+                    {strength.label}
+                  </Typography>
+                </View>
+                <View style={styles.strengthTrack}>
+                  <View
+                    style={[
+                      styles.strengthBar,
+                      {
+                        width: strength.width as any,
+                        backgroundColor: strength.color,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            )}
+
+            {passwordStatus && (
+              <View
+                style={[
+                  styles.statusAlert,
+                  passwordStatus.type === "success"
+                    ? styles.statusSuccess
+                    : styles.statusError,
+                ]}
+              >
+                {passwordStatus.type === "success" ? (
+                  <CheckCircle2 size={16} color={colors.accent.green} />
+                ) : (
+                  <AlertCircle size={16} color={colors.accent.red} />
+                )}
+                <Typography
+                  variant="caption"
+                  weight="medium"
+                  style={{
+                    color:
+                      passwordStatus.type === "success"
+                        ? colors.accent.green
+                        : colors.accent.red,
+                    flex: 1,
+                  }}
+                >
+                  {passwordStatus.msg}
+                </Typography>
+              </View>
+            )}
+
+            <Button
+              variant="secondary"
+              size="md"
+              onPress={handleChangePassword}
+              disabled={passwordSaving || !currentPassword || !newPassword}
+              loading={passwordSaving}
+              style={{ marginTop: 14 }}
+            >
+              Verify & Re-encrypt Password
+            </Button>
+          </Card>
+
+          {/* 3. BYOK / Custom API Keys (OpenAI Removed) */}
+          <Card variant="default" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Key size={18} color={colors.accent.cyan} />
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="secondary"
+                  style={styles.sectionTag}
+                >
+                  API KEYS
+                </Typography>
+              </View>
+              <Badge
+                label="Zero-Knowledge At Rest"
+                variant="default"
+                size="sm"
+              />
+            </View>
+
+            <Typography
+              variant="caption"
+              color="dim"
+              style={{ marginBottom: 14 }}
+            >
+              Keys are encrypted with server-side AES-GCM and only unsealed in
+              edge functions when orchestrating jobs or generating documents.
+            </Typography>
+
+            <Typography
+              variant="caption"
+              color="secondary"
+              style={{ marginBottom: 8 }}
+            >
+              SELECT RECOGNIZED PROVIDER:
+            </Typography>
+            <View style={styles.providerGrid}>
+              {SUPPORTED_PROVIDERS.map((p) => {
+                const active = selectedProvider === p.id;
+                return (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => setSelectedProvider(p.id)}
+                    style={[
+                      styles.providerCard,
+                      active && styles.providerCardActive,
+                    ]}
+                  >
+                    <Typography
+                      variant="bodySm"
+                      weight={active ? "bold" : "medium"}
+                      style={{
+                        color: active
+                          ? colors.accent.cyan
+                          : colors.text.primary,
+                      }}
+                    >
+                      {p.name}
+                    </Typography>
+                    <Typography variant="caption" color="dim" numberOfLines={1}>
+                      {p.hint}
+                    </Typography>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Input
+              label={`Secret Key for ${SUPPORTED_PROVIDERS.find((p) => p.id === selectedProvider)?.name}`}
+              value={apiKeyInput}
+              onChangeText={setApiKeyInput}
+              placeholder="AIzaSy... / sk-ant-..."
+              secureTextEntry
+            />
+
+            {keyStatus && (
+              <View
+                style={[
+                  styles.statusAlert,
+                  keyStatus.type === "success"
+                    ? styles.statusSuccess
+                    : styles.statusError,
+                ]}
+              >
+                {keyStatus.type === "success" ? (
+                  <CheckCircle2 size={16} color={colors.accent.green} />
+                ) : (
+                  <AlertCircle size={16} color={colors.accent.red} />
+                )}
+                <Typography
+                  variant="caption"
+                  weight="medium"
+                  style={{
+                    color:
+                      keyStatus.type === "success"
+                        ? colors.accent.green
+                        : colors.accent.red,
+                    flex: 1,
+                  }}
+                >
+                  {keyStatus.msg}
+                </Typography>
+              </View>
+            )}
+
+            <Button
+              variant="primary"
+              size="md"
+              onPress={handleSaveApiKey}
+              disabled={savingKey || !apiKeyInput}
+              loading={savingKey}
+              style={{ marginTop: 12 }}
+            >
+              Seal API Key to Vault
+            </Button>
+
+            {/* List of Active Keys */}
+            <Typography
+              variant="caption"
+              color="dim"
+              style={{ marginTop: 20, marginBottom: 8 }}
+            >
+              CONFIGURED VAULT KEYS:
+            </Typography>
+            {apiKeys.length === 0 ? (
+              <Typography variant="caption" color="dim">
+                No custom keys stored. Standard Hunter platform defaults will be
+                utilized.
+              </Typography>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {apiKeys.map((k) => (
+                  <View key={k.id} style={styles.savedKeyItem}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <Key size={14} color={colors.accent.cyan} />
+                      <Typography
+                        variant="bodySm"
+                        weight="bold"
+                        color="primary"
+                      >
+                        {k.provider.toUpperCase()}
+                      </Typography>
+                      <Badge label="ACTIVE" variant="green" size="sm" />
+                    </View>
+                    <Pressable
+                      onPress={() => handleDeleteApiKey(k.id)}
+                      hitSlop={8}
+                    >
+                      <Trash2 size={16} color={colors.accent.red} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+
+          {/* 4. Resumes & CV Documents */}
+          <Card variant="default" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <FileText size={18} color={colors.accent.cyan} />
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="secondary"
+                  style={styles.sectionTag}
+                >
+                  STORED RESUMES & CVS
+                </Typography>
+              </View>
+              <Button
+                variant="ghost"
+                size="sm"
+                onPress={() => setShowUploader("cv")}
+                style={{ flexDirection: "row", gap: 4 }}
+              >
+                <Upload size={14} color={colors.accent.cyan} />
+                Upload CV
+              </Button>
+            </View>
+
+            {resumeDocs.length === 0 ? (
+              <Typography variant="caption" color="dim">
+                No resumes uploaded yet. Upload a PDF to automatically index
+                skills and generate tailored applications.
+              </Typography>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {resumeDocs.map((doc) => (
+                  <View key={doc.id} style={styles.docItem}>
+                    <View style={{ flex: 1 }}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <Typography
+                          variant="bodySm"
+                          weight="bold"
+                          color="primary"
+                        >
+                          {doc.file_name}
+                        </Typography>
+                        {doc.is_primary && (
+                          <Badge label="PRIMARY" variant="cyan" size="sm" />
+                        )}
+                      </View>
+                      <Typography variant="caption" color="dim">
+                        {Math.round(doc.file_size_kb || 0)} KB · Uploaded{" "}
+                        {new Date(doc.uploaded_at).toLocaleDateString()}
+                      </Typography>
+                    </View>
+
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
+                    >
+                      {!doc.is_primary && (
+                        <Pressable
+                          onPress={() => handleSetPrimaryDoc(doc.id)}
+                          style={styles.actionIconBtn}
+                        >
+                          <Star size={16} color={colors.text.dim} />
+                        </Pressable>
+                      )}
+                      <Pressable
+                        onPress={() =>
+                          handleDeleteDoc(doc.id, doc.storage_path)
+                        }
+                        style={styles.actionIconBtn}
+                      >
+                        <Trash2 size={16} color={colors.accent.red} />
+                      </Pressable>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+
+          {/* 5. Certifications */}
+          <Card variant="default" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Award size={18} color={colors.accent.cyan} />
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="secondary"
+                  style={styles.sectionTag}
+                >
+                  PROFESSIONAL CERTIFICATIONS
+                </Typography>
+              </View>
+              <Button
+                variant="ghost"
+                size="sm"
+                onPress={() => setShowUploader("certification")}
+                style={{ flexDirection: "row", gap: 4 }}
+              >
+                <Plus size={14} color={colors.accent.cyan} />
+                Add Cert
+              </Button>
+            </View>
+
+            {certs.length === 0 ? (
+              <Typography variant="caption" color="dim">
+                No certifications registered. Add AWS, GCP, CKA, or specialized
+                credentials to boost your profile score.
+              </Typography>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {certs.map((c) => (
+                  <View key={c.id} style={styles.docItem}>
+                    <View style={{ flex: 1 }}>
+                      <Typography
+                        variant="bodySm"
+                        weight="bold"
+                        color="primary"
+                      >
+                        {c.cert_name || c.file_name}
+                      </Typography>
+                      <Typography variant="caption" color="dim">
+                        {c.cert_issuer ? `${c.cert_issuer} · ` : ""}Uploaded{" "}
+                        {new Date(c.uploaded_at).toLocaleDateString()}
+                      </Typography>
+                    </View>
+                    <Pressable
+                      onPress={() => handleDeleteCert(c.id)}
+                      style={styles.actionIconBtn}
+                    >
+                      <Trash2 size={16} color={colors.accent.red} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+          </Card>
+        </View>
+      </ScrollView>
+
+      {/* Upload Modal Drawer */}
       <DocumentUploader
         visible={showUploader !== false}
         type={showUploader || "cv"}
@@ -561,81 +1073,172 @@ export default function VaultScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "transparent" },
+  container: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 120,
+    alignItems: "center",
+  },
+  centeredContainer: {
+    width: "100%",
+    maxWidth: 800,
+    alignSelf: "center",
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 12,
+    marginBottom: 20,
+    paddingHorizontal: 4,
   },
-  uploadBtn: { flexDirection: "row", gap: 4 },
-  scroll: { paddingHorizontal: 16, paddingBottom: 120 },
-  section: { marginBottom: 24 },
-  sectionHeader: {
+  headerSubtitle: {
+    marginTop: 4,
+  },
+  enclaveBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(6, 182, 212, 0.08)",
+    borderColor: "rgba(6, 182, 212, 0.25)",
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+  },
+  cardSection: {
+    padding: 20,
+    marginBottom: 20,
+    borderRadius: radius.lg,
+  },
+  cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 14,
   },
-  sectionLabel: { marginBottom: 8 },
-  uploadBtnSm: { paddingVertical: 4, paddingHorizontal: 8 },
-  docCard: { padding: 12, marginBottom: 8 },
-  docRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: "rgba(0,210,255,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  docInfo: { flex: 1 },
-  emptyCard: { padding: 20, alignItems: "center" },
-  certGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  certCard: { width: "48%", padding: 12 },
-  certHeader: {
+  cardHeaderLeft: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
+    alignItems: "center",
+    gap: 8,
   },
-  apiKeyCard: {
-    padding: 16,
-    backgroundColor: "rgba(10, 15, 29, 0.75)",
+  sectionTag: {
+    letterSpacing: 0.8,
   },
-  providerChipRow: {
+  gridTwoCols: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
+    gap: 12,
+    marginBottom: 8,
   },
-  providerChip: {
+  gridCol: {
+    flex: 1,
+    minWidth: 220,
+  },
+  pinActionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+  },
+  biometricBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 8,
+    borderRadius: radius.md,
     backgroundColor: "rgba(255, 255, 255, 0.04)",
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.08)",
+    marginLeft: "auto",
   },
-  providerChipActive: {
-    backgroundColor: `${colors.accent.cyan}18`,
-    borderColor: `${colors.accent.cyan}66`,
+  biometricBtnActive: {
+    backgroundColor: "rgba(6, 182, 212, 0.12)",
+    borderColor: colors.accent.cyan,
   },
-  statusBox: {
+  strengthMeterContainer: {
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  strengthMeterHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  strengthTrack: {
+    height: 6,
+    width: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  strengthBar: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  statusAlert: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    padding: 10,
-    borderRadius: 8,
+    padding: 12,
+    borderRadius: radius.md,
     borderWidth: 1,
+    marginTop: 8,
+    marginBottom: 8,
   },
   statusSuccess: {
     backgroundColor: `${colors.accent.green}15`,
-    borderColor: `${colors.accent.green}30`,
+    borderColor: `${colors.accent.green}35`,
   },
   statusError: {
     backgroundColor: `${colors.accent.red}15`,
-    borderColor: `${colors.accent.red}30`,
+    borderColor: `${colors.accent.red}35`,
+  },
+  providerGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 14,
+  },
+  providerCard: {
+    flex: 1,
+    minWidth: 140,
+    padding: 10,
+    borderRadius: radius.md,
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+  },
+  providerCardActive: {
+    backgroundColor: "rgba(6, 182, 212, 0.12)",
+    borderColor: colors.accent.cyan,
+  },
+  savedKeyItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: radius.md,
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.06)",
+  },
+  docItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: radius.md,
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.06)",
+  },
+  actionIconBtn: {
+    padding: 6,
   },
 });

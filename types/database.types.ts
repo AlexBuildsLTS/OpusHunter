@@ -509,6 +509,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          seniority: any
+          seniority: any
           avatar_url: string | null
           bio: string | null
           country_code: string | null
