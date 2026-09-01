@@ -1,5 +1,3 @@
-
-
 /**
  * supabase/functions/score-cover-letter/index.ts
  * OpusHunter — ATS Intelligence Scorer.
@@ -33,26 +31,29 @@ Deno.serve(async (req: Request) => {
     const { coverLetterId } = await req.json();
     if (!coverLetterId) throw new Error("Missing coverLetterId");
 
-    // 1. Fetch Cover Letter + Job in parallel
-    const [letterResult, jobResult] = await Promise.all([
-      supabase
-        .from("cover_letters")
-        .select("*")
-        .eq("id", coverLetterId)
-        .single(),
-      supabase
+    // 1. Fetch Cover Letter
+    const { data: letter, error: letterError } = await supabase
+      .from("cover_letters")
+      .select("*")
+      .eq("id", coverLetterId)
+      .single();
+
+    if (letterError || !letter) {
+      throw new Error("Cover letter not found");
+    }
+
+    // 2. Fetch Job Vault description if job_id is linked
+    let jdText = "";
+    if (letter.job_id) {
+      const { data: jobData } = await supabase
         .from("job_vault")
         .select("description")
-        .eq("id", coverLetterId)
-        .maybeSingle(),
-    ]);
+        .eq("id", letter.job_id)
+        .maybeSingle();
+      jdText = (jobData?.description || "").toLowerCase();
+    }
 
-    if (letterResult.error || !letterResult.data)
-      throw new Error("Cover letter not found");
-    const letter = letterResult.data;
-
-    // 2. Extract Job Description Keywords
-    const jdText = (jobResult.data?.description || "").toLowerCase();
+    // 3. Extract Job Description Keywords
     const stopWords = new Set([
       "the",
       "and",
@@ -72,7 +73,7 @@ Deno.serve(async (req: Request) => {
       .filter((word: string) => word.length > 2 && !stopWords.has(word));
     const uniqueKeywords = [...new Set(jdKeywords)];
 
-    // 3. Calculate ATS Score (Keyword Density)
+    // 4. Calculate ATS Score (Keyword Density)
     const letterText = (letter.body || "").toLowerCase();
     let matchedKeywords = 0;
     for (const keyword of uniqueKeywords) {
@@ -86,8 +87,9 @@ Deno.serve(async (req: Request) => {
           )
         : 50;
 
-    // 4. Calculate Specificity Score (Numerical / Quantifiable claims)
-    const sentences = letter.body.split(/(?<=[.!?])\s+/);
+    // 5. Calculate Specificity Score (Numerical / Quantifiable claims)
+    const rawBody = letter.body || "";
+    const sentences = rawBody.length > 0 ? rawBody.split(/(?<=[.!?])\s+/) : [];
     let specificSentences = 0;
     for (const sentence of sentences) {
       // Checks for numbers, percentages, or currencies
@@ -104,7 +106,7 @@ Deno.serve(async (req: Request) => {
         ? Math.round((specificSentences / sentences.length) * 100)
         : 0;
 
-    // 5. Detect Filler Phrases
+    // 6. Detect Filler Phrases
     let fillerCount = 0;
     for (const phrase of FILLER_PHRASES) {
       if (letterText.includes(phrase.toLowerCase())) fillerCount++;
@@ -129,7 +131,10 @@ Deno.serve(async (req: Request) => {
   } catch (error: unknown) {
     console.error("Score cover letter error:", error);
     return Response.json(
-      { error: "scoring_failed", message: error instanceof Error ? error.message : String(error) },
+      {
+        error: "scoring_failed",
+        message: error instanceof Error ? error.message : String(error),
+      },
       { status: 500, headers: corsHeaders },
     );
   }

@@ -117,7 +117,7 @@ export default function SettingsScreen() {
         <Card
           variant="interactive"
           style={styles.settingCard}
-          onPress={() => router.push("./(tabs)/settings/profile")}
+          onPress={() => router.push("/(tabs)/settings/profile")}
         >
           <View style={styles.settingIcon}>
             <User size={20} color={colors.accent.cyan} />
@@ -201,7 +201,7 @@ export default function SettingsScreen() {
         <Card
           variant="interactive"
           style={styles.settingCard}
-          onPress={() => router.push("./(tabs)/settings/vault")}
+          onPress={() => router.push("/(tabs)/settings/vault")}
         >
           <View
             style={[

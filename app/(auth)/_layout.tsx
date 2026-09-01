@@ -1,13 +1,13 @@
-// app/(auth)/_layout.tsx
-// Auth stack layout. AnimatedBackground is mounted once at the root
-// (app/_layout.tsx) and persists across every route, so it is not re-mounted here.
+/**
+ * app/(auth)/_layout.tsx
+ * OpusHunter — Auth Stack Layout
+ */
 import { Stack } from "expo-router";
-import { View } from "react-native";
-import { colors } from "../../constants/theme";
+import { View, StyleSheet } from "react-native";
 
 export default function AuthLayout() {
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg.deepest }}>
+    <View style={styles.container}>
       <Stack
         screenOptions={{
           headerShown: false,
@@ -17,3 +17,10 @@ export default function AuthLayout() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+});

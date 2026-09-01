@@ -1,12 +1,43 @@
-// components/layout/AdaptiveLayout.tsx
-import React from 'react';
-import { View, Text, useWindowDimensions, TouchableOpacity, Image, Platform, StyleSheet } from 'react-native';
-import { useRouter, usePathname } from 'expo-router';
-import { BlurView } from 'expo-blur';
-import { ProfileDropdown } from '../shared/ProfileDropdown';
-import { cn } from '../../lib/utils';
-import { C } from '../../lib/theme';
-import { Search, Kanban, FolderOpen, User, Settings, ShieldCheck } from 'lucide-react-native';
+/**
+ * components/layout/AdaptiveLayout.tsx
+ * OpusHunter — Universal Navigation Shell
+ *
+ * Enforces strict Top-Right ProfileDropdown placement across all device widths.
+ * Handles the Desktop Sidebar (≥1024px) and the Mobile Floating Tab Bar (<1024px).
+ * Safely pads scrollable content so it is never trapped behind floating elements.
+ */
+
+import React from "react";
+import {
+  View,
+  Text,
+  useWindowDimensions,
+  TouchableOpacity,
+  Platform,
+  StyleSheet,
+  ScrollView,
+} from "react-native";
+import { useRouter, usePathname } from "expo-router";
+import { BlurView } from "expo-blur";
+import { ProfileDropdown } from "../shared/ProfileDropdown";
+import { C } from "../../lib/theme";
+import { Search, Kanban, FolderOpen, Zap } from "lucide-react-native";
+
+const NAV_ITEMS = [
+  {
+    id: "discover",
+    path: "/(tabs)",
+    title: "DISCOVER",
+    Icon: Search,
+  },
+  { id: "pipeline", path: "/(tabs)/pipeline", title: "PIPELINE", Icon: Kanban },
+  {
+    id: "vault",
+    path: "/(tabs)/settings/vault",
+    title: "VAULT",
+    Icon: FolderOpen,
+  },
+];
 
 export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
   const { width } = useWindowDimensions();
@@ -14,56 +45,52 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
 
   const isDesktop = width >= 1024;
-  const isTablet = width >= 768 && width < 1024;
-  const isMobile = !isDesktop && !isTablet;
-
-  const isChatScreen = pathname.includes('/settings/chat');
-  const showMobileNav = isMobile && !isChatScreen;
-
-  const navItems = [
-    { Icon: Search, path: '/(tabs)', id: 'discover', title: 'DISCOVER' },
-    { Icon: Kanban, path: '/(tabs)/pipeline', id: 'pipeline', title: 'PIPELINE' },
-    { Icon: FolderOpen, path: '/(tabs)/vault', id: 'vault', title: 'VAULT' },
-    { Icon: User, path: '/(tabs)/profile', id: 'profile', title: 'PROFILE' },
-    { Icon: Settings, path: '/(tabs)/settings', id: 'settings', title: 'SETTINGS' },
-  ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: 'transparent' }} className="relative overflow-hidden">
-      {Platform.OS === 'web' && (
-        <style dangerouslySetInnerHTML={{ __html: `
+    <View style={styles.root}>
+      {Platform.OS === "web" && (
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
           * { -ms-overflow-style: none !important; scrollbar-width: none !important; }
           *::-webkit-scrollbar { display: none !important; }
-          html, body { overflow: hidden; height: 100%; width: 100%; margin: 0; padding: 0; background-color: #05070a; }
-        `}} />
+          html, body { overflow: hidden; height: 100%; width: 100%; margin: 0; padding: 0; background-color: transparent; }
+        `,
+          }}
+        />
       )}
 
-      {/* Profile Dropdown Header Anchor */}
-      <View className="absolute top-12 right-6 z-[1000]" pointerEvents="box-none">
-        <ProfileDropdown />
-      </View>
-
-      <View className="flex-row flex-1">
-        {/* Desktop / Tablet Sidebar */}
-        {(isDesktop || isTablet) && (
-          <View style={{ backgroundColor: 'rgba(5, 8, 17, 0.85)', borderRightColor: C.border }} className={cn('border-r pt-12 items-center z-50', isDesktop ? 'w-24' : 'w-20')}>
-            <TouchableOpacity onPress={() => router.push('/(tabs)')} className="mb-14">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#22D3EE] to-[#3B82F6] flex items-center justify-center shadow-glow-cyan">
-                <Search size={20} color="#05070a" />
-              </div>
+      {/* ── DESKTOP SIDEBAR (≥1024px) ────────────────────────────── */}
+      {isDesktop && (
+        <View style={styles.sidebar}>
+          <View style={{ width: "100%", alignItems: "center", gap: 32 }}>
+            <TouchableOpacity
+              onPress={() => router.push("/(tabs)")}
+              activeOpacity={0.8}
+            >
+              <View style={styles.brandLogo}>
+                <Zap size={22} color="#050811" />
+              </View>
             </TouchableOpacity>
 
-            <View className="flex-1 mt-4 gap-y-8">
-              {navItems.map((item) => {
-                const isActive = pathname === item.path || (pathname.startsWith(item.path) && item.path !== '/(tabs)');
-                const iconColor = isActive ? '#22D3EE' : 'rgba(237, 234, 247, 0.6)';
-
+            <View style={{ width: "100%", alignItems: "center", gap: 16 }}>
+              {NAV_ITEMS.map((item) => {
+                const isActive =
+                  pathname === item.path || pathname.startsWith(item.path);
                 return (
-                  <TouchableOpacity key={item.id} onPress={() => router.push(item.path as any)} className="items-center group">
-                    <View className={cn('w-12 h-12 rounded-2xl items-center justify-center transition-all', isActive ? 'bg-[#22D3EE]/10 border border-[#22D3EE]/30 shadow-glow-cyan' : 'bg-transparent')}>
-                      <item.Icon size={22} color={iconColor} strokeWidth={isActive ? 2.5 : 1.5} />
-                    </View>
-                    <Text className={cn('mt-1.5 text-[8px] font-extrabold tracking-[2px] uppercase', isActive ? 'text-[#22D3EE]' : 'text-slate-400')}>
+                  <TouchableOpacity
+                    key={item.id}
+                    onPress={() => router.push(item.path as any)}
+                    activeOpacity={0.7}
+                    style={[styles.navItem, isActive && styles.navItemActive]}
+                  >
+                    <item.Icon size={22} color={isActive ? C.cyan : C.sub} />
+                    <Text
+                      style={[
+                        styles.navItemText,
+                        isActive && { color: C.text },
+                      ]}
+                    >
                       {item.title}
                     </Text>
                   </TouchableOpacity>
@@ -71,30 +98,182 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
               })}
             </View>
           </View>
-        )}
-
-        {/* Main Application Viewport */}
-        <View className="flex-1 h-full overflow-hidden">{children}</View>
-      </View>
-
-      {/* Mobile Floating Bottom Navigation */}
-      {showMobileNav && (
-        <View className="absolute bottom-4 left-6 right-6 h-20 z-[100]" pointerEvents="box-none">
-          <BlurView intensity={Platform.OS === 'web' ? 30 : 60} tint="dark" className="flex-row items-center justify-around h-full rounded-[28px] border border-white/10 bg-[#05080d]/80 overflow-hidden shadow-2xl">
-            {navItems.map((item) => {
-              const isActive = pathname === item.path || (pathname.startsWith(item.path) && item.path !== '/(tabs)');
-              const iconColor = isActive ? '#22D3EE' : 'rgba(237, 234, 247, 0.6)';
-
-              return (
-                <TouchableOpacity key={item.id} onPress={() => router.push(item.path as any)} className="items-center justify-center w-16 h-full">
-                  <item.Icon size={22} color={iconColor} strokeWidth={isActive ? 2.5 : 1.5} />
-                  {isActive && <View className="absolute bottom-3 w-1.5 h-1.5 rounded-full bg-[#22D3EE] shadow-glow-cyan" />}
-                </TouchableOpacity>
-              );
-            })}
-          </BlurView>
         </View>
       )}
+
+      {/* ── MAIN CONTENT CONTAINER ──────────────────────────────── */}
+      <View style={styles.mainContent}>
+        {/* ── UNIFIED HEADER (Profile ALWAYS Top-Right) ──────────── */}
+        <View style={styles.topHeader}>
+          {!isDesktop ? (
+            <View style={styles.mobileBrandBadge}>
+              <Text style={styles.mobileBrandText}>OpusHunter</Text>
+            </View>
+          ) : (
+            <View /> /* Empty spacer for desktop to push profile right */
+          )}
+
+          <ProfileDropdown />
+        </View>
+
+        {/* ── SCROLLABLE CHILDREN ─────────────────────────────────── */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingBottom: isDesktop ? 40 : 120,
+            paddingTop: 16,
+            flexGrow: 1,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {children}
+        </ScrollView>
+
+        {/* ── MOBILE BOTTOM FLOATING TAB BAR (<1024px) ────────────── */}
+        {!isDesktop && (
+          <View
+            style={[
+              styles.mobileTabBarContainer,
+              { pointerEvents: "box-none" },
+            ]}
+          >
+            <BlurView
+              intensity={Platform.OS === "web" ? 30 : 60}
+              tint="dark"
+              style={styles.mobileTabBar}
+            >
+              {NAV_ITEMS.map((item) => {
+                const isActive =
+                  pathname === item.path || pathname.startsWith(item.path);
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    onPress={() => router.push(item.path as any)}
+                    activeOpacity={0.7}
+                    style={styles.mobileTabItem}
+                  >
+                    <item.Icon size={22} color={isActive ? C.cyan : C.sub} />
+                    {isActive && <View style={styles.mobileActiveDot} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </BlurView>
+          </View>
+        )}
+      </View>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: "transparent",
+  },
+  sidebar: {
+    width: 96,
+    backgroundColor: "rgba(6, 9, 19, 0.85)",
+    borderRightWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.05)",
+    zIndex: 50,
+    alignItems: "center",
+    paddingVertical: 24,
+  },
+  brandLogo: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: C.cyan,
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: `0 0 16px ${C.cyan}44`,
+    marginBottom: 16,
+  },
+  navItem: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  navItemActive: {
+    backgroundColor: `${C.cyan}15`,
+    borderColor: `${C.cyan}30`,
+  },
+  navItemText: {
+    marginTop: 6,
+    fontSize: 9,
+    fontWeight: "800",
+    color: C.sub,
+    letterSpacing: 0.5,
+  },
+  mainContent: {
+    flex: 1,
+    position: "relative",
+    zIndex: 10,
+  },
+  topHeader: {
+    height: 68,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    backgroundColor: "transparent",
+    zIndex: 60,
+  },
+  mobileBrandBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: `${C.cyan}12`,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  mobileBrandText: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: C.cyan,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  mobileTabBarContainer: {
+    position: "absolute",
+    bottom: 24,
+    left: 24,
+    right: 24,
+    height: 68,
+    zIndex: 50,
+  },
+  mobileTabBar: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(5, 8, 17, 0.8)",
+    overflow: "hidden",
+  },
+  mobileTabItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    height: "100%",
+    position: "relative",
+  },
+  mobileActiveDot: {
+    position: "absolute",
+    bottom: 12,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.cyan,
+    boxShadow: `0 0 6px ${C.cyan}`,
+  },
+});

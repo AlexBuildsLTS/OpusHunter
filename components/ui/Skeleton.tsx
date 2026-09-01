@@ -5,8 +5,8 @@
  * Subtle 1.6s loop. Supports percentages, fixed sizes, and circles.
  */
 
-import React, { useEffect } from "react";
-import { View, StyleSheet } from "react-native";
+import { useEffect } from "react";
+import { View, StyleSheet, StyleProp, ViewStyle, DimensionValue } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -15,14 +15,15 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
-import { colors, radius } from "../../constants/theme";
+import { radius } from "../../constants/theme";
+import React from "react";
 
 interface SkeletonProps {
-  width?: number | `${number}%`;
-  height?: number;
+  width?: DimensionValue;
+  height?: DimensionValue;
   borderRadius?: number;
   circle?: boolean;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function Skeleton({
@@ -56,7 +57,7 @@ export function Skeleton({
       style={[
         styles.base,
         {
-          width: circle ? height : (width as any),
+          width: circle ? height : width,
           height,
           borderRadius: finalRadius,
         },

@@ -1,274 +1,293 @@
-/**
- * components/shared/ResponsiveNavShell.tsx
- * OpusHunter — Adaptive Navigation Shell.
- *
- * The single shell that wraps every authenticated screen (mounted once in
- * app/(tabs)/_layout.tsx). Layout adapts by width:
- *   • Desktop (≥1024px) — fixed icon sidebar + floating bottom profile trigger.
- *   • Tablet  (768–1023) — narrower sidebar.
- *   • Mobile  (<768)     — top header + floating bottom tab bar.
- *
- * Pure React Native primitives + StyleSheet only — no raw DOM elements, so it
- * renders identically (and correctly) on Web, iOS, and Android.
- */
-
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
+  Pressable,
   useWindowDimensions,
+  StyleSheet,
+  Platform,
 } from "react-native";
-import { useRouter, usePathname } from "expo-router";
-import { NAV_ITEMS } from "../../lib/navConfig";
-import { colors, radius, shadows } from "../../constants/theme";
-import { ProfileDropdown } from "./ProfileDropdown";
-import { Zap } from "lucide-react-native";
+import { useRouter, useSegments } from "expo-router";
+import { BlurView } from "expo-blur";
+import {
+  Home,
+  Compass,
+  Inbox,
+  Bot,
+  User,
+  Settings,
+  ShieldAlert,
+  LogOut,
+} from "lucide-react-native";
+import Animated, {
+  FadeIn,
+  FadeOut,
+  SlideInRight,
+  SlideOutRight,
+} from "react-native-reanimated";
 
-const DESKTOP_BP = 1024;
-const TABLET_BP = 768;
-
-export const ResponsiveNavShell = ({
-  children,
+const ProfileMenu = ({
+  onClose,
+  isAdmin,
 }: {
-  children: React.ReactNode;
+  onClose: () => void;
+  isAdmin: boolean;
 }) => {
-  const { width } = useWindowDimensions();
   const router = useRouter();
-  const pathname = usePathname();
 
-  const isDesktop = width >= DESKTOP_BP;
-  const isTablet = width >= TABLET_BP && width < DESKTOP_BP;
-  const isMobile = width < TABLET_BP;
-
-  const visibleItems = NAV_ITEMS;
+  const navigateTo = (path: string) => {
+    onClose();
+    router.push(path as any);
+  };
 
   return (
-    <View style={styles.root}>
-      {/* ── Desktop / Tablet Sidebar ────────────────────────────── */}
-      {(isDesktop || isTablet) && (
-        <View
-          style={[
-            styles.sidebar,
-            isDesktop ? styles.sidebarWide : styles.sidebarNarrow,
-          ]}
+    <Animated.View
+      entering={SlideInRight.springify().damping(20)}
+      exiting={SlideOutRight}
+      className="absolute right-4 top-16 z-50 w-64 overflow-hidden rounded-2xl border border-white/10 shadow-2xl"
+    >
+      <BlurView
+        intensity={Platform.OS === "ios" ? 80 : 100}
+        tint="dark"
+        className="p-2"
+      >
+        <View className="mb-2 border-b border-white/10 px-4 py-3">
+          <Text className="font-semibold text-white">System Operator</Text>
+          <Text className="text-xs text-slate-400">dev@opushunter.io</Text>
+        </View>
+
+        <Pressable
+          onPress={() => navigateTo("/(tabs)/settings/profile")}
+          className="flex-row items-center rounded-lg p-3 active:bg-white/10"
         >
-          {/* Brand mark */}
-          <TouchableOpacity
-            onPress={() => router.push("/(tabs)")}
-            style={styles.brandMark}
+          <User size={18} color="#94A3B8" />
+          <Text className="ml-3 font-medium text-slate-200">
+            Profile & Vault
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => navigateTo("/(tabs)/settings")}
+          className="flex-row items-center rounded-lg p-3 active:bg-white/10"
+        >
+          <Settings size={18} color="#94A3B8" />
+          <Text className="ml-3 font-medium text-slate-200">
+            System Preferences
+          </Text>
+        </Pressable>
+
+        {isAdmin && (
+          <Pressable
+            onPress={() => navigateTo("/(tabs)/admin")}
+            className="mt-2 flex-row items-center rounded-lg border border-cyan-500/20 bg-cyan-500/10 p-3 active:bg-white/10"
           >
-            <Zap size={20} color={colors.bg.deepest} />
-          </TouchableOpacity>
-
-          {/* Nav items */}
-          <View style={styles.navList}>
-            {visibleItems.map((item) => {
-              const isActive =
-                pathname === item.route ||
-                (item.route !== "/(tabs)" && pathname.startsWith(item.route));
-              const IconComponent = item.icon;
-
-              return (
-                <TouchableOpacity
-                  key={item.key}
-                  onPress={() => router.push(item.route as any)}
-                  style={[styles.navItem, isActive && styles.navItemActive]}
-                >
-                  <IconComponent
-                    size={20}
-                    color={
-                      isActive ? colors.accent.cyan : colors.text.secondary
-                    }
-                  />
-                  <Text
-                    style={[styles.navLabel, isActive && styles.navLabelActive]}
-                  >
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-      )}
-
-      {/* ── Main content column ─────────────────────────────────── */}
-      <View style={styles.contentColumn}>
-        {/* Mobile top header */}
-        {isMobile && (
-          <View style={styles.mobileHeader}>
-            <Text style={styles.mobileBrand}>OPUSHUNTER</Text>
-            <ProfileDropdown />
-          </View>
+            <ShieldAlert size={18} color="#22D3EE" />
+            <Text className="ml-3 font-medium text-cyan-400">
+              Admin Terminal
+            </Text>
+          </Pressable>
         )}
 
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{
-            paddingBottom: isMobile ? 110 : 40,
-            paddingHorizontal: isDesktop ? 32 : 16,
-            paddingTop: 20,
-          }}
-        >
-          {children}
-        </ScrollView>
-
-        {/* ── Mobile bottom floating tab bar ────────────────────── */}
-        {isMobile && (
-          <View style={styles.mobileTabBar}>
-            {visibleItems.map((item) => {
-              const isActive = pathname === item.route;
-              const IconComponent = item.icon;
-              return (
-                <TouchableOpacity
-                  key={item.key}
-                  onPress={() => router.push(item.route as any)}
-                  style={styles.mobileTabItem}
-                >
-                  <IconComponent
-                    size={20}
-                    color={
-                      isActive ? colors.accent.cyan : colors.text.secondary
-                    }
-                  />
-                  <Text
-                    style={[
-                      styles.mobileTabLabel,
-                      isActive && styles.navLabelActive,
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-      </View>
-
-      {/* ── Desktop / Tablet profile trigger (top-right) ────────── */}
-      {(isDesktop || isTablet) && (
-        <View style={styles.profileAnchor}>
-          <ProfileDropdown />
-        </View>
-      )}
-    </View>
+        <Pressable className="mt-2 flex-row items-center rounded-lg border-t border-white/10 p-3 pt-4 active:bg-white/10">
+          <LogOut size={18} color="#94A3B8" />
+          <Text className="ml-3 font-medium text-slate-200">Disconnect</Text>
+        </Pressable>
+      </BlurView>
+    </Animated.View>
   );
 };
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    flexDirection: "row",
-    backgroundColor: colors.bg.deepest,
-  },
+export default function ResponsiveNavShell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { width } = useWindowDimensions();
+  const segments = useSegments();
+  const router = useRouter();
+  const isDesktop = width > 1024;
+  const [profileOpen, setProfileOpen] = useState(false);
 
-  // ── Sidebar ──────────────────────────────────────────────────
-  sidebar: {
-    backgroundColor: colors.bg.sidebar,
-    borderRightWidth: 1,
-    borderRightColor: colors.surface.border,
-    alignItems: "center",
-    paddingTop: 24,
-    paddingBottom: 24,
-  },
-  sidebarWide: { width: 80 },
-  sidebarNarrow: { width: 64 },
-  brandMark: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.lg,
-    backgroundColor: colors.accent.cyan,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 32,
-    ...(shadows.glowCyan as any),
-  },
-  navList: {
-    flex: 1,
-    alignItems: "center",
-    gap: 12,
-  },
-  navItem: {
-    width: 56,
-    paddingVertical: 10,
-    borderRadius: radius.lg,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-  },
-  navItemActive: {
-    backgroundColor: `${colors.accent.blue}26`,
-    borderWidth: 1,
-    borderColor: `${colors.accent.cyan}4D`,
-  },
-  navLabel: {
-    fontSize: 9,
-    fontWeight: "700",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    color: colors.text.secondary,
-  },
-  navLabelActive: { color: colors.accent.cyan },
+  const isAdmin = true;
+  const currentRoute = segments[segments.length - 1] || "pipeline";
 
-  // ── Content column ────────────────────────────────────────────
-  contentColumn: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  mobileHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.surface.border,
-  },
-  mobileBrand: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 2,
-    color: colors.accent.cyan,
-  },
+  const NAV_ITEMS = [
+    { id: "discover", label: "Discover", icon: Compass, route: "/(tabs)" },
+    {
+      id: "pipeline",
+      label: "Pipeline",
+      icon: Inbox,
+      route: "/(tabs)/pipeline",
+    },
+    {
+      id: "vault",
+      label: "Vault",
+      icon: Home,
+      route: "/(tabs)/settings/vault",
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      icon: Settings,
+      route: "/(tabs)/settings",
+    },
+  ];
 
-  // ── Mobile bottom tab bar ─────────────────────────────────────
-  mobileTabBar: {
-    position: "absolute",
-    bottom: 16,
-    left: 16,
-    right: 16,
-    height: 72,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-    backgroundColor: colors.bg.sidebar,
-    ...(shadows.glassLg as any),
-  },
-  mobileTabItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
-  },
-  mobileTabLabel: {
-    fontSize: 9,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    color: colors.text.secondary,
-  },
+  return (
+    <View className="flex-1 bg-transparent">
+      <View className={`flex-1 ${isDesktop ? "flex-row" : "flex-col"}`}>
+        {/* Desktop Sidebar */}
+        {isDesktop && (
+          <BlurView
+            intensity={20}
+            tint="dark"
+            className="w-72 justify-between border-r border-white/5 bg-black/20 px-6 pb-8 pt-10"
+          >
+            <View>
+              <Pressable
+                onPress={() => router.push("/(tabs)")}
+                className="mb-12 cursor-pointer flex-row items-center px-2"
+              >
+                <View className="mr-4 h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/50 bg-cyan-500/20 shadow-[0_0_15px_rgba(34,211,238,0.3)]">
+                  <Text className="text-lg font-bold text-cyan-400">O</Text>
+                </View>
+                <Text className="text-2xl font-black tracking-tighter text-white">
+                  OPUS<Text className="text-cyan-400">HUNTER</Text>
+                </Text>
+              </Pressable>
 
-  // ── Profile anchor (desktop/tablet, top-right) ───────────────
-  profileAnchor: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    zIndex: 1000,
-  },
-});
+              <View className="gap-y-2">
+                {NAV_ITEMS.map((item) => {
+                  const active = currentRoute === item.id;
+                  const Icon = item.icon;
+                  return (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => router.push(item.route as any)}
+                      className={`flex-row items-center rounded-xl px-4 py-3.5 transition-all ${active ? "border border-cyan-500/30 bg-cyan-500/10 shadow-sm" : "active:bg-white/5"}`}
+                    >
+                      <Icon size={22} color={active ? "#22D3EE" : "#64748B"} />
+                      <Text
+                        className={`ml-4 text-base font-bold ${active ? "text-cyan-400" : "text-slate-400"}`}
+                      >
+                        {item.label.toUpperCase()}
+                      </Text>
+                      {active && (
+                        <View className="ml-auto h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22D3EE]" />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Pressable
+              onPress={() => setProfileOpen(!profileOpen)}
+              className="flex-row items-center rounded-2xl border border-white/10 bg-white/5 p-4 active:bg-white/10"
+            >
+              <View className="h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-800">
+                <User size={20} color="#CBD5E1" />
+              </View>
+              <View className="ml-3">
+                <Text className="text-sm font-bold text-slate-200">
+                  SYSTEM ADMIN
+                </Text>
+                <View className="flex-row items-center">
+                  <View className="mr-1.5 h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                  <Text className="text-[10px] font-medium tracking-widest text-slate-500">
+                    READY
+                  </Text>
+                </View>
+              </View>
+            </Pressable>
+          </BlurView>
+        )}
+
+        {/* Main Content Area */}
+        <View className="relative flex-1">
+          {/* Mobile Header */}
+          {!isDesktop && (
+            <BlurView
+              intensity={40}
+              tint="dark"
+              className="z-40 h-16 flex-row items-center justify-between border-b border-white/5 bg-black/40 px-4"
+            >
+              <Pressable
+                onPress={() => router.push("/(tabs)")}
+                className="cursor-pointer flex-row items-center gap-3"
+              >
+                <View className="h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/50 bg-cyan-500/20">
+                  <Text className="text-sm font-bold text-cyan-400">O</Text>
+                </View>
+                <Text className="text-lg font-black tracking-tighter text-white">
+                  OPUSHUNTER
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setProfileOpen(!profileOpen)}
+                className="h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 active:bg-white/20"
+              >
+                <User size={20} color="#E2E8F0" />
+              </Pressable>
+            </BlurView>
+          )}
+
+          {/* Profile Overlay */}
+          {profileOpen && (
+            <View className="absolute inset-0 z-50">
+              <Pressable
+                className="flex-1 bg-black/20"
+                onPress={() => setProfileOpen(false)}
+              >
+                <Animated.View
+                  entering={FadeIn}
+                  exiting={FadeOut}
+                  style={StyleSheet.absoluteFill}
+                />
+              </Pressable>
+              <ProfileMenu
+                onClose={() => setProfileOpen(false)}
+                isAdmin={isAdmin}
+              />
+            </View>
+          )}
+
+          {/* Content Slot */}
+          <View className="z-10 flex-1">{children}</View>
+        </View>
+
+        {/* Mobile Bottom Tab Bar */}
+        {!isDesktop && (
+          <BlurView
+            intensity={60}
+            tint="dark"
+            className="z-40 h-20 flex-row items-center justify-around border-t border-white/5 bg-black/60 px-2 pb-4 pt-2"
+          >
+            {NAV_ITEMS.map((item) => {
+              const active = currentRoute === item.id;
+              const Icon = item.icon;
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => router.push(item.route as any)}
+                  className="w-16 items-center justify-center"
+                >
+                  <View
+                    className={`rounded-xl p-2 ${active ? "bg-cyan-500/20" : "active:bg-white/5"}`}
+                  >
+                    <Icon size={24} color={active ? "#22D3EE" : "#64748B"} />
+                  </View>
+                  <Text
+                    className={`mt-1 text-[10px] font-bold tracking-widest ${active ? "text-cyan-400" : "text-slate-500"}`}
+                  >
+                    {item.label.toUpperCase()}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </BlurView>
+        )}
+      </View>
+    </View>
+  );
+}

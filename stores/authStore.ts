@@ -40,26 +40,43 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initializeAuth: async () => {
     if (authListenerRegistered) {
-      const { data: { session } } = await supabase.auth.getSession();
-      set({ session, user: session?.user ?? null, isHydrated: true, isLoading: false });
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        set({
+          session,
+          user: session?.user ?? null,
+          isHydrated: true,
+          isLoading: false,
+        });
+      } catch {
+        set({ isHydrated: true, isLoading: false });
+      }
       return;
     }
     authListenerRegistered = true;
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       set({ session, user: session?.user ?? null });
 
       supabase.auth.onAuthStateChange(async (_event, session) => {
         set({ session, user: session?.user ?? null });
 
         if (session?.user) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
-          set({ profile });
+          try {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", session.user.id)
+              .maybeSingle();
+            set({ profile: profile ?? null });
+          } catch (e) {
+            console.warn("Failed to fetch profile on auth change:", e);
+          }
         } else {
           set({ profile: null });
         }
@@ -79,13 +96,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { user } = get();
     if (!user) return;
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    set({ profile });
+      set({ profile: profile ?? null });
+    } catch (e) {
+      console.warn("Failed to refresh profile:", e);
+    }
   },
 
   signOut: async () => {

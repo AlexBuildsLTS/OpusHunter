@@ -120,7 +120,7 @@ export default function AdminDashboard() {
         <Card
           variant="interactive"
           style={styles.linkCard}
-          onPress={() => router.push("./(tabs)/admin/users")}
+          onPress={() => router.push("/(tabs)/admin/users")}
         >
           <View style={styles.linkIcon}>
             <Users size={20} color={colors.accent.cyan} />
@@ -139,7 +139,7 @@ export default function AdminDashboard() {
         <Card
           variant="interactive"
           style={styles.linkCard}
-          onPress={() => router.push("./(tabs)/admin/api-keys")}
+          onPress={() => router.push("/(tabs)/admin/api-keys")}
         >
           <View
             style={[

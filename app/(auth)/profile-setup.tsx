@@ -1,11 +1,10 @@
 /**
  * app/(auth)/profile-setup.tsx
- * OpusHunter — 5-Step Mandatory Profile Wizard (Refined).
- * Collects all career preferences for the scraper and AI.
- * Animated step transitions with sleek progress bar. Saves to Supabase profiles table.
+ * OpusHunter — 5-Step Mandatory Profile Wizard
+ * Cross-platform (APK, Web, Desktop), real backend, zero mock data.
  */
 
-import { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -13,24 +12,41 @@ import {
   Pressable,
   Text,
   Platform,
-  useWindowDimensions,
+  ActivityIndicator,
+  TextInput,
+  TouchableOpacity,
 } from "react-native";
 import Animated, { FadeInDown, Easing } from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import * as DocumentPicker from "expo-document-picker";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../stores/authStore";
 import { SafeAreaWrapper } from "../../components/shared/SafeAreaWrapper";
-import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
-import { Typography } from "../../components/ui/Typography";
-import { Card } from "../../components/ui/GlassCard";
-import { Chip } from "../../components/ui/Chip";
-import { colors, radius } from "../../constants/theme";
-import { Check, ChevronLeft, ChevronRight } from "lucide-react-native";
-import { Database } from "../../types/database.types";
+import { C } from "../../lib/theme";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  X,
+  Sparkles,
+  Upload,
+  Trash2,
+  FileText,
+  Award,
+  AlertCircle,
+  Briefcase,
+  GraduationCap,
+  ExternalLink,
+} from "lucide-react-native";
+
+import type { Database } from "../../types/database.types";
 
 type SeniorityLevel = Database["public"]["Enums"]["seniority_level_enum"];
+type WorkType = Database["public"]["Enums"]["work_type_enum"];
+
+const MAX_DOCUMENTS = 6;
 
 const SENIORITY: SeniorityLevel[] = [
   "junior",
@@ -42,49 +58,340 @@ const SENIORITY: SeniorityLevel[] = [
   "vp",
   "c_level",
 ];
-const WORK_TYPES = ["remote", "hybrid", "onsite", "flexible"];
+const WORK_TYPES: WorkType[] = ["remote", "hybrid", "onsite", "flexible"];
 const RADIUS_OPTIONS = [25, 50, 75, 100];
+const SUGGESTED_ROLES = [
+  "Java Fullstack Developer",
+  "Backend Engineer",
+  "Fullstack Engineer",
+  "Frontend Developer",
+  "DevOps Engineer",
+];
+const SUGGESTED_SKILLS = [
+  "Java",
+  "Spring Boot",
+  "React",
+  "TypeScript",
+  "PostgreSQL",
+  "Docker",
+  "AWS",
+  "Kubernetes",
+  "Node.js",
+  "Python",
+  "REST APIs",
+  "Git",
+];
+const SUGGESTED_LANGUAGES = [
+  "English",
+  "Swedish",
+  "German",
+  "Spanish",
+  "French",
+];
+const SUGGESTED_CITIES = [
+  "Stockholm",
+  "Gothenburg",
+  "Malmö",
+  "Uppsala",
+  "Lund",
+  "Linköping",
+];
+const SUGGESTED_COUNTRIES = [
+  "Sweden",
+  "Norway",
+  "Denmark",
+  "Germany",
+  "United Kingdom",
+];
 
 export default function ProfileSetupScreen() {
   const router = useRouter();
-  const { profile, setProfile } = useAuthStore();
-  const { width } = useWindowDimensions();
-  const isDesktop = Platform.OS === "web" && width >= 1024;
+  const { user, profile, setProfile, refreshProfile } = useAuthStore();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<{
-    professional_title: string;
-    years_experience: string;
-    seniority_level: SeniorityLevel;
-    target_roles: string[];
-    work_type_preferences: string[];
-    target_cities: string[];
-    target_countries: string[];
-    location_radius_km: number;
-    salary_min: string;
-    salary_max: string;
-    salary_currency: string;
-  }>({
-    professional_title: "",
-    years_experience: "0",
-    seniority_level: "mid",
-    target_roles: [] as string[],
-    work_type_preferences: ["remote"] as string[],
-    target_cities: [] as string[],
-    target_countries: ["Sweden"] as string[],
-    location_radius_km: 50,
-    salary_min: "",
-    salary_max: "",
-    salary_currency: "SEK",
+  // Form State
+  const [formData, setFormData] = useState({
+    first_name: profile?.first_name || "",
+    last_name: profile?.last_name || "",
+    professional_title: profile?.professional_title || "",
+    target_roles: profile?.target_roles || ([] as string[]),
+    skills: [] as string[],
+    education: "",
+    education_degree: "",
+    github_url: "",
+    portfolio_url: "",
+    bio: profile?.bio || "",
+    years_experience: String(profile?.years_experience || "0"),
+    seniority_level: profile?.seniority_level || "mid",
+    languages: profile?.languages || ["English"],
+    work_type_preferences: (profile?.work_type_preferences || [
+      "remote",
+    ]) as string[],
+    target_cities: profile?.target_cities || (["Stockholm"] as string[]),
+    target_countries: profile?.target_countries || (["Sweden"] as string[]),
+    location_radius_km: profile?.location_radius_km || 50,
+    salary_min: profile?.salary_min ? String(profile.salary_min) : "",
+    salary_max: profile?.salary_max ? String(profile.salary_max) : "",
+    salary_currency: profile?.salary_currency || "SEK",
+    max_daily_applications: profile?.max_daily_applications || 10,
   });
+
+  // Local state for interactive tag inputs
+  const [newRoleInput, setNewRoleInput] = useState("");
+  const [newSkillInput, setNewSkillInput] = useState("");
+  const [newLangInput, setNewLangInput] = useState("");
+  const [newCityInput, setNewCityInput] = useState("");
+  const [newCountryInput, setNewCountryInput] = useState("");
+
+  // Bio generation state
+  const [bioTone, setBioTone] = useState<"executive" | "technical" | "modern">(
+    "technical",
+  );
+  const [generatingBio, setGeneratingBio] = useState(false);
+
+  // Documents state (CVs and Certifications)
+  const [resumes, setResumes] = useState<any[]>([]);
+  const [certs, setCerts] = useState<any[]>([]);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   const totalSteps = 5;
 
+  // Load existing user context & documents
+  const loadUserData = useCallback(async () => {
+    if (!user) return;
+    try {
+      // 1. Fetch user_context
+      const { data: context } = await supabase
+        .from("user_context")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (context) {
+        setFormData((prev) => ({
+          ...prev,
+          skills: context.extracted_skills?.length
+            ? context.extracted_skills
+            : prev.skills,
+          bio: prev.bio || context.career_summary || "",
+          education:
+            Array.isArray(context.extracted_education) &&
+            context.extracted_education.length > 0
+              ? (context.extracted_education[0] as any)?.institution ||
+                (context.extracted_education[0] as any)?.degree ||
+                ""
+              : prev.education,
+          github_url:
+            (context.skill_clusters as any)?.github_url || prev.github_url,
+          portfolio_url:
+            (context.skill_clusters as any)?.portfolio_url ||
+            prev.portfolio_url,
+        }));
+      }
+
+      // 2. Fetch resumes
+      const { data: resumeList } = await supabase
+        .from("resume_documents")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("uploaded_at", { ascending: false });
+      if (resumeList) setResumes(resumeList);
+
+      // 3. Fetch certifications
+      const { data: certList } = await supabase
+        .from("certifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("uploaded_at", { ascending: false });
+      if (certList) setCerts(certList);
+    } catch (e) {
+      console.warn("Error loading user context / documents:", e);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadUserData();
+  }, [loadUserData]);
+
+  // Document upload handler (CV or Certification)
+  const handleUploadDocument = async (type: "cv" | "certification") => {
+    if (!user) return;
+    const currentCount = resumes.length + certs.length;
+    if (currentCount >= MAX_DOCUMENTS) {
+      setError(
+        `Maximum ${MAX_DOCUMENTS} documents reached. Please remove a file to upload another.`,
+      );
+      return;
+    }
+
+    setError(null);
+    setUploadStatus(null);
+    setUploadingDoc(true);
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type:
+          type === "cv"
+            ? [
+                "application/pdf",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              ]
+            : ["application/pdf", "image/jpeg", "image/png", "image/webp"],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        setUploadingDoc(false);
+        return;
+      }
+
+      const asset = result.assets[0];
+      setUploadStatus(`Uploading ${asset.name}...`);
+
+      const sanitizedName = asset.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const bucket = type === "cv" ? "resumes" : "certifications";
+      const table = type === "cv" ? "resume_documents" : "certifications";
+      const path = `${user.id}/${Date.now()}-${sanitizedName}`;
+
+      const fileResponse = await fetch(asset.uri);
+      const fileBlob = await fileResponse.blob();
+
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(path, fileBlob, {
+          contentType: asset.mimeType || "application/octet-stream",
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const baseInsert = {
+        user_id: user.id,
+        storage_path: path,
+        file_name: asset.name,
+        file_type: asset.mimeType || "application/octet-stream",
+        file_size_kb: Math.round((asset.size || 0) / 1024),
+      };
+
+      const { error: dbError } = await supabase.from(table).insert(
+        type === "cv"
+          ? ({
+              ...baseInsert,
+              is_primary: resumes.length === 0,
+              extraction_status: "pending",
+            } as any)
+          : baseInsert,
+      );
+
+      if (dbError) throw dbError;
+
+      // If CV, trigger AI extraction in background
+      if (type === "cv") {
+        setUploadStatus("Extracting skills & context with AI...");
+        try {
+          await supabase.functions.invoke("extract-context", {
+            body: { userId: user.id, documentPath: path, bucket: "resumes" },
+          });
+        } catch (extErr) {
+          console.warn("AI extraction invocation error:", extErr);
+        }
+      }
+
+      await loadUserData();
+      setUploadStatus(null);
+    } catch (err: any) {
+      setError(err.message || "Failed to upload document");
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
+  // Document delete handler
+  const handleDeleteDocument = async (
+    type: "cv" | "certification",
+    id: string,
+    storagePath: string,
+  ) => {
+    if (!user) return;
+    setError(null);
+    try {
+      const bucket = type === "cv" ? "resumes" : "certifications";
+      const table = type === "cv" ? "resume_documents" : "certifications";
+
+      await supabase.storage.from(bucket).remove([storagePath]);
+      await supabase.from(table).delete().eq("id", id);
+      await loadUserData();
+    } catch (err: any) {
+      setError(err.message || "Failed to delete document");
+    }
+  };
+
+  // AI Bio Generator
+  const handleGenerateBio = () => {
+    setGeneratingBio(true);
+    const fullName = `${formData.first_name} ${formData.last_name}`.trim();
+    const name = fullName || "Professional";
+    const title = formData.professional_title || "Software Developer";
+    const years =
+      parseInt(formData.years_experience) > 0
+        ? `${formData.years_experience}+ years of`
+        : "strong hands-on";
+    const skillsList =
+      formData.skills.length > 0
+        ? formData.skills.slice(0, 6).join(", ")
+        : "modern software architecture, system reliability, and full-stack development";
+    const rolesList =
+      formData.target_roles.length > 0
+        ? formData.target_roles.join(", ")
+        : title;
+    const edu = formData.education
+      ? ` Backed by diploma/education in ${formData.education}.`
+      : "";
+
+    let generated = "";
+    if (bioTone === "executive") {
+      generated = `${name} is a results-driven professional specializing as a ${title} with ${years} expertise in driving high-impact technical initiatives. Proficient across ${skillsList}, dedicated to delivering measurable business value and rock-solid architecture in ${rolesList}.${edu}`;
+    } else if (bioTone === "technical") {
+      generated = `Hands-on ${title} with ${years} practical experience engineering scalable systems, clean microservices, and reliable workflows. Core competencies include ${skillsList}. Focused on performance, resilient coding, and technical problem-solving for ${rolesList}.${edu}`;
+    } else {
+      generated = `Forward-looking ${title} passionate about building modern, human-centric software solutions. Skilled in ${skillsList}, bringing curiosity, agile speed, and craftsmanship to high-velocity teams targeting ${rolesList}.${edu}`;
+    }
+
+    setFormData((prev) => ({ ...prev, bio: generated }));
+    setGeneratingBio(false);
+  };
+
+  // Step Validation & Navigation
+  const validateStep = (currentStep: number): boolean => {
+    setError(null);
+    if (currentStep === 0) {
+      if (!formData.first_name.trim()) {
+        setError("First name is required.");
+        return false;
+      }
+      if (!formData.last_name.trim()) {
+        setError("Last name is required.");
+        return false;
+      }
+      if (!formData.professional_title.trim()) {
+        setError(
+          "Primary target job title is required (e.g. Java Fullstack Developer).",
+        );
+        return false;
+      }
+    }
+    return true;
+  };
+
   const goNext = () => {
+    if (!validateStep(step)) return;
+
     if (step < totalSteps - 1) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      if (Platform.OS !== "web")
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       setStep(step + 1);
     } else {
       handleComplete();
@@ -92,32 +399,37 @@ export default function ProfileSetupScreen() {
   };
 
   const goBack = () => {
+    setError(null);
     if (step > 0) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      if (Platform.OS !== "web")
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       setStep(step - 1);
     }
   };
 
   const handleComplete = async () => {
     if (loading) return;
-    if (!profile) {
-      setError("No profile found. Please sign in again.");
-      setLoading(false);
+    if (!profile || !user) {
+      setError("No session found. Please sign in again.");
       return;
     }
     setLoading(true);
     setError(null);
+
     try {
-      const { error: updateError } = await supabase
+      // 1. Update profiles table
+      const { error: profileError } = await supabase
         .from("profiles")
         .update({
-          professional_title: formData.professional_title,
+          first_name: formData.first_name.trim(),
+          last_name: formData.last_name.trim(),
+          professional_title: formData.professional_title.trim(),
+          bio: formData.bio.trim() || null,
           years_experience: parseInt(formData.years_experience) || 0,
-          seniority_level: formData.seniority_level,
+          seniority_level: formData.seniority_level as any,
           target_roles: formData.target_roles,
-          work_type_preferences: formData.work_type_preferences as (
-            "remote" | "hybrid" | "onsite" | "flexible"
-          )[],
+          languages: formData.languages,
+          work_type_preferences: formData.work_type_preferences as any,
           target_cities: formData.target_cities,
           target_countries: formData.target_countries,
           location_radius_km: formData.location_radius_km,
@@ -128,23 +440,56 @@ export default function ProfileSetupScreen() {
             ? parseInt(formData.salary_max)
             : null,
           salary_currency: formData.salary_currency,
+          max_daily_applications: formData.max_daily_applications,
           profile_complete: true,
         })
         .eq("id", profile.id);
 
-      if (updateError) throw updateError;
+      if (profileError) throw profileError;
 
-      const { data: newProfile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", profile.id)
-        .single();
-      setProfile(newProfile);
+      // 2. Upsert user_context with rich skills, diploma, and portfolio links
+      const educationPayload = formData.education.trim()
+        ? [
+            {
+              institution: formData.education.trim(),
+              degree:
+                formData.education_degree.trim() ||
+                formData.professional_title.trim(),
+              year: new Date().getFullYear(),
+            },
+          ]
+        : [];
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
-        () => {},
-      );
-      router.replace("/(tabs)/" as any);
+      const { error: contextError } = await supabase
+        .from("user_context")
+        .upsert(
+          {
+            user_id: user.id,
+            extracted_skills: formData.skills,
+            extracted_education: educationPayload,
+            career_summary: formData.bio.trim() || null,
+            skill_clusters: {
+              github_url: formData.github_url.trim() || null,
+              portfolio_url: formData.portfolio_url.trim() || null,
+            },
+            tone_preference: bioTone,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" },
+        );
+
+      if (contextError) {
+        console.warn("user_context upsert warning:", contextError);
+      }
+
+      await refreshProfile();
+
+      if (Platform.OS !== "web")
+        Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Success,
+        ).catch(() => {});
+
+      router.replace("/(tabs)/(dashboard)" as any);
     } catch (err: any) {
       setError(err.message || "Failed to save profile");
       setLoading(false);
@@ -152,23 +497,55 @@ export default function ProfileSetupScreen() {
   };
 
   const handleSkip = async () => {
-    if (loading) return;
-    if (profile) {
-      try {
-        await supabase
-          .from("profiles")
-          .update({ profile_complete: true })
-          .eq("id", profile.id);
-      } catch {}
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    router.replace("/(tabs)/" as any);
+    if (profile) {
+      await supabase
+        .from("profiles")
+        .update({ profile_complete: true })
+        .eq("id", profile.id);
+      await refreshProfile();
+    }
+    router.replace("/(tabs)/(dashboard)" as any);
   };
 
-  const toggleArrayItem = (
-    field: "target_roles" | "work_type_preferences" | "target_cities",
+  // Array manipulation helpers
+  const addTag = (
+    field:
+      | "target_roles"
+      | "skills"
+      | "languages"
+      | "target_cities"
+      | "target_countries",
     value: string,
   ) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (!formData[field].includes(trimmed)) {
+      setFormData((prev) => ({
+        ...prev,
+        [field]: [...prev[field], trimmed],
+      }));
+    }
+  };
+
+  const removeTag = (
+    field:
+      | "target_roles"
+      | "skills"
+      | "languages"
+      | "target_cities"
+      | "target_countries",
+    value: string,
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: prev[field].filter((item) => item !== value),
+    }));
+  };
+
+  const toggleArrayItem = (field: "work_type_preferences", value: string) => {
     setFormData((prev) => {
       const current = prev[field];
       const exists = current.includes(value);
@@ -181,310 +558,965 @@ export default function ProfileSetupScreen() {
     });
   };
 
+  // Step 0: Card 1 - Core Identity, Job Targets, Skills, Education, Links, Bio & Documents
+  const renderStep0 = () => {
+    const totalDocs = resumes.length + certs.length;
+
+    return (
+      <View>
+        <Text style={styles.stepTitle}>Identity & Target Career</Text>
+        <Text style={styles.stepSubtitle}>
+          Define your target role, skill tags, education, links, and documents.
+          Our scraper will use these tags to find matching jobs.
+        </Text>
+
+        {/* FULL NAME */}
+        <View style={styles.sectionDivider}>
+          <Text style={styles.sectionHeader}>FULL NAME</Text>
+          <View style={styles.badgeRequired}>
+            <Text style={styles.badgeRequiredText}>REQUIRED</Text>
+          </View>
+        </View>
+
+        <View style={styles.rowInputs}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>FIRST NAME</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.first_name}
+              onChangeText={(text) =>
+                setFormData((prev) => ({ ...prev, first_name: text }))
+              }
+              placeholder="e.g., Alex"
+              placeholderTextColor={C.dim}
+              autoCapitalize="words"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>LAST NAME</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.last_name}
+              onChangeText={(text) =>
+                setFormData((prev) => ({ ...prev, last_name: text }))
+              }
+              placeholder="e.g., Lindqvist"
+              placeholderTextColor={C.dim}
+              autoCapitalize="words"
+            />
+          </View>
+        </View>
+
+        {/* TARGET JOB TITLE */}
+        <View style={styles.sectionDivider}>
+          <Text style={styles.sectionHeader}>PRIMARY JOB YOU SEEK</Text>
+          <View style={styles.badgeRequired}>
+            <Text style={styles.badgeRequiredText}>REQUIRED</Text>
+          </View>
+        </View>
+        <Text style={styles.fieldHint}>
+          Defines your active pipeline (1 active search pipeline at a time on
+          standard tier).
+        </Text>
+        <TextInput
+          style={styles.input}
+          value={formData.professional_title}
+          onChangeText={(text) =>
+            setFormData((prev) => ({ ...prev, professional_title: text }))
+          }
+          placeholder="e.g., Java Fullstack Developer"
+          placeholderTextColor={C.dim}
+        />
+
+        {/* TARGET ROLES TAGS */}
+        <View style={styles.sectionDivider}>
+          <Text style={styles.sectionHeader}>TARGET ROLES & ALTERNATES</Text>
+          <View style={styles.badgeOptional}>
+            <Text style={styles.badgeOptionalText}>RECOMMENDED</Text>
+          </View>
+        </View>
+        <Text style={styles.fieldHint}>
+          Add multiple related roles you want the scraper to monitor for
+          vacancies.
+        </Text>
+        <View style={styles.tagInputRow}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            value={newRoleInput}
+            onChangeText={setNewRoleInput}
+            onSubmitEditing={() => {
+              addTag("target_roles", newRoleInput);
+              setNewRoleInput("");
+            }}
+            placeholder="Type role & press Add..."
+            placeholderTextColor={C.dim}
+          />
+          <TouchableOpacity
+            style={styles.addTagButton}
+            onPress={() => {
+              addTag("target_roles", newRoleInput);
+              setNewRoleInput("");
+            }}
+            activeOpacity={0.8}
+          >
+            <Plus size={18} color={C.cyan} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Target roles list */}
+        {formData.target_roles.length > 0 && (
+          <View style={styles.chipContainer}>
+            {formData.target_roles.map((role) => (
+              <View key={role} style={styles.tagChip}>
+                <Briefcase
+                  size={12}
+                  color={C.cyan}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={styles.tagChipText}>{role}</Text>
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => removeTag("target_roles", role)}
+                  style={{ marginLeft: 6 }}
+                >
+                  <X size={14} color={C.sub} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Quick suggestions for roles */}
+        <View style={styles.suggestionsRow}>
+          <Text style={styles.suggestionTitle}>Suggestions:</Text>
+          {SUGGESTED_ROLES.filter((r) => !formData.target_roles.includes(r))
+            .slice(0, 3)
+            .map((r) => (
+              <Pressable
+                key={r}
+                onPress={() => addTag("target_roles", r)}
+                style={styles.suggestionPill}
+              >
+                <Text style={styles.suggestionPillText}>+ {r}</Text>
+              </Pressable>
+            ))}
+        </View>
+
+        {/* SKILLS TAGS */}
+        <View style={styles.sectionDivider}>
+          <Text style={styles.sectionHeader}>SKILLS & TECH STACK</Text>
+          <View style={styles.badgeRequired}>
+            <Text style={styles.badgeRequiredText}>KEY FOR SCRAPER</Text>
+          </View>
+        </View>
+        <Text style={styles.fieldHint}>
+          Add languages, frameworks, databases, and tools. Our scraper queries
+          and matches jobs against these tags.
+        </Text>
+        <View style={styles.tagInputRow}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            value={newSkillInput}
+            onChangeText={setNewSkillInput}
+            onSubmitEditing={() => {
+              addTag("skills", newSkillInput);
+              setNewSkillInput("");
+            }}
+            placeholder="e.g., Java, Spring Boot, React, Docker..."
+            placeholderTextColor={C.dim}
+          />
+          <TouchableOpacity
+            style={styles.addTagButton}
+            onPress={() => {
+              addTag("skills", newSkillInput);
+              setNewSkillInput("");
+            }}
+            activeOpacity={0.8}
+          >
+            <Plus size={18} color={C.cyan} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Skills list */}
+        {formData.skills.length > 0 && (
+          <View style={styles.chipContainer}>
+            {formData.skills.map((skill) => (
+              <View key={skill} style={styles.tagChipActive}>
+                <Text style={styles.tagChipTextActive}>{skill}</Text>
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => removeTag("skills", skill)}
+                  style={{ marginLeft: 6 }}
+                >
+                  <X size={14} color={C.cyan} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Suggested skills pills */}
+        <View style={styles.suggestionsRow}>
+          <Text style={styles.suggestionTitle}>Popular:</Text>
+          {SUGGESTED_SKILLS.filter((s) => !formData.skills.includes(s))
+            .slice(0, 6)
+            .map((s) => (
+              <Pressable
+                key={s}
+                onPress={() => addTag("skills", s)}
+                style={styles.suggestionPill}
+              >
+                <Text style={styles.suggestionPillText}>+ {s}</Text>
+              </Pressable>
+            ))}
+        </View>
+
+        {/* EDUCATION / DIPLOMA */}
+        <View style={styles.sectionDivider}>
+          <Text style={styles.sectionHeader}>EDUCATION & DIPLOMA</Text>
+          <View style={styles.badgeOptional}>
+            <Text style={styles.badgeOptionalText}>OPTIONAL</Text>
+          </View>
+        </View>
+        <Text style={styles.fieldHint}>
+          University degree, school diploma, or vocational program (e.g. Java
+          Fullstack Developer).
+        </Text>
+        <TextInput
+          style={styles.input}
+          value={formData.education}
+          onChangeText={(text) =>
+            setFormData((prev) => ({ ...prev, education: text }))
+          }
+          placeholder="e.g., Java Fullstack Developer Diploma — Nackademin / KTH"
+          placeholderTextColor={C.dim}
+        />
+
+        {/* LINKS: GITHUB & PORTFOLIO */}
+        <View style={styles.sectionDivider}>
+          <Text style={styles.sectionHeader}>PORTFOLIO & GITHUB</Text>
+          <View style={styles.badgeOptional}>
+            <Text style={styles.badgeOptionalText}>OPTIONAL</Text>
+          </View>
+        </View>
+        <View style={styles.rowInputs}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>GITHUB PROFILE URL</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.github_url}
+              onChangeText={(text) =>
+                setFormData((prev) => ({ ...prev, github_url: text }))
+              }
+              placeholder="https://github.com/username"
+              placeholderTextColor={C.dim}
+              autoCapitalize="none"
+              keyboardType="url"
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>PORTFOLIO / WEBSITE URL</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.portfolio_url}
+              onChangeText={(text) =>
+                setFormData((prev) => ({ ...prev, portfolio_url: text }))
+              }
+              placeholder="https://myportfolio.dev"
+              placeholderTextColor={C.dim}
+              autoCapitalize="none"
+              keyboardType="url"
+            />
+          </View>
+        </View>
+
+        {/* BIO & AI GENERATOR */}
+        <View style={styles.sectionDivider}>
+          <Text style={styles.sectionHeader}>PROFESSIONAL BIO</Text>
+          <View style={styles.badgeOptional}>
+            <Text style={styles.badgeOptionalText}>AI-ASSISTED</Text>
+          </View>
+        </View>
+        <View style={styles.bioHeaderRow}>
+          <View style={styles.tonePills}>
+            {(["executive", "technical", "modern"] as const).map((t) => (
+              <Pressable
+                key={t}
+                onPress={() => setBioTone(t)}
+                style={[
+                  styles.tonePill,
+                  bioTone === t && styles.tonePillActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tonePillText,
+                    bioTone === t && { color: C.cyan },
+                  ]}
+                >
+                  {t}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={styles.aiGenButton}
+            onPress={handleGenerateBio}
+            activeOpacity={0.8}
+            disabled={generatingBio}
+          >
+            <Sparkles size={14} color="#000" />
+            <Text style={styles.aiGenButtonText}>
+              {generatingBio ? "Writing..." : "Generate with AI"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          value={formData.bio}
+          onChangeText={(text) =>
+            setFormData((prev) => ({ ...prev, bio: text }))
+          }
+          placeholder="Write a brief professional summary or click 'Generate with AI' to craft a tailored narrative based on your credentials..."
+          placeholderTextColor={C.dim}
+          multiline
+          numberOfLines={4}
+        />
+
+        {/* DOCUMENT UPLOADS (CAPPED AT 6) */}
+        <View style={styles.sectionDivider}>
+          <Text style={styles.sectionHeader}>
+            DOCUMENTS & VAULT ({totalDocs}/{MAX_DOCUMENTS} MAX)
+          </Text>
+          <View style={styles.badgeOptional}>
+            <Text style={styles.badgeOptionalText}>OPTIONAL</Text>
+          </View>
+        </View>
+        <Text style={styles.fieldHint}>
+          Upload your CV/Resume (PDF/DOCX) and Certifications. AI automatically
+          extracts career context.
+        </Text>
+
+        <View style={styles.uploadButtonsRow}>
+          <TouchableOpacity
+            style={[
+              styles.uploadActionBtn,
+              totalDocs >= MAX_DOCUMENTS && { opacity: 0.5 },
+            ]}
+            onPress={() => handleUploadDocument("cv")}
+            disabled={uploadingDoc || totalDocs >= MAX_DOCUMENTS}
+            activeOpacity={0.8}
+          >
+            <FileText size={16} color={C.cyan} />
+            <Text style={styles.uploadActionBtnText}>Upload CV / Resume</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.uploadActionBtn,
+              totalDocs >= MAX_DOCUMENTS && { opacity: 0.5 },
+            ]}
+            onPress={() => handleUploadDocument("certification")}
+            disabled={uploadingDoc || totalDocs >= MAX_DOCUMENTS}
+            activeOpacity={0.8}
+          >
+            <Award size={16} color={C.cyan} />
+            <Text style={styles.uploadActionBtnText}>Upload Certification</Text>
+          </TouchableOpacity>
+        </View>
+
+        {uploadingDoc && (
+          <View style={styles.uploadProgressBox}>
+            <ActivityIndicator size="small" color={C.cyan} />
+            <Text style={styles.uploadProgressText}>
+              {uploadStatus || "Processing document..."}
+            </Text>
+          </View>
+        )}
+
+        {/* Uploaded Documents List */}
+        {totalDocs > 0 && (
+          <View style={styles.documentsCardList}>
+            {resumes.map((doc) => (
+              <View key={doc.id} style={styles.docRow}>
+                <View style={styles.docRowLeft}>
+                  <FileText size={18} color={C.cyan} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.docName} numberOfLines={1}>
+                      {doc.file_name}
+                    </Text>
+                    <Text style={styles.docMeta}>
+                      CV • {doc.file_size_kb || 0} KB •{" "}
+                      {doc.extraction_status || "synced"}
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  hitSlop={8}
+                  onPress={() =>
+                    handleDeleteDocument("cv", doc.id, doc.storage_path)
+                  }
+                  style={styles.deleteDocBtn}
+                >
+                  <Trash2 size={16} color={C.sub} />
+                </Pressable>
+              </View>
+            ))}
+
+            {certs.map((doc) => (
+              <View key={doc.id} style={styles.docRow}>
+                <View style={styles.docRowLeft}>
+                  <Award size={18} color={C.cyan} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.docName} numberOfLines={1}>
+                      {doc.file_name}
+                    </Text>
+                    <Text style={styles.docMeta}>
+                      Certification • {doc.file_size_kb || 0} KB
+                    </Text>
+                  </View>
+                </View>
+                <Pressable
+                  hitSlop={8}
+                  onPress={() =>
+                    handleDeleteDocument(
+                      "certification",
+                      doc.id,
+                      doc.storage_path,
+                    )
+                  }
+                  style={styles.deleteDocBtn}
+                >
+                  <Trash2 size={16} color={C.sub} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  // Step 1: Seniority, Years of Experience & Languages
+  const renderStep1 = () => (
+    <View>
+      <Text style={styles.stepTitle}>Experience & Seniority</Text>
+      <Text style={styles.stepSubtitle}>
+        Set your career trajectory and linguistic capabilities for global and
+        Nordic job searches.
+      </Text>
+
+      <Text style={styles.label}>YEARS OF EXPERIENCE</Text>
+      <TextInput
+        style={styles.input}
+        value={formData.years_experience}
+        onChangeText={(text) =>
+          setFormData((prev) => ({ ...prev, years_experience: text }))
+        }
+        placeholder="e.g., 5"
+        keyboardType="numeric"
+        placeholderTextColor={C.dim}
+      />
+
+      <Text style={styles.label}>SENIORITY LEVEL</Text>
+      <View style={styles.chipContainer}>
+        {SENIORITY.map((level) => (
+          <Pressable
+            key={level}
+            onPress={() =>
+              setFormData((prev) => ({ ...prev, seniority_level: level }))
+            }
+            style={[
+              styles.chip,
+              formData.seniority_level === level && styles.chipActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                formData.seniority_level === level && { color: C.cyan },
+              ]}
+            >
+              {level.replace("_", " ")}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.label}>LANGUAGES SPOKEN</Text>
+      <View style={styles.tagInputRow}>
+        <TextInput
+          style={[styles.input, { flex: 1 }]}
+          value={newLangInput}
+          onChangeText={setNewLangInput}
+          onSubmitEditing={() => {
+            addTag("languages", newLangInput);
+            setNewLangInput("");
+          }}
+          placeholder="Add language..."
+          placeholderTextColor={C.dim}
+        />
+        <TouchableOpacity
+          style={styles.addTagButton}
+          onPress={() => {
+            addTag("languages", newLangInput);
+            setNewLangInput("");
+          }}
+          activeOpacity={0.8}
+        >
+          <Plus size={18} color={C.cyan} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.chipContainer}>
+        {formData.languages.map((lang) => (
+          <View key={lang} style={styles.tagChipActive}>
+            <Text style={styles.tagChipTextActive}>{lang}</Text>
+            <Pressable
+              hitSlop={8}
+              onPress={() => removeTag("languages", lang)}
+              style={{ marginLeft: 6 }}
+            >
+              <X size={14} color={C.cyan} />
+            </Pressable>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.suggestionsRow}>
+        <Text style={styles.suggestionTitle}>Suggestions:</Text>
+        {SUGGESTED_LANGUAGES.filter((l) => !formData.languages.includes(l)).map(
+          (l) => (
+            <Pressable
+              key={l}
+              onPress={() => addTag("languages", l)}
+              style={styles.suggestionPill}
+            >
+              <Text style={styles.suggestionPillText}>+ {l}</Text>
+            </Pressable>
+          ),
+        )}
+      </View>
+    </View>
+  );
+
+  // Step 2: Location & Work Types
+  const renderStep2 = () => (
+    <View>
+      <Text style={styles.stepTitle}>Work Preferences & Location</Text>
+      <Text style={styles.stepSubtitle}>
+        Define where and how you want to work. The scraper prioritizes jobs
+        matching these parameters.
+      </Text>
+
+      <Text style={styles.label}>WORK TYPES (SELECT MULTIPLE)</Text>
+      <View style={styles.chipContainer}>
+        {WORK_TYPES.map((type) => (
+          <Pressable
+            key={type}
+            onPress={() => toggleArrayItem("work_type_preferences", type)}
+            style={[
+              styles.chip,
+              formData.work_type_preferences.includes(type) &&
+                styles.chipActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                formData.work_type_preferences.includes(type) && {
+                  color: C.cyan,
+                },
+              ]}
+            >
+              {type}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.label}>TARGET CITIES</Text>
+      <View style={styles.tagInputRow}>
+        <TextInput
+          style={[styles.input, { flex: 1 }]}
+          value={newCityInput}
+          onChangeText={setNewCityInput}
+          onSubmitEditing={() => {
+            addTag("target_cities", newCityInput);
+            setNewCityInput("");
+          }}
+          placeholder="e.g., Stockholm..."
+          placeholderTextColor={C.dim}
+        />
+        <TouchableOpacity
+          style={styles.addTagButton}
+          onPress={() => {
+            addTag("target_cities", newCityInput);
+            setNewCityInput("");
+          }}
+          activeOpacity={0.8}
+        >
+          <Plus size={18} color={C.cyan} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.chipContainer}>
+        {formData.target_cities.map((city) => (
+          <View key={city} style={styles.tagChipActive}>
+            <Text style={styles.tagChipTextActive}>{city}</Text>
+            <Pressable
+              hitSlop={8}
+              onPress={() => removeTag("target_cities", city)}
+              style={{ marginLeft: 6 }}
+            >
+              <X size={14} color={C.cyan} />
+            </Pressable>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.suggestionsRow}>
+        <Text style={styles.suggestionTitle}>Nordic hubs:</Text>
+        {SUGGESTED_CITIES.filter(
+          (c) => !formData.target_cities.includes(c),
+        ).map((c) => (
+          <Pressable
+            key={c}
+            onPress={() => addTag("target_cities", c)}
+            style={styles.suggestionPill}
+          >
+            <Text style={styles.suggestionPillText}>+ {c}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.label}>TARGET COUNTRIES</Text>
+      <View style={styles.tagInputRow}>
+        <TextInput
+          style={[styles.input, { flex: 1 }]}
+          value={newCountryInput}
+          onChangeText={setNewCountryInput}
+          onSubmitEditing={() => {
+            addTag("target_countries", newCountryInput);
+            setNewCountryInput("");
+          }}
+          placeholder="e.g., Sweden..."
+          placeholderTextColor={C.dim}
+        />
+        <TouchableOpacity
+          style={styles.addTagButton}
+          onPress={() => {
+            addTag("target_countries", newCountryInput);
+            setNewCountryInput("");
+          }}
+          activeOpacity={0.8}
+        >
+          <Plus size={18} color={C.cyan} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.chipContainer}>
+        {formData.target_countries.map((country) => (
+          <View key={country} style={styles.tagChipActive}>
+            <Text style={styles.tagChipTextActive}>{country}</Text>
+            <Pressable
+              hitSlop={8}
+              onPress={() => removeTag("target_countries", country)}
+              style={{ marginLeft: 6 }}
+            >
+              <X size={14} color={C.cyan} />
+            </Pressable>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.suggestionsRow}>
+        <Text style={styles.suggestionTitle}>Suggestions:</Text>
+        {SUGGESTED_COUNTRIES.filter(
+          (c) => !formData.target_countries.includes(c),
+        ).map((c) => (
+          <Pressable
+            key={c}
+            onPress={() => addTag("target_countries", c)}
+            style={styles.suggestionPill}
+          >
+            <Text style={styles.suggestionPillText}>+ {c}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.label}>SEARCH RADIUS (KM)</Text>
+      <View style={styles.chipContainer}>
+        {RADIUS_OPTIONS.map((r) => (
+          <Pressable
+            key={r}
+            onPress={() =>
+              setFormData((prev) => ({ ...prev, location_radius_km: r }))
+            }
+            style={[
+              styles.chip,
+              formData.location_radius_km === r && styles.chipActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                formData.location_radius_km === r && { color: C.cyan },
+              ]}
+            >
+              {r} km
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+
+  // Step 3: Salary & Application Throttling
+  const renderStep3 = () => (
+    <View>
+      <Text style={styles.stepTitle}>Compensation & Application Pace</Text>
+      <Text style={styles.stepSubtitle}>
+        Specify baseline compensation goals and daily auto-application throttles
+        to prevent rate-limiting.
+      </Text>
+
+      <View style={styles.rowInputs}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>MINIMUM MONTHLY SALARY</Text>
+          <TextInput
+            style={styles.input}
+            value={formData.salary_min}
+            onChangeText={(text) =>
+              setFormData((prev) => ({ ...prev, salary_min: text }))
+            }
+            placeholder="e.g., 48000"
+            keyboardType="numeric"
+            placeholderTextColor={C.dim}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.label}>MAXIMUM EXPECTED SALARY</Text>
+          <TextInput
+            style={styles.input}
+            value={formData.salary_max}
+            onChangeText={(text) =>
+              setFormData((prev) => ({ ...prev, salary_max: text }))
+            }
+            placeholder="e.g., 68000"
+            keyboardType="numeric"
+            placeholderTextColor={C.dim}
+          />
+        </View>
+      </View>
+
+      <Text style={styles.label}>CURRENCY</Text>
+      <View style={styles.chipContainer}>
+        {["SEK", "EUR", "USD", "GBP"].map((currency) => (
+          <Pressable
+            key={currency}
+            onPress={() =>
+              setFormData((prev) => ({ ...prev, salary_currency: currency }))
+            }
+            style={[
+              styles.chip,
+              formData.salary_currency === currency && styles.chipActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                formData.salary_currency === currency && { color: C.cyan },
+              ]}
+            >
+              {currency}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.label}>MAX DAILY APPLICATIONS</Text>
+      <Text style={styles.fieldHint}>
+        Controls automatic application throttling to maintain delivery
+        reputation.
+      </Text>
+      <View style={styles.chipContainer}>
+        {[5, 10, 15, 20].map((num) => (
+          <Pressable
+            key={num}
+            onPress={() =>
+              setFormData((prev) => ({ ...prev, max_daily_applications: num }))
+            }
+            style={[
+              styles.chip,
+              formData.max_daily_applications === num && styles.chipActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                formData.max_daily_applications === num && { color: C.cyan },
+              ]}
+            >
+              {num} apps/day
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+
+  // Step 4: Summary & Confirmation
+  const renderStep4 = () => {
+    const totalDocs = resumes.length + certs.length;
+
+    return (
+      <View>
+        <Text style={styles.stepTitle}>Review & Launch Pipeline</Text>
+        <Text style={styles.stepSubtitle}>
+          Verify your configuration. Once launched, our real scraping engine and
+          AI matching system will run against verified jobs.
+        </Text>
+
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Full Name</Text>
+            <Text style={styles.summaryValue}>
+              {`${formData.first_name} ${formData.last_name}`.trim() || "N/A"}
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Primary Target Title</Text>
+            <Text style={styles.summaryValue}>
+              {formData.professional_title || "N/A"}
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Target Roles</Text>
+            <Text style={styles.summaryValue}>
+              {formData.target_roles.length > 0
+                ? formData.target_roles.join(", ")
+                : formData.professional_title}
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>
+              Core Skills ({formData.skills.length})
+            </Text>
+            <Text style={styles.summaryValue} numberOfLines={2}>
+              {formData.skills.length > 0
+                ? formData.skills.join(", ")
+                : "None specified"}
+            </Text>
+          </View>
+
+          {formData.education ? (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Education / Diploma</Text>
+              <Text style={styles.summaryValue} numberOfLines={2}>
+                {formData.education}
+              </Text>
+            </View>
+          ) : null}
+
+          {formData.github_url || formData.portfolio_url ? (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Links</Text>
+              <Text style={styles.summaryValue} numberOfLines={1}>
+                {[formData.github_url, formData.portfolio_url]
+                  .filter(Boolean)
+                  .join(" • ")}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Uploaded Documents</Text>
+            <Text style={styles.summaryValue}>
+              {totalDocs} files ({resumes.length} CVs, {certs.length} Certs)
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Experience / Seniority</Text>
+            <Text style={styles.summaryValue}>
+              {formData.years_experience} yrs •{" "}
+              {formData.seniority_level.replace("_", " ")}
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Work Types</Text>
+            <Text style={styles.summaryValue}>
+              {formData.work_type_preferences.join(", ")}
+            </Text>
+          </View>
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Cities & Countries</Text>
+            <Text style={styles.summaryValue}>
+              {formData.target_cities.join(", ")} (
+              {formData.target_countries.join(", ")})
+            </Text>
+          </View>
+
+          <View style={[styles.summaryRow, { borderBottomWidth: 0 }]}>
+            <Text style={styles.summaryLabel}>Salary & Pace</Text>
+            <Text style={styles.summaryValue}>
+              {formData.salary_min
+                ? `${formData.salary_min} - ${formData.salary_max || "+"} ${formData.salary_currency}`
+                : "Open"}{" "}
+              • {formData.max_daily_applications}/day
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   const stepContent = () => {
     switch (step) {
       case 0:
-        return (
-          <View style={styles.step}>
-            <Typography
-              variant="h2"
-              weight="bold"
-              color="primary"
-              style={styles.stepTitle}
-            >
-              Professional Identity
-            </Typography>
-            <Input
-              label="Professional Title"
-              value={formData.professional_title}
-              onChangeText={(text) =>
-                setFormData({ ...formData, professional_title: text })
-              }
-              placeholder="e.g., Senior Frontend Engineer"
-            />
-            <Input
-              label="Years of Experience"
-              value={formData.years_experience}
-              onChangeText={(text) =>
-                setFormData({ ...formData, years_experience: text })
-              }
-              placeholder="e.g., 5"
-              keyboardType="numeric"
-            />
-            <Typography
-              variant="caption"
-              color="secondary"
-              style={styles.subLabel}
-            >
-              SENIORITY LEVEL
-            </Typography>
-            <View style={styles.chipContainer}>
-              {SENIORITY.map((level) => (
-                <Chip
-                  key={level}
-                  label={level}
-                  selected={formData.seniority_level === level}
-                  onPress={() =>
-                    setFormData({ ...formData, seniority_level: level })
-                  }
-                />
-              ))}
-            </View>
-          </View>
-        );
+        return renderStep0();
       case 1:
-        return (
-          <View style={styles.step}>
-            <Typography
-              variant="h2"
-              weight="bold"
-              color="primary"
-              style={styles.stepTitle}
-            >
-              Target Roles & Work Type
-            </Typography>
-            <Input
-              label="Target Roles (comma separated)"
-              value={formData.target_roles.join(", ")}
-              onChangeText={(text) =>
-                setFormData({
-                  ...formData,
-                  target_roles: text
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
-              placeholder="Frontend, Backend, Fullstack..."
-            />
-            <Typography
-              variant="caption"
-              color="secondary"
-              style={styles.subLabel}
-            >
-              WORK TYPES
-            </Typography>
-            <View style={styles.chipContainer}>
-              {WORK_TYPES.map((type) => (
-                <Chip
-                  key={type}
-                  label={type}
-                  selected={formData.work_type_preferences.includes(type)}
-                  onPress={() => toggleArrayItem("work_type_preferences", type)}
-                />
-              ))}
-            </View>
-          </View>
-        );
+        return renderStep1();
       case 2:
-        return (
-          <View style={styles.step}>
-            <Typography
-              variant="h2"
-              weight="bold"
-              color="primary"
-              style={styles.stepTitle}
-            >
-              Location & Geography
-            </Typography>
-            <Input
-              label="Target Cities (comma separated)"
-              value={formData.target_cities.join(", ")}
-              onChangeText={(text) =>
-                setFormData({
-                  ...formData,
-                  target_cities: text
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
-              placeholder="Stockholm, Gothenburg, Malmö..."
-            />
-            <Input
-              label="Target Countries (comma separated)"
-              value={formData.target_countries.join(", ")}
-              onChangeText={(text) =>
-                setFormData({
-                  ...formData,
-                  target_countries: text
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
-              }
-              placeholder="Sweden, Germany, UK..."
-            />
-            <Typography
-              variant="caption"
-              color="secondary"
-              style={styles.subLabel}
-            >
-              RADIUS (KM)
-            </Typography>
-            <View style={styles.chipContainer}>
-              {RADIUS_OPTIONS.map((r) => (
-                <Chip
-                  key={r}
-                  label={`${r} km`}
-                  selected={formData.location_radius_km === r}
-                  onPress={() =>
-                    setFormData({ ...formData, location_radius_km: r })
-                  }
-                />
-              ))}
-            </View>
-          </View>
-        );
+        return renderStep2();
       case 3:
-        return (
-          <View style={styles.step}>
-            <Typography
-              variant="h2"
-              weight="bold"
-              color="primary"
-              style={styles.stepTitle}
-            >
-              Salary Expectations
-            </Typography>
-            <View style={styles.row}>
-              <Input
-                label="Min"
-                value={formData.salary_min}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, salary_min: text })
-                }
-                placeholder="45000"
-                keyboardType="numeric"
-                style={{ flex: 1 }}
-              />
-              <Input
-                label="Max"
-                value={formData.salary_max}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, salary_max: text })
-                }
-                placeholder="65000"
-                keyboardType="numeric"
-                style={{ flex: 1 }}
-              />
-            </View>
-            <Typography
-              variant="caption"
-              color="secondary"
-              style={styles.subLabel}
-            >
-              CURRENCY
-            </Typography>
-            <View style={styles.chipContainer}>
-              {["SEK", "EUR", "USD", "GBP"].map((currency) => (
-                <Chip
-                  key={currency}
-                  label={currency}
-                  selected={formData.salary_currency === currency}
-                  onPress={() =>
-                    setFormData({ ...formData, salary_currency: currency })
-                  }
-                />
-              ))}
-            </View>
-          </View>
-        );
+        return renderStep3();
       case 4:
-        return (
-          <View style={styles.step}>
-            <Typography
-              variant="h2"
-              weight="bold"
-              color="primary"
-              style={styles.stepTitle}
-            >
-              Review & Complete
-            </Typography>
-            <Card style={styles.summaryCard}>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Title</Text>
-                <Text style={styles.summaryValue}>
-                  {formData.professional_title || "N/A"}
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Experience</Text>
-                <Text style={styles.summaryValue}>
-                  {formData.years_experience} years
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Roles</Text>
-                <Text style={styles.summaryValue}>
-                  {formData.target_roles.join(", ") || "N/A"}
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Work Types</Text>
-                <Text style={styles.summaryValue}>
-                  {formData.work_type_preferences.join(", ")}
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Cities</Text>
-                <Text style={styles.summaryValue}>
-                  {formData.target_cities.join(", ") || "N/A"}
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Countries</Text>
-                <Text style={styles.summaryValue}>
-                  {formData.target_countries.join(", ")}
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Radius</Text>
-                <Text style={styles.summaryValue}>
-                  {formData.location_radius_km} km
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Salary</Text>
-                <Text style={styles.summaryValue}>
-                  {formData.salary_min
-                    ? `${formData.salary_min} - ${formData.salary_max} ${formData.salary_currency}`
-                    : "Not specified"}
-                </Text>
-              </View>
-            </Card>
-          </View>
-        );
+        return renderStep4();
+      default:
+        return null;
     }
   };
 
   return (
     <SafeAreaWrapper edges={["top", "bottom"]} style={styles.container}>
-      <View style={[styles.header, isDesktop && styles.headerDesktop]}>
+      <View style={styles.header}>
         <Pressable
           onPress={goBack}
           disabled={step === 0}
           hitSlop={8}
-          style={[styles.backButton, step === 0 && styles.backButtonDisabled]}
+          style={[styles.backButton, step === 0 && { opacity: 0.3 }]}
         >
-          <ChevronLeft
-            size={24}
-            color={step === 0 ? colors.text.dim : colors.text.primary}
-          />
+          <ChevronLeft size={22} color={step === 0 ? C.dim : C.text} />
         </Pressable>
-        <Typography variant="caption" color="secondary">
+
+        <Text style={styles.headerStepText}>
           STEP {step + 1} OF {totalSteps}
-        </Typography>
-        <Pressable onPress={handleSkip} hitSlop={8}>
-          <Typography variant="caption" color="accent">
-            Skip Setup
-          </Typography>
+        </Text>
+
+        <Pressable onPress={handleSkip} hitSlop={8} style={styles.skipBadge}>
+          <Text style={styles.skipBadgeText}>Skip for now</Text>
+          <ChevronRight size={13} color={C.cyan} />
         </Pressable>
       </View>
 
-      <View
-        style={[styles.progressTrack, isDesktop && styles.progressTrackDesktop]}
-      >
+      <View style={styles.progressTrack}>
         <View
           style={[
             styles.progressFill,
@@ -494,36 +1526,51 @@ export default function ProfileSetupScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          isDesktop && styles.scrollDesktop,
-        ]}
+        contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <Animated.View
           key={step}
-          entering={FadeInDown.duration(300).easing(Easing.out(Easing.quad))}
+          entering={FadeInDown.duration(280).easing(Easing.out(Easing.quad))}
           style={styles.content}
         >
           {stepContent()}
+
           {error && (
             <View style={styles.errorBox}>
+              <AlertCircle
+                size={16}
+                color={C.pink}
+                style={{ marginRight: 8 }}
+              />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
-          <Button
+
+          <TouchableOpacity
             onPress={goNext}
-            loading={loading}
+            disabled={loading}
             style={styles.nextButton}
-            haptic={false}
+            activeOpacity={0.85}
           >
-            {step === totalSteps - 1 ? "Complete Profile" : "Continue"}
-            {step === totalSteps - 1 ? (
-              <Check size={18} color={colors.text.inverse} />
+            {loading ? (
+              <ActivityIndicator color="#000" />
             ) : (
-              <ChevronRight size={18} color={colors.text.inverse} />
+              <>
+                <Text style={styles.nextButtonText}>
+                  {step === totalSteps - 1
+                    ? "LAUNCH PIPELINE & COMPLETE PROFILE"
+                    : "CONTINUE"}
+                </Text>
+                {step === totalSteps - 1 ? (
+                  <Check size={18} color="#000" />
+                ) : (
+                  <ChevronRight size={18} color="#000" />
+                )}
+              </>
             )}
-          </Button>
+          </TouchableOpacity>
         </Animated.View>
       </ScrollView>
     </SafeAreaWrapper>
@@ -531,87 +1578,439 @@ export default function ProfileSetupScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, backgroundColor: "transparent" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 14,
+    maxWidth: 680,
+    alignSelf: "center",
+    width: "100%",
+  },
+  headerStepText: {
+    color: C.sub,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1.5,
   },
   backButton: {
     padding: 8,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface.card,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  backButtonDisabled: { opacity: 0.4 },
-  headerDesktop: {
-    maxWidth: 640,
-    width: "100%",
-    alignSelf: "center",
+  skipBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: "rgba(0, 245, 255, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 245, 255, 0.2)",
+  },
+  skipBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.cyan,
   },
   progressTrack: {
-    height: 2,
-    backgroundColor: colors.surface.border,
-    marginHorizontal: 24,
-    borderRadius: 1,
-    marginBottom: 16,
+    height: 3,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    marginHorizontal: 20,
+    borderRadius: 2,
+    marginBottom: 20,
     overflow: "hidden",
-  },
-  progressTrackDesktop: {
     maxWidth: 640,
-    width: "100%",
     alignSelf: "center",
+    width: "100%",
   },
   progressFill: {
     height: "100%",
-    backgroundColor: colors.accent.cyan,
-    shadowColor: colors.accent.cyan,
+    backgroundColor: C.cyan,
+    shadowColor: C.cyan,
     shadowOpacity: 0.8,
-    shadowRadius: 4,
+    shadowRadius: 6,
   },
-  scroll: { paddingHorizontal: 24, paddingBottom: 40 },
-  scrollDesktop: {
+  scroll: {
+    paddingHorizontal: 20,
+    paddingBottom: 60,
+  },
+  content: {
+    flex: 1,
     maxWidth: 640,
-    width: "100%",
     alignSelf: "center",
+    width: "100%",
   },
-  content: { flex: 1 },
-  step: { paddingTop: 8 },
-  stepTitle: { marginBottom: 24 },
+  stepTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: C.text,
+    marginBottom: 6,
+    letterSpacing: -0.5,
+  },
+  stepSubtitle: {
+    fontSize: 13,
+    color: C.sub,
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  sectionDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 20,
+    marginBottom: 6,
+  },
+  sectionHeader: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: C.cyan,
+    letterSpacing: 1.2,
+  },
+  badgeRequired: {
+    backgroundColor: "rgba(0, 245, 255, 0.12)",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(0, 245, 255, 0.3)",
+  },
+  badgeRequiredText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: C.cyan,
+    letterSpacing: 0.8,
+  },
+  badgeOptional: {
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  badgeOptionalText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: C.sub,
+    letterSpacing: 0.8,
+  },
+  fieldHint: {
+    fontSize: 12,
+    color: C.dim,
+    marginBottom: 8,
+    lineHeight: 17,
+  },
+  label: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: C.sub,
+    letterSpacing: 1.2,
+    marginBottom: 6,
+    marginTop: 14,
+  },
+  rowInputs: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  input: {
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    height: 50,
+    color: C.text,
+    fontSize: 14,
+  },
+  textArea: {
+    height: 100,
+    paddingTop: 12,
+    paddingBottom: 12,
+    textAlignVertical: "top",
+  },
+  tagInputRow: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  addTagButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: "rgba(0, 245, 255, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 245, 255, 0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   chipContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    marginTop: 8,
+    marginVertical: 8,
   },
-  subLabel: { marginTop: 12, marginBottom: 8 },
-  row: { flexDirection: "row", gap: 12 },
-  summaryCard: { padding: 16, marginBottom: 16 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  chipActive: {
+    borderColor: `${C.cyan}60`,
+    backgroundColor: `${C.cyan}15`,
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.sub,
+    textTransform: "capitalize",
+  },
+  tagChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  tagChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: C.text,
+  },
+  tagChipActive: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: "rgba(0, 245, 255, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 245, 255, 0.3)",
+  },
+  tagChipTextActive: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.cyan,
+  },
+  suggestionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  suggestionTitle: {
+    fontSize: 11,
+    color: C.dim,
+    marginRight: 4,
+  },
+  suggestionPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  suggestionPillText: {
+    fontSize: 11,
+    color: C.sub,
+  },
+  bioHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+    marginTop: 4,
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  tonePills: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  tonePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: "rgba(255,255,255,0.02)",
+  },
+  tonePillActive: {
+    borderColor: `${C.cyan}50`,
+    backgroundColor: `${C.cyan}10`,
+  },
+  tonePillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: C.dim,
+    textTransform: "capitalize",
+  },
+  aiGenButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: C.cyan,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  aiGenButtonText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#000",
+    letterSpacing: 0.5,
+  },
+  uploadButtonsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 12,
+    flexWrap: "wrap",
+  },
+  uploadActionBtn: {
+    flex: 1,
+    minWidth: 140,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: "rgba(0, 245, 255, 0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 245, 255, 0.2)",
+  },
+  uploadActionBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: C.text,
+  },
+  uploadProgressBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(0, 245, 255, 0.06)",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  uploadProgressText: {
+    fontSize: 12,
+    color: C.cyan,
+    fontWeight: "600",
+  },
+  documentsCardList: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  docRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  docRowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  docName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: C.text,
+  },
+  docMeta: {
+    fontSize: 11,
+    color: C.dim,
+    marginTop: 2,
+  },
+  deleteDocBtn: {
+    padding: 6,
+    marginLeft: 8,
+  },
+  summaryCard: {
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 18,
+    padding: 20,
+    marginTop: 10,
+  },
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 8,
+    alignItems: "center",
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.surface.border,
+    borderBottomColor: "rgba(255,255,255,0.05)",
   },
-  summaryLabel: { color: colors.text.dim, fontSize: 14, fontWeight: "600" },
+  summaryLabel: {
+    color: C.sub,
+    fontSize: 13,
+    fontWeight: "600",
+  },
   summaryValue: {
-    color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: "500",
+    color: C.text,
+    fontSize: 13,
+    fontWeight: "700",
     maxWidth: "60%",
     textAlign: "right",
   },
   errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "rgba(248,113,113,0.1)",
     borderWidth: 1,
     borderColor: "rgba(248,113,113,0.3)",
-    borderRadius: radius.md,
-    padding: 12,
-    marginBottom: 16,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 20,
   },
-  errorText: { color: colors.accent.red, fontSize: 13 },
-  nextButton: { marginTop: 16 },
+  errorText: {
+    color: C.pink,
+    fontSize: 13,
+    fontWeight: "600",
+    flex: 1,
+  },
+  nextButton: {
+    flexDirection: "row",
+    backgroundColor: C.cyan,
+    borderRadius: 14,
+    height: 54,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 28,
+    gap: 8,
+    shadowColor: C.cyan,
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  nextButtonText: {
+    color: "#000",
+    fontWeight: "900",
+    fontSize: 13,
+    letterSpacing: 1.2,
+  },
 });

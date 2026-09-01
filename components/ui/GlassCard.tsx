@@ -68,17 +68,44 @@ const styles = StyleSheet.create({
   default: {
     backgroundColor: colors.surface.card,
     borderColor: colors.surface.border,
-    ...(shadows.card as any),
+    ...Platform.select({
+      web: { boxShadow: shadows.card } as any,
+      default: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
+        elevation: 3,
+      },
+    }),
   },
   elevated: {
     backgroundColor: colors.surface.frost,
     borderColor: colors.surface.borderCyan,
-    ...(shadows.glassLg as any),
+    ...Platform.select({
+      web: { boxShadow: shadows.glassLg } as any,
+      default: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.55,
+        shadowRadius: 24,
+        elevation: 8,
+      },
+    }),
   },
   interactive: {
     backgroundColor: colors.surface.card,
     borderColor: colors.surface.border,
-    ...(shadows.card as any),
+    ...Platform.select({
+      web: { boxShadow: shadows.card } as any,
+      default: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 12,
+        elevation: 3,
+      },
+    }),
   },
 
   // Padding

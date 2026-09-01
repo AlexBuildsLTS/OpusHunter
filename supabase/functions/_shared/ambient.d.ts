@@ -11,17 +11,23 @@ declare namespace Deno {
     delete(key: string): void;
     toObject(): Record<string, string>;
   };
-  export function serve(handler: (req: Request) => Response | Promise<Response> | void): void;
+  export function serve(
+    handler: (req: Request) => Response | Promise<Response> | void,
+  ): void;
   export namespace serve {
     function port(): number;
   }
 }
 
 declare module "npm:pdf-parse@1.1.1" {
-  function pdfParse(buffer: any): Promise<{ text: string }>;
+  function pdfParse(
+    buffer: Uint8Array | ArrayBuffer | Record<string, unknown>,
+  ): Promise<{ text: string }>;
   export default pdfParse;
 }
 
 declare module "npm:mammoth@1.8.0" {
-  export function extractRawText(input: { buffer: any }): Promise<{ value: string }>;
+  export function extractRawText(input: {
+    buffer: Uint8Array | ArrayBuffer | Record<string, unknown>;
+  }): Promise<{ value: string }>;
 }

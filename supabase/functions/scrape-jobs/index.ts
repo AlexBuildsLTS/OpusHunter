@@ -10,7 +10,12 @@
  */
 
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
-import { getCandidateKeys, handle429, markKeyUsed, logUsage } from "../_shared/keyResolver.ts";
+import {
+  getCandidateKeys,
+  handle429,
+  markKeyUsed,
+  logUsage,
+} from "../_shared/keyResolver.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { rateLimit } from "../_shared/rateLimit.ts";
 
@@ -53,21 +58,25 @@ interface NormalizedJob {
 }
 
 // ── 1. JSearch Adapter ────────────────────────────────────────────────────────
-async function fetchJSearch(params: ScrapeParams, userId: string): Promise<NormalizedJob[]> {
+async function fetchJSearch(
+  params: ScrapeParams,
+  userId: string,
+): Promise<NormalizedJob[]> {
   const candidateKeys = await getCandidateKeys(supabase, userId, "rapidapi");
   if (candidateKeys.length === 0) return [];
 
-  const queryTerms = (params.keywords && params.keywords.length > 0)
-    ? params.keywords.join(" ")
-    : "developer";
+  const queryTerms =
+    params.keywords && params.keywords.length > 0
+      ? params.keywords.join(" ")
+      : "software developer OR engineer OR IT OR fullstack";
 
-  const primaryCountry = params.countries?.[0] || "SE";
+  const primaryCountry = params.countries?.[0] || "Sweden";
   const primaryCity = params.cities?.[0] || "Stockholm";
 
   const queryParams = new URLSearchParams({
     query: `${queryTerms} in ${primaryCity}, ${primaryCountry}`,
     page: (params.page || 1).toString(),
-    num_pages: "1",
+    num_pages: "2",
     date_posted: params.datePosted || "all",
   });
 
@@ -78,12 +87,15 @@ async function fetchJSearch(params: ScrapeParams, userId: string): Promise<Norma
 
   for (const keyObj of candidateKeys) {
     try {
-      const response = await fetch(`https://jsearch.p.rapidapi.com/search?${queryParams}`, {
-        headers: {
-          "X-RapidAPI-Key": keyObj.key,
-          "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
+      const response = await fetch(
+        `https://jsearch.p.rapidapi.com/search?${queryParams}`,
+        {
+          headers: {
+            "X-RapidAPI-Key": keyObj.key,
+            "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
+          },
         },
-      });
+      );
 
       if (response.status === 429) {
         await handle429(supabase, keyObj.keyId);
@@ -94,25 +106,47 @@ async function fetchJSearch(params: ScrapeParams, userId: string): Promise<Norma
 
       const data = await response.json();
       await markKeyUsed(supabase, keyObj);
-      await logUsage(supabase, userId, "rapidapi", keyObj.source, true, 0, "scrape-jobs/jsearch");
+      await logUsage(
+        supabase,
+        userId,
+        "rapidapi",
+        keyObj.source,
+        true,
+        0,
+        "scrape-jobs/jsearch",
+      );
 
-      const rawItems = data.data || [];
-      return rawItems.map((raw: any) => ({
-        title: raw.job_title || "Untitled Role",
-        company: raw.employer_name || "Unknown Company",
-        company_logo_url: raw.employer_logo || null,
-        location: [raw.job_city, raw.job_state, raw.job_country].filter(Boolean).join(", ") || primaryCity,
-        country_code: raw.job_country || primaryCountry,
-        description: raw.job_description || "",
-        apply_url: raw.job_apply_link || raw.job_google_link || "",
-        posted_at: raw.job_posted_at_datetime_utc || new Date().toISOString(),
+      const rawItems = (data.data || []) as Array<Record<string, unknown>>;
+      return rawItems.map((raw) => ({
+        title: String(raw.job_title || "Untitled Role"),
+        company: String(raw.employer_name || "Unknown Company"),
+        company_logo_url: raw.employer_logo
+          ? String(raw.employer_logo)
+          : undefined,
+        location:
+          [raw.job_city, raw.job_state, raw.job_country]
+            .filter(Boolean)
+            .map(String)
+            .join(", ") || primaryCity,
+        country_code: String(raw.job_country || primaryCountry),
+        description: String(raw.job_description || ""),
+        apply_url: String(raw.job_apply_link || raw.job_google_link || ""),
+        posted_at: String(
+          raw.job_posted_at_datetime_utc || new Date().toISOString(),
+        ),
         work_type: raw.job_is_remote ? "remote" : "onsite",
-        salary_min: raw.job_min_salary || null,
-        salary_max: raw.job_max_salary || null,
-        currency: raw.job_salary_currency || "SEK",
+        salary_min:
+          typeof raw.job_min_salary === "number"
+            ? raw.job_min_salary
+            : undefined,
+        salary_max:
+          typeof raw.job_max_salary === "number"
+            ? raw.job_max_salary
+            : undefined,
+        currency: String(raw.job_salary_currency || "SEK"),
         source: "jsearch",
-        external_job_id: raw.job_id,
-        source_url: raw.job_apply_link || "",
+        external_job_id: raw.job_id ? String(raw.job_id) : undefined,
+        source_url: raw.job_apply_link ? String(raw.job_apply_link) : "",
       }));
     } catch (err) {
       console.warn("JSearch fetch error with key:", err);
@@ -123,18 +157,22 @@ async function fetchJSearch(params: ScrapeParams, userId: string): Promise<Norma
 }
 
 // ── 2. Adzuna Adapter ─────────────────────────────────────────────────────────
-async function fetchAdzuna(params: ScrapeParams, userId: string): Promise<NormalizedJob[]> {
+async function fetchAdzuna(
+  params: ScrapeParams,
+  userId: string,
+): Promise<NormalizedJob[]> {
   const candidateKeys = await getCandidateKeys(supabase, userId, "adzuna");
   if (candidateKeys.length === 0) return [];
 
   const country = (params.countries?.[0] || "se").toLowerCase();
   const locationName = params.cities?.[0] || "Stockholm";
-  const whatQuery = (params.keywords && params.keywords.length > 0)
-    ? params.keywords.join(" ")
-    : "developer";
+  const whatQuery =
+    params.keywords && params.keywords.length > 0
+      ? params.keywords.join(" ")
+      : "software developer IT engineer";
 
-  const appKeyObj = candidateKeys[0]; // Active key
-  const appId = params.adzunaAppId || Deno.env.get("ADZUNA_APP_ID") || "opushunter";
+  const appId =
+    params.adzunaAppId || Deno.env.get("ADZUNA_APP_ID") || "opushunter";
 
   for (const keyObj of candidateKeys) {
     try {
@@ -142,7 +180,7 @@ async function fetchAdzuna(params: ScrapeParams, userId: string): Promise<Normal
       const queryParams = new URLSearchParams({
         app_id: appId,
         app_key: keyObj.key,
-        results_per_page: "25",
+        results_per_page: "50",
         what: whatQuery,
         where: locationName,
       });
@@ -159,28 +197,57 @@ async function fetchAdzuna(params: ScrapeParams, userId: string): Promise<Normal
 
       if (!response.ok) continue;
 
-      const data = await response.json();
+      const data = (await response.json()) as {
+        results?: Array<Record<string, unknown>>;
+      };
       await markKeyUsed(supabase, keyObj);
-      await logUsage(supabase, userId, "adzuna", keyObj.source, true, 0, "scrape-jobs/adzuna");
+      await logUsage(
+        supabase,
+        userId,
+        "adzuna",
+        keyObj.source,
+        true,
+        0,
+        "scrape-jobs/adzuna",
+      );
 
       const results = data.results || [];
-      return results.map((raw: any) => ({
-        title: raw.title?.replace(/<\/?[^>]+(>|$)/g, "") || "Untitled Role",
-        company: raw.company?.display_name || "Unknown Company",
-        company_logo_url: null,
-        location: raw.location?.display_name || locationName,
-        country_code: country.toUpperCase(),
-        description: raw.description?.replace(/<\/?[^>]+(>|$)/g, "") || "",
-        apply_url: raw.redirect_url || "",
-        posted_at: raw.created || new Date().toISOString(),
-        work_type: "onsite",
-        salary_min: raw.salary_min || null,
-        salary_max: raw.salary_max || null,
-        currency: raw.salary_is_predicted ? "SEK" : (raw.salary_min ? "SEK" : "EUR"),
-        source: "adzuna",
-        external_job_id: raw.id?.toString(),
-        source_url: raw.redirect_url || "",
-      }));
+      return results.map((raw) => {
+        const companyObj = raw.company as { display_name?: string } | undefined;
+        const locObj = raw.location as { display_name?: string } | undefined;
+        const titleStr =
+          typeof raw.title === "string"
+            ? raw.title.replace(/<\/?[^>]+(>|$)/g, "")
+            : "Untitled Role";
+        const descStr =
+          typeof raw.description === "string"
+            ? raw.description.replace(/<\/?[^>]+(>|$)/g, "")
+            : "";
+
+        return {
+          title: titleStr,
+          company: companyObj?.display_name || "Unknown Company",
+          company_logo_url: undefined,
+          location: locObj?.display_name || locationName,
+          country_code: country.toUpperCase(),
+          description: descStr,
+          apply_url: String(raw.redirect_url || ""),
+          posted_at: String(raw.created || new Date().toISOString()),
+          work_type: "onsite",
+          salary_min:
+            typeof raw.salary_min === "number" ? raw.salary_min : undefined,
+          salary_max:
+            typeof raw.salary_max === "number" ? raw.salary_max : undefined,
+          currency: raw.salary_is_predicted
+            ? "SEK"
+            : raw.salary_min
+              ? "SEK"
+              : "EUR",
+          source: "adzuna",
+          external_job_id: raw.id ? String(raw.id) : undefined,
+          source_url: String(raw.redirect_url || ""),
+        };
+      });
     } catch (err) {
       console.warn("Adzuna fetch error with key:", err);
     }
@@ -190,16 +257,20 @@ async function fetchAdzuna(params: ScrapeParams, userId: string): Promise<Normal
 }
 
 // ── 3. LinkedIn Adapter (via RapidAPI linkedin-jobs-search) ────────────────────
-async function fetchLinkedIn(params: ScrapeParams, userId: string): Promise<NormalizedJob[]> {
+async function fetchLinkedIn(
+  params: ScrapeParams,
+  userId: string,
+): Promise<NormalizedJob[]> {
   const candidateKeys = await getCandidateKeys(supabase, userId, "rapidapi");
   if (candidateKeys.length === 0) return [];
 
   const locationStr = params.cities?.[0]
     ? `${params.cities[0]}, ${params.countries?.[0] || "Sweden"}`
     : "Stockholm, Sweden";
-  const queryStr = (params.keywords && params.keywords.length > 0)
-    ? params.keywords.join(" ")
-    : "software engineer";
+  const queryStr =
+    params.keywords && params.keywords.length > 0
+      ? params.keywords.join(" ")
+      : "software engineer developer";
 
   for (const keyObj of candidateKeys) {
     try {
@@ -225,27 +296,47 @@ async function fetchLinkedIn(params: ScrapeParams, userId: string): Promise<Norm
 
       if (!response.ok) continue;
 
-      const data = await response.json();
+      const data = (await response.json()) as
+        Record<string, unknown> | Array<Record<string, unknown>>;
       await markKeyUsed(supabase, keyObj);
-      await logUsage(supabase, userId, "rapidapi", keyObj.source, true, 0, "scrape-jobs/linkedin");
+      await logUsage(
+        supabase,
+        userId,
+        "rapidapi",
+        keyObj.source,
+        true,
+        0,
+        "scrape-jobs/linkedin",
+      );
 
-      const items = Array.isArray(data) ? data : (data.jobs || data.data || []);
-      return items.map((raw: any) => ({
-        title: raw.job_title || raw.title || "Untitled Role",
-        company: raw.company_name || raw.company || "Unknown Company",
-        company_logo_url: raw.company_logo || null,
-        location: raw.location || locationStr,
+      const items: Array<Record<string, unknown>> = Array.isArray(data)
+        ? data
+        : ((data.jobs || data.data || []) as Array<Record<string, unknown>>);
+
+      return items.map((raw) => ({
+        title: String(raw.job_title || raw.title || "Untitled Role"),
+        company: String(raw.company_name || raw.company || "Unknown Company"),
+        company_logo_url: raw.company_logo
+          ? String(raw.company_logo)
+          : undefined,
+        location: String(raw.location || locationStr),
         country_code: params.countries?.[0] || "SE",
-        description: raw.job_description || raw.description || "LinkedIn job opportunity.",
-        apply_url: raw.job_url || raw.apply_url || raw.url || "",
-        posted_at: raw.posted_date || new Date().toISOString(),
-        work_type: raw.work_type || "onsite",
-        salary_min: null,
-        salary_max: null,
+        description: String(
+          raw.job_description || raw.description || "LinkedIn job opportunity.",
+        ),
+        apply_url: String(raw.job_url || raw.apply_url || raw.url || ""),
+        posted_at: String(raw.posted_date || new Date().toISOString()),
+        work_type: String(raw.work_type || "onsite"),
+        salary_min: undefined,
+        salary_max: undefined,
         currency: "SEK",
         source: "linkedin",
-        external_job_id: raw.job_id || raw.id,
-        source_url: raw.job_url || "",
+        external_job_id: raw.job_id
+          ? String(raw.job_id)
+          : raw.id
+            ? String(raw.id)
+            : undefined,
+        source_url: String(raw.job_url || ""),
       }));
     } catch (err) {
       console.warn("LinkedIn fetch error with key:", err);
@@ -256,7 +347,7 @@ async function fetchLinkedIn(params: ScrapeParams, userId: string): Promise<Norm
 }
 
 // ── Main Handler ───────────────────────────────────────────────────────────────
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -273,18 +364,25 @@ Deno.serve(async (req) => {
           error: "rate_limited",
           nextAvailableAt: rateLimitResult.nextAvailableAt,
         },
-        { status: 429, headers: corsHeaders }
+        { status: 429, headers: corsHeaders },
       );
     }
 
-    const enabled = searchParams.enableSources || { jsearch: true, adzuna: true, linkedin: true };
+    const enabled = searchParams.enableSources || {
+      jsearch: true,
+      adzuna: true,
+      linkedin: true,
+    };
 
     // 2. Run scrapers in parallel
     const scrapePromises: Promise<NormalizedJob[]>[] = [];
 
-    if (enabled.jsearch !== false) scrapePromises.push(fetchJSearch(searchParams, userId));
-    if (enabled.adzuna !== false) scrapePromises.push(fetchAdzuna(searchParams, userId));
-    if (enabled.linkedin !== false) scrapePromises.push(fetchLinkedIn(searchParams, userId));
+    if (enabled.jsearch !== false)
+      scrapePromises.push(fetchJSearch(searchParams, userId));
+    if (enabled.adzuna !== false)
+      scrapePromises.push(fetchAdzuna(searchParams, userId));
+    if (enabled.linkedin !== false)
+      scrapePromises.push(fetchLinkedIn(searchParams, userId));
 
     const results = await Promise.allSettled(scrapePromises);
 
@@ -297,13 +395,13 @@ Deno.serve(async (req) => {
 
     // 3. Deduplication via SHA-256
     const seen = new Set<string>();
-    const deduped: any[] = [];
+    const deduped: Array<NormalizedJob & { dedup_hash: string }> = [];
 
     for (const listing of allListings) {
       const hashInput = `${(listing.company || "").toLowerCase()}${(listing.title || "").toLowerCase()}${(listing.location || "").toLowerCase()}`;
       const hash = await crypto.subtle.digest(
         "SHA-256",
-        new TextEncoder().encode(hashInput)
+        new TextEncoder().encode(hashInput),
       );
       const hashString = Array.from(new Uint8Array(hash))
         .map((b) => b.toString(16).padStart(2, "0"))
@@ -318,8 +416,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 4. Upsert into job_vault
-    const finalListings = deduped.slice(0, 50);
+    // 4. Upsert into job_vault (Max 30 jobs per scrape batch)
+    const finalListings = deduped.slice(0, 30);
     if (finalListings.length > 0) {
       const { error: upsertError } = await supabase.from("job_vault").upsert(
         finalListings.map((listing) => ({
@@ -327,7 +425,7 @@ Deno.serve(async (req) => {
           user_id: userId,
           scraped_at: new Date().toISOString(),
         })),
-        { onConflict: "user_id,dedup_hash" }
+        { onConflict: "user_id,dedup_hash" },
       );
       if (upsertError) throw upsertError;
     }
@@ -342,13 +440,16 @@ Deno.serve(async (req) => {
         totalScraped: allListings.length,
         listings: finalListings,
       },
-      { headers: corsHeaders }
+      { headers: corsHeaders },
     );
   } catch (error: unknown) {
     console.error("Scrape error:", error);
     return Response.json(
-      { error: "scrape_failed", message: error instanceof Error ? error.message : String(error) },
-      { status: 500, headers: corsHeaders }
+      {
+        error: "scrape_failed",
+        message: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500, headers: corsHeaders },
     );
   }
 });

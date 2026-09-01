@@ -7,14 +7,8 @@
  * Handles optimistic status updates via TanStack Query.
  */
 
-import React, { useState } from "react";
-import {
-  View,
-  StyleSheet,
-  Pressable,
-  ScrollView,
-  useWindowDimensions,
-} from "react-native";
+import React from "react";
+import { View, StyleSheet, ScrollView, Platform } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,
@@ -22,6 +16,7 @@ import Animated, {
   withSpring,
   runOnJS,
 } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
 import { Card } from "../ui/GlassCard";
 import { Badge } from "../ui/Badge";
 import { Typography } from "../ui/Typography";
@@ -29,6 +24,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../stores/authStore";
 import { colors, radius } from "../../constants/theme";
+import { springs } from "../../constants/animations";
 import type { Database } from "../../types/database.types";
 
 type Application = Database["public"]["Tables"]["job_applications"]["Row"] & {
@@ -45,6 +41,8 @@ const COLUMNS: { key: Status; label: string; color: string }[] = [
   { key: "offer", label: "Offer", color: colors.status.offer },
   { key: "rejected", label: "Rejected", color: colors.status.rejected },
 ];
+
+const COLUMN_WIDTH = 280;
 
 interface KanbanBoardProps {
   applications: Application[];
@@ -81,23 +79,92 @@ function JobCardCompact({ app }: { app: Application }) {
   );
 }
 
+function triggerHaptic(type: "grab" | "drop") {
+  if (Platform.OS === "web") return;
+  if (type === "grab") {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+  } else {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }
+}
+
+interface DraggableCardProps {
+  app: Application;
+  onDrop: (appId: string, newStatus: Status) => void;
+}
+
+function DraggableCard({ app, onDrop }: DraggableCardProps) {
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const scale = useSharedValue(1);
+  const isDragging = useSharedValue(false);
+
+  const pan = Gesture.Pan()
+    .onBegin(() => {
+      isDragging.value = true;
+      scale.value = withSpring(1.05, springs.press);
+      runOnJS(triggerHaptic)("grab");
+    })
+    .onUpdate((e) => {
+      translateX.value = e.translationX;
+      translateY.value = e.translationY;
+    })
+    .onEnd((e) => {
+      isDragging.value = false;
+      const startX = e.absoluteX - e.translationX;
+      const columnIndex = Math.floor((startX + e.translationX) / COLUMN_WIDTH);
+      const targetIndex = Math.min(
+        Math.max(columnIndex, 0),
+        COLUMNS.length - 1,
+      );
+      const newStatus = COLUMNS[targetIndex]?.key;
+
+      translateX.value = withSpring(0, springs.swipe);
+      translateY.value = withSpring(0, springs.swipe);
+      scale.value = withSpring(1, springs.press);
+      runOnJS(triggerHaptic)("drop");
+
+      if (newStatus && newStatus !== app.status) {
+        runOnJS(onDrop)(app.id, newStatus);
+      }
+    })
+    .onFinalize(() => {
+      isDragging.value = false;
+      scale.value = withSpring(1, springs.press);
+    });
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+    zIndex: isDragging.value ? 999 : 1,
+    elevation: isDragging.value ? 8 : 0,
+  }));
+
+  return (
+    <GestureDetector gesture={pan}>
+      <Animated.View style={animStyle}>
+        <JobCardCompact app={app} />
+      </Animated.View>
+    </GestureDetector>
+  );
+}
+
 export function KanbanBoard({ applications, isLoading }: KanbanBoardProps) {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
-  const { width } = useWindowDimensions();
 
-  // Optimistic update logic on drag end
   const handleDrop = async (appId: string, newStatus: Status) => {
     if (!user) return;
 
-    // Optimistically update UI
     queryClient.setQueryData(["applications", user.id], (old: any) =>
       (old || []).map((a: Application) =>
         a.id === appId ? { ...a, status: newStatus } : a,
       ),
     );
 
-    // Persist to Supabase
     await supabase
       .from("job_applications")
       .update({ status: newStatus, updated_at: new Date().toISOString() })
@@ -105,54 +172,6 @@ export function KanbanBoard({ applications, isLoading }: KanbanBoardProps) {
 
     queryClient.invalidateQueries({ queryKey: ["applications", user.id] });
   };
-
-  /** Drag Card Component (Internal) */
-  function DraggableCard({ app }: { app: Application }) {
-    const translateX = useSharedValue(0);
-    const translateY = useSharedValue(0);
-    const scale = useSharedValue(1);
-
-    const pan = Gesture.Pan()
-      .onUpdate((e) => {
-        translateX.value = e.translationX;
-        translateY.value = e.translationY;
-        scale.value = 1.05;
-      })
-      .onEnd((e) => {
-        // Determine nearest column based on absolute X position
-        const columnWidth = 280;
-        const startX = e.absoluteX - e.translationX;
-        const columnIndex = Math.floor((startX + e.translationX) / columnWidth);
-        const newStatus =
-          COLUMNS[Math.min(Math.max(columnIndex, 0), COLUMNS.length - 1)]?.key;
-
-        // Reset position
-        translateX.value = withSpring(0, { damping: 15, stiffness: 180 });
-        translateY.value = withSpring(0, { damping: 15, stiffness: 180 });
-        scale.value = withSpring(1, { damping: 15, stiffness: 180 });
-
-        if (newStatus && newStatus !== app.status) {
-          runOnJS(handleDrop)(app.id, newStatus);
-        }
-      });
-
-    const animStyle = useAnimatedStyle(() => ({
-      transform: [
-        { translateX: translateX.value },
-        { translateY: translateY.value },
-        { scale: scale.value },
-      ],
-      zIndex: 10,
-    }));
-
-    return (
-      <GestureDetector gesture={pan}>
-        <Animated.View style={animStyle}>
-          <JobCardCompact app={app} />
-        </Animated.View>
-      </GestureDetector>
-    );
-  }
 
   if (isLoading) {
     return (
@@ -194,7 +213,9 @@ export function KanbanBoard({ applications, isLoading }: KanbanBoardProps) {
                   </Typography>
                 </View>
               ) : (
-                colApps.map((app) => <DraggableCard key={app.id} app={app} />)
+                colApps.map((app) => (
+                  <DraggableCard key={app.id} app={app} onDrop={handleDrop} />
+                ))
               )}
             </View>
           </View>

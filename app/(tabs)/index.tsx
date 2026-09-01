@@ -255,7 +255,7 @@ export default function DashboardScreen() {
               Job Pipeline
             </Typography>
             <TouchableOpacity
-              onPress={() => router.push("./(tabs)/pipeline")}
+              onPress={() => router.push("/(tabs)/pipeline")}
               style={styles.sectionLink}
             >
               <Typography variant="bodySm" color="accent">

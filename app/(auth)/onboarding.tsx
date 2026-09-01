@@ -2,24 +2,12 @@
  * app/(auth)/onboarding.tsx
  * OpusHunter — Onboarding Flow.
  * 4 animated slides explaining OpusHunter's value.
- * Uses PanResponder for native swipe + buttons for web. Smooth Reanimated slides.
+ * Slide/swipe mechanics now live in components/ui/Stepper.tsx (shared with Configure) —
+ * this file owns only the content and the skip/finish routing logic.
  */
 
-import React, { useRef, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  PanResponder,
-  Dimensions,
-} from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-} from "react-native-reanimated";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import {
@@ -29,13 +17,12 @@ import {
   ChevronRight,
   ArrowRight,
 } from "lucide-react-native";
+import { useAuthStore } from "../../stores/authStore";
 import { SafeAreaWrapper } from "../../components/shared/SafeAreaWrapper";
 import { Button } from "../../components/ui/Button";
 import { Typography } from "../../components/ui/Typography";
-import { colors, radius, shadows } from "../../constants/theme";
-import { durations } from "../../constants/animations";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+import { Stepper, useStepperControls } from "../../components/ui/Stepper";
+import { colors } from "../../constants/theme";
 
 const SLIDES = [
   {
@@ -70,64 +57,53 @@ const SLIDES = [
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { session, user } = useAuthStore();
   const [index, setIndex] = useState(0);
-  const translateX = useSharedValue(0);
-  const currentIndex = useSharedValue(0);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dx) > 20,
-      onPanResponderRelease: (_, gesture) => {
-        if (gesture.dx < -50 && index < SLIDES.length - 1) {
-          goNext();
-        } else if (gesture.dx > 50 && index > 0) {
-          goPrev();
-        }
-      },
-    }),
-  ).current;
-
-  const goNext = () => {
-    if (index >= SLIDES.length - 1) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const nextIndex = index + 1;
-    translateX.value = withTiming(-SCREEN_WIDTH * nextIndex, {
-      duration: durations.slow,
-      easing: Easing.out(Easing.cubic),
-    });
-    currentIndex.value = withTiming(nextIndex, { duration: durations.slow });
-    setIndex(nextIndex);
-  };
-
-  const goPrev = () => {
-    if (index <= 0) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    const prevIndex = index - 1;
-    translateX.value = withTiming(-SCREEN_WIDTH * prevIndex, {
-      duration: durations.slow,
-      easing: Easing.out(Easing.cubic),
-    });
-    currentIndex.value = withTiming(prevIndex, { duration: durations.slow });
-    setIndex(prevIndex);
-  };
+  const { goNext, goPrev } = useStepperControls(index, SLIDES.length, setIndex);
 
   const handleFinish = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    router.push("/(auth)/auth");
+    if (session || user) {
+      router.replace("/(tabs)/(dashboard)" as any);
+    } else {
+      router.push("/(auth)/auth");
+    }
+  };
+
+  // Same routing logic as handleFinish, kept as a separate named handler because
+  // "skip" and "finish the last slide" are different user intents that happen to
+  // route to the same place today — if that ever diverges (e.g. skip logs an
+  // analytics event finish doesn't) they're already separate functions to edit.
+  const handleSkip = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (session || user) {
+      router.replace("/(tabs)/(dashboard)" as any);
+    } else {
+      router.push("/(auth)/auth");
+    }
   };
 
   return (
     <SafeAreaWrapper edges={["top", "bottom"]} style={styles.container}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.push("/(auth)/auth")} hitSlop={8}>
-          <Text style={styles.skipText}>Skip</Text>
-        </Pressable>
-      </View>
+      <View style={styles.contentWrapper}>
+        <View style={styles.header}>
+          <Pressable
+            onPress={handleSkip}
+            hitSlop={12}
+            style={styles.skipButton}
+          >
+            <Text style={styles.skipText}>
+              {session || user ? "Skip to Dashboard" : "Skip"}
+            </Text>
+            <ArrowRight size={14} color={colors.accent.cyan} />
+          </Pressable>
+        </View>
 
-      {/* Slide Deck */}
-      <View style={styles.slidesContainer} {...panResponder.panHandlers}>
-        <Animated.View
-          style={[styles.slidesRow, { transform: [{ translateX }] }]}
+        <Stepper
+          stepCount={SLIDES.length}
+          currentStep={index}
+          onStepChange={setIndex}
+          showDots={false}
         >
           {SLIDES.map((slide, i) => {
             const Icon = slide.icon;
@@ -164,35 +140,34 @@ export default function OnboardingScreen() {
               </View>
             );
           })}
-        </Animated.View>
-      </View>
+        </Stepper>
 
-      {/* Pagination & Actions */}
-      <View style={styles.footer}>
-        <View style={styles.pagination}>
-          {SLIDES.map((_, i) => (
-            <View
-              key={i}
-              style={[styles.dot, i === index && styles.dotActive]}
-            />
-          ))}
-        </View>
+        <View style={styles.footer}>
+          <View style={styles.pagination}>
+            {SLIDES.map((_, i) => (
+              <View
+                key={i}
+                style={[styles.dot, i === index && styles.dotActive]}
+              />
+            ))}
+          </View>
 
-        <View style={styles.buttonsRow}>
-          {index > 0 && (
-            <Button variant="ghost" onPress={goPrev} style={styles.backBtn}>
-              Back
-            </Button>
-          )}
-          {index < SLIDES.length - 1 ? (
-            <Button onPress={goNext} style={styles.nextBtn} haptic={false}>
-              Next <ArrowRight size={18} color={colors.text.inverse} />
-            </Button>
-          ) : (
-            <Button onPress={handleFinish} style={styles.nextBtn}>
-              Get Started
-            </Button>
-          )}
+          <View style={styles.buttonsRow}>
+            {index > 0 && (
+              <Button variant="ghost" onPress={goPrev} style={styles.backBtn}>
+                Back
+              </Button>
+            )}
+            {index < SLIDES.length - 1 ? (
+              <Button onPress={goNext} style={styles.nextBtn} haptic={false}>
+                Next <ArrowRight size={18} color={colors.text.inverse} />
+              </Button>
+            ) : (
+              <Button onPress={handleFinish} style={styles.nextBtn}>
+                Get Started
+              </Button>
+            )}
+          </View>
         </View>
       </View>
     </SafeAreaWrapper>
@@ -201,27 +176,37 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  contentWrapper: {
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
+    flex: 1,
+  },
   header: {
     flexDirection: "row",
     justifyContent: "flex-end",
     paddingHorizontal: 24,
-    paddingTop: 8,
+    paddingTop: 12,
+  },
+  skipButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   skipText: {
     color: colors.text.secondary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
-  },
-  slidesContainer: {
-    flex: 1,
-    overflow: "hidden",
-  },
-  slidesRow: {
-    flexDirection: "row",
-    height: "100%",
+    letterSpacing: 0.2,
   },
   slide: {
-    width: SCREEN_WIDTH,
+    width: "100%",
     paddingHorizontal: 32,
     justifyContent: "center",
     alignItems: "center",

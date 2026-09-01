@@ -7,6 +7,7 @@ import {
   Modal,
   TouchableWithoutFeedback,
   Image,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, {
@@ -101,59 +102,69 @@ export function ProfileDropdown() {
         <TouchableWithoutFeedback onPress={() => setOpen(false)}>
           <View style={styles.overlay}>
             <TouchableWithoutFeedback>
-              <Animated.View style={[styles.dropdown, panelStyle]}>
-                <View style={styles.header}>
-                  {profile?.avatar_url ? (
-                    <Image
-                      source={{ uri: profile.avatar_url }}
-                      style={styles.avatarLarge}
-                    />
-                  ) : (
-                    <View style={styles.avatarLarge}>
-                      <Text style={styles.avatarTextLarge}>{initials}</Text>
+              <Animated.View style={panelStyle}>
+                <View style={styles.dropdown}>
+                  <View style={styles.header}>
+                    {profile?.avatar_url ? (
+                      <Image
+                        source={{ uri: profile.avatar_url }}
+                        style={styles.avatarLarge}
+                      />
+                    ) : (
+                      <View style={styles.avatarLarge}>
+                        <Text style={styles.avatarTextLarge}>{initials}</Text>
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.userName}>{fullName}</Text>
+                      <Text style={styles.userEmail} numberOfLines={1}>
+                        {user?.email || ""}
+                      </Text>
                     </View>
-                  )}
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.userName}>{fullName}</Text>
-                    <Text style={styles.userEmail} numberOfLines={1}>
-                      {user?.email || ""}
-                    </Text>
+                    <Pressable onPress={() => setOpen(false)} hitSlop={8}>
+                      <X size={18} color={colors.text.dim} />
+                    </Pressable>
                   </View>
-                  <Pressable onPress={() => setOpen(false)} hitSlop={8}>
-                    <X size={18} color={colors.text.dim} />
-                  </Pressable>
-                </View>
 
-                <View style={styles.menu}>
-                  <Pressable
-                    style={styles.menuItem}
-                    onPress={() => handleNavigate("/(tabs)/settings/profile")}
-                  >
-                    <User size={16} color={colors.accent.cyan} />
-                    <Text style={styles.menuText}>Profile Settings</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.menuItem}
-                    onPress={() => handleNavigate("/(tabs)/settings")}
-                  >
-                    <Settings size={16} color={colors.accent.cyan} />
-                    <Text style={styles.menuText}>Settings</Text>
-                  </Pressable>
-                  {profile?.role === "admin" && (
+                  <View style={styles.menu}>
                     <Pressable
                       style={styles.menuItem}
-                      onPress={() => handleNavigate("/(tabs)/admin" as any)}
+                      onPress={() =>
+                        handleNavigate("/(tabs)/(dashboard)/settings/profile")
+                      }
                     >
-                      <Shield size={16} color={colors.accent.red} />
-                      <Text style={styles.menuText}>Admin Console</Text>
+                      <User size={16} color={colors.accent.cyan} />
+                      <Text style={styles.menuText}>Profile Settings</Text>
                     </Pressable>
-                  )}
-                </View>
+                    <Pressable
+                      style={styles.menuItem}
+                      onPress={() =>
+                        handleNavigate("/(tabs)/(dashboard)/settings/index")
+                      }
+                    >
+                      <Settings size={16} color={colors.accent.cyan} />
+                      <Text style={styles.menuText}>Settings</Text>
+                    </Pressable>
+                    {profile?.role === "admin" && (
+                      <Pressable
+                        style={styles.menuItem}
+                        onPress={() =>
+                          handleNavigate(
+                            "/(tabs)/(dashboard)/admin/index" as any,
+                          )
+                        }
+                      >
+                        <Shield size={16} color={colors.accent.red} />
+                        <Text style={styles.menuText}>Admin Console</Text>
+                      </Pressable>
+                    )}
+                  </View>
 
-                <Pressable style={styles.signOutBtn} onPress={handleSignOut}>
-                  <LogOut size={16} color={colors.accent.red} />
-                  <Text style={styles.signOutText}>Sign Out</Text>
-                </Pressable>
+                  <Pressable style={styles.signOutBtn} onPress={handleSignOut}>
+                    <LogOut size={16} color={colors.accent.red} />
+                    <Text style={styles.signOutText}>Sign Out</Text>
+                  </Pressable>
+                </View>
               </Animated.View>
             </TouchableWithoutFeedback>
           </View>
@@ -199,7 +210,16 @@ const styles = StyleSheet.create({
     borderColor: colors.surface.border,
     borderRadius: radius.xl,
     padding: 14,
-    ...(shadows.glassLg as any),
+    ...Platform.select({
+      web: { boxShadow: shadows.glassLg } as any,
+      default: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.55,
+        shadowRadius: 24,
+        elevation: 10,
+      },
+    }),
   },
   header: {
     flexDirection: "row",

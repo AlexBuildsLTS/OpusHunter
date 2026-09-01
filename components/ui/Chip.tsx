@@ -37,7 +37,6 @@ export function Chip({
     }
     onPress?.();
   };
-
   // Tint map — each variant pairs the accent color with its translucent wash.
   const variants = {
     default: {

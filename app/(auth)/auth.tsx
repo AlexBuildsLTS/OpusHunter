@@ -54,9 +54,9 @@ import {
   Send,
   ShieldAlert,
   Terminal,
-  Github,
-  Twitter,
-  Linkedin,
+  Globe,
+  Share2,
+  ExternalLink,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
 import { Typography } from "../../components/ui/Typography";
@@ -1125,20 +1125,23 @@ const MarketingContent = () => (
       <TouchableOpacity
         onPress={() => Linking.openURL("https://github.com")}
         style={styles.socialBtn}
+        accessibilityLabel="GitHub"
       >
-        <Github size={18} color={colors.accent.green} />
+        <Globe size={18} color={colors.accent.green} />
       </TouchableOpacity>
       <TouchableOpacity
         onPress={() => Linking.openURL("https://twitter.com")}
         style={styles.socialBtn}
+        accessibilityLabel="Twitter"
       >
-        <Twitter size={18} color={colors.accent.blueGlow} />
+        <Share2 size={18} color={colors.accent.blueGlow} />
       </TouchableOpacity>
       <TouchableOpacity
         onPress={() => Linking.openURL("https://linkedin.com")}
         style={styles.socialBtn}
+        accessibilityLabel="LinkedIn"
       >
-        <Linkedin size={18} color={colors.accent.cyan} />
+        <ExternalLink size={18} color={colors.accent.cyan} />
       </TouchableOpacity>
     </View>
   </View>
@@ -1159,7 +1162,7 @@ const SecurityFooter = () => (
 
 // ─── Styles ────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg.deepest },
+  container: { flex: 1, backgroundColor: "transparent" },
   brandIconImage: { width: 40, height: 40 },
   desktopContainer: { flexDirection: "row", flex: 1 },
   desktopSidebar: {

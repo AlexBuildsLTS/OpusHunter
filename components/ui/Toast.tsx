@@ -106,7 +106,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       <View style={styles.container} pointerEvents="box-none">
         {toasts.map((toast) => {
           const style = TOAST_STYLES[toast.type];
-          const Icon = style.icon;
+          const Icon = style.icon as any;
           return (
             <Animated.View
               key={toast.id}

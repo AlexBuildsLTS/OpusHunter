@@ -25,10 +25,6 @@ const config = getDefaultConfig(__dirname);
 // Support .mjs and .cjs module formats (required for some ESM-only packages)
 config.resolver.sourceExts = [...config.resolver.sourceExts, "mjs", "cjs"];
 
-// Disable unstable package exports to prevent resolution issues with
-// packages that have non-standard exports fields
-config.resolver.unstable_enablePackageExports = false;
-
 module.exports = wrapWithReanimatedMetroConfig(
   withNativeWind(config, { input: "./global.css" }),
 );

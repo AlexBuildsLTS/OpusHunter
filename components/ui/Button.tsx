@@ -3,11 +3,11 @@
  * OpusHunter — Button Component.
  * Variants: primary, secondary, ghost, destructive. Sizes: sm, md, lg.
  * Renders children directly so callers can compose icon + label freely.
- * Press scale (native), hover lift (web), haptic feedback, loading spinner.
- * All colors resolve from constants/theme.ts — no hardcoded hex.
+ * Physics-based spring press (Reanimated), web hover lift, haptic feedback, loading spinner.
+ * All colors resolve from constants/theme.ts.
  */
 
-import React from "react";
+import React, { useCallback } from "react";
 import {
   Pressable,
   Text,
@@ -15,8 +15,16 @@ import {
   StyleSheet,
   Platform,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, radius, shadows } from "../../constants/theme";
+import { springs } from "../../constants/animations";
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface ButtonProps {
   /** Visual variant — determines background, border, and text color. */
@@ -53,41 +61,63 @@ export function Button({
   style,
   haptic = true,
 }: ButtonProps) {
-  const handlePress = () => {
+  const scale = useSharedValue(1);
+
+  const handlePressIn = useCallback(() => {
+    scale.value = withSpring(0.96, springs.press);
+  }, [scale]);
+
+  const handlePressOut = useCallback(() => {
+    scale.value = withSpring(1, springs.press);
+  }, [scale]);
+
+  const handlePress = useCallback(() => {
     if (disabled || loading) return;
     if (haptic && Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
     onPress();
-  };
+  }, [disabled, loading, haptic, onPress]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   const foreground = FOREGROUND[variant];
 
-  // Wrap string children in a Text so text styling applies; leave node
+  // Wrap string/number children in a Text so text styling applies; leave node
   // children (icons, rows) untouched so flex layout handles them.
-  const content =
-    typeof children === "string" ? (
-      <Text
-        style={[styles.text, styles[`${size}Text`], { color: foreground.text }]}
-      >
-        {children}
-      </Text>
-    ) : (
-      children
-    );
+  const content = React.Children.map(children, (child) => {
+    if (typeof child === "string" || typeof child === "number") {
+      return (
+        <Text
+          style={[
+            styles.text,
+            styles[`${size}Text`],
+            { color: foreground.text },
+          ]}
+        >
+          {String(child)}
+        </Text>
+      );
+    }
+    return child;
+  });
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       disabled={disabled || loading}
-      style={({ pressed }) => [
+      style={[
         styles.base,
         styles[variant],
         styles[size],
         disabled && styles.disabled,
         loading && styles.loading,
-        pressed && styles.pressed,
         style,
+        animatedStyle,
       ]}
     >
       {loading ? (
@@ -95,7 +125,7 @@ export function Button({
       ) : (
         content
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -111,7 +141,16 @@ const styles = StyleSheet.create({
   // ── Variants ──────────────────────────────────────────────
   primary: {
     backgroundColor: colors.accent.cyan,
-    ...(shadows.btnCyan as unknown as object),
+    ...Platform.select({
+      web: { boxShadow: shadows.btnCyan } as any,
+      default: {
+        shadowColor: colors.accent.cyan,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+      },
+    }),
   },
   secondary: {
     backgroundColor: colors.surface.card,

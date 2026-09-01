@@ -12,6 +12,7 @@ import { KanbanBoard } from "../../../components/jobcardsetup/KanbanBoard";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../../../lib/supabase";
 import { useAuthStore } from "../../../stores/authStore";
+import React from "react";
 
 export default function PipelineScreen() {
   const { user } = useAuthStore();

@@ -54,6 +54,7 @@
 html,
 body,
 #root {
+  background-color: #020617 !important;
   background:
     radial-gradient(
       circle at 50% 0%,
@@ -74,6 +75,13 @@ body,
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
     sans-serif;
+}
+
+/* ── OVERRIDE ALL REACT NAVIGATION DEFAULT CARDS TO PREVENT ANY WHITE SCREEN ── */
+div[style*="rgb(242, 242, 242)"],
+div[style*="242, 242, 242"],
+div[style*="rgb(255, 255, 255)"]:not([data-keep-white]) {
+  background-color: transparent !important;
 }
 
 /* Subtle aerospace radar / target sweep ambient (very subtle, 18s loop) */

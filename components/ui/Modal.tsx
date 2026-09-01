@@ -88,7 +88,7 @@ export function Modal({
           <BlurView
             intensity={20}
             tint="dark"
-            style={StyleSheet.absoluteFill}
+            style={StyleSheet.absoluteFill} 
           />
         )}
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />

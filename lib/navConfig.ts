@@ -28,7 +28,7 @@ export interface NavItem {
   adminOnly?: boolean;
 }
 
-/** Main navigation items — add new tabs here, instantly reflected in UI */
+/** Main navigation items — strictly core workflows (Profile/Settings/Admin belong in ProfileDropdown) */
 export const NAV_ITEMS: NavItem[] = [
   { key: "discover", label: "Discover", icon: Search, route: "/(tabs)" },
   {
@@ -42,25 +42,6 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Vault",
     icon: FolderOpen,
     route: "/(tabs)/settings/vault",
-  },
-  {
-    key: "profile",
-    label: "Profile",
-    icon: User,
-    route: "/(tabs)/settings/profile",
-  },
-  {
-    key: "settings",
-    label: "Settings",
-    icon: Settings,
-    route: "/(tabs)/settings",
-  },
-  {
-    key: "admin",
-    label: "Admin",
-    icon: ShieldCheck,
-    route: "/(tabs)/admin",
-    adminOnly: true,
   },
 ];
 
