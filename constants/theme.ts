@@ -1,6 +1,7 @@
 export const colors = {
   /* ── Backgrounds (Deep Aerospace Obsidian) ─────────────────────── */
   bg: {
+    primary: "#050811", // Root / primary background
     deepest: "#050811", // Root background — darkest
     core: "#0A0F1D", // Main app surface
     mid: "#111A30", // Elevated surfaces
@@ -190,3 +191,47 @@ export const durations = {
   slow: 300, // Modals / slides
   ambient: 8000, // Ambient loops
 } as const;
+
+/* ── Shorthand Color Accessor (C) ─────────────────────────────────── */
+export const C = {
+  cyan: colors.accent.cyan,
+  purple: colors.accent.blue,
+  pink: colors.accent.red,
+  red: colors.accent.red,
+  green: colors.accent.green,
+  amber: colors.accent.amber,
+  blue: colors.accent.blue,
+  bg: colors.bg.deepest,
+  core: colors.bg.core,
+  cardBg: colors.surface.card,
+  text: colors.text.primary,
+  sub: colors.text.secondary,
+  dim: colors.text.dim,
+  border: colors.surface.border,
+  borderCyan: colors.surface.borderCyan,
+  card: colors.bg.mid,
+} as const;
+
+/* ── Role Configuration Badges ───────────────────────────────────── */
+export const ROLE_CFG = {
+  admin: {
+    color: colors.accent.red,
+    label: "ADMIN",
+    bg: `${colors.accent.red}1A`,
+    border: `${colors.accent.red}4D`,
+  },
+  premium: {
+    color: colors.accent.amber,
+    label: "PREMIUM",
+    bg: `${colors.accent.amber}1A`,
+    border: `${colors.accent.amber}4D`,
+  },
+  member: {
+    color: colors.accent.blue,
+    label: "MEMBER",
+    bg: `${colors.accent.blue}1A`,
+    border: `${colors.accent.blue}4D`,
+  },
+} as const;
+
+export type RoleName = keyof typeof ROLE_CFG;

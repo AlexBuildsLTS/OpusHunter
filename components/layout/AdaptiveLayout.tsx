@@ -77,7 +77,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
         <View style={styles.sidebar}>
           <View style={{ width: "100%", alignItems: "center", gap: 32 }}>
             <TouchableOpacity
-              onPress={() => router.push("/(tabs)")}
+              onPress={() => router.push("./(tabs)")}
               activeOpacity={0.8}
             >
               <View style={styles.brandLogo}>

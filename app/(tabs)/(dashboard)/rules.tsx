@@ -183,18 +183,16 @@ export default function HunterRulesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg.core,
+    backgroundColor: "transparent",
+    maxWidth: 1100,
+    width: "100%",
+    alignSelf: "center",
+    paddingHorizontal: 16,
   },
   header: {
-    paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255, 255, 255, 0.06)",
-    backgroundColor: "rgba(10, 15, 29, 0.85)",
-    ...Platform.select({
-      web: { backdropFilter: "blur(12px)" } as any,
-    }),
+    paddingBottom: 16,
+    backgroundColor: "transparent",
   },
   headerTitleRow: {
     flexDirection: "row",

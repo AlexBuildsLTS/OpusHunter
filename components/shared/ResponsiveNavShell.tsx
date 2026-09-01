@@ -145,7 +145,7 @@ export default function ResponsiveNavShell({
           >
             <View>
               <Pressable
-                onPress={() => router.push("/(tabs)")}
+                onPress={() => router.push("./(tabs)")}
                 className="mb-12 cursor-pointer flex-row items-center px-2"
               >
                 <View className="mr-4 h-10 w-10 items-center justify-center rounded-xl border border-cyan-500/50 bg-cyan-500/20 shadow-[0_0_15px_rgba(34,211,238,0.3)]">
@@ -213,7 +213,7 @@ export default function ResponsiveNavShell({
               className="z-40 h-16 flex-row items-center justify-between border-b border-white/5 bg-black/40 px-4"
             >
               <Pressable
-                onPress={() => router.push("/(tabs)")}
+                onPress={() => router.push("./(tabs)")}
                 className="cursor-pointer flex-row items-center gap-3"
               >
                 <View className="h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/50 bg-cyan-500/20">

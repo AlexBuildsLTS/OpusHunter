@@ -2,6 +2,7 @@
  * app/(auth)/_layout.tsx
  * OpusHunter — Auth Stack Layout
  */
+import React from "react";
 import { Stack } from "expo-router";
 import { View, StyleSheet } from "react-native";
 

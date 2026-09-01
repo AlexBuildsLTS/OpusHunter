@@ -1,10 +1,9 @@
 /**
  * components/shared/AnimatedBackground.tsx
- * OpusHunter — Fluid Ambient Background Canvas
+ * OpusHunter — Unified Symmetrical Cybernetic Ambient Background
  *
- * Guaranteed 0% crash, 0% WebGL dependency.
- * Rock-solid deep dark obsidian background (#020617) with slow, fluid,
- * non-distracting sinusoidal drifting glowing orbs (Cyan, Blue, Indigo).
+ * Symmetrical, centered, aerospace-grade dark obsidian background (#050811).
+ * Balanced dual-hemisphere ambient radiant glow mesh with centered orbital harmony.
  *
  * Runs on:
  * - Web: Hardware-accelerated CSS compositor keyframes (smooth 60-120fps, zero GPU crash)
@@ -12,7 +11,7 @@
  */
 
 import React, { useEffect } from "react";
-import { View, StyleSheet, Platform } from "react-native";
+import { View, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -21,7 +20,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 
-// ─── Native Reanimated Orb Component ─────────────────────────────────────────
+// ─── Native Reanimated Symmetric Orb Component ───────────────────────────────
 interface OrbProps {
   size: number;
   color: string;
@@ -56,15 +55,15 @@ const NativeOrb: React.FC<OrbProps> = ({
     );
     transY.value = withRepeat(
       withTiming(driftY, {
-        duration: durationMs * 1.25,
+        duration: durationMs * 1.15,
         easing: Easing.inOut(Easing.sin),
       }),
       -1,
       true,
     );
     scale.value = withRepeat(
-      withTiming(1.15, {
-        duration: durationMs * 0.8,
+      withTiming(1.1, {
+        duration: durationMs * 0.9,
         easing: Easing.inOut(Easing.sin),
       }),
       -1,
@@ -91,7 +90,7 @@ const NativeOrb: React.FC<OrbProps> = ({
           height: size,
           borderRadius: size / 2,
           backgroundColor: color,
-          opacity: 0.6,
+          opacity: 0.5,
         },
         animStyle,
       ]}
@@ -99,117 +98,142 @@ const NativeOrb: React.FC<OrbProps> = ({
   );
 };
 
-// ─── Web CSS Injector for zero-overhead, crash-proof compositor animation ─────
+// ─── Web CSS Injector: Symmetrical, Balanced, Centered Harmonic Flow ─────────
 const WEB_KEYFRAMES = `
 html, body, #root {
-  background-color: #020617 !important;
+  background-color: #050811 !important;
+  margin: 0;
+  padding: 0;
 }
-@keyframes opusOrb1 {
+@keyframes opusOrbLeft {
   0% { transform: translate(0px, 0px) scale(1); }
-  50% { transform: translate(70px, -50px) scale(1.2); }
+  50% { transform: translate(35px, -30px) scale(1.12); }
   100% { transform: translate(0px, 0px) scale(1); }
 }
-@keyframes opusOrb2 {
+@keyframes opusOrbRight {
   0% { transform: translate(0px, 0px) scale(1); }
-  50% { transform: translate(-65px, 55px) scale(1.15); }
+  50% { transform: translate(-35px, 30px) scale(1.12); }
   100% { transform: translate(0px, 0px) scale(1); }
 }
-@keyframes opusOrb3 {
-  0% { transform: translate(0px, 0px) scale(1); }
-  50% { transform: translate(50px, 70px) scale(1.25); }
-  100% { transform: translate(0px, 0px) scale(1); }
+@keyframes opusCorePulse {
+  0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.18; }
+  50% { transform: translate(-50%, -50%) scale(1.12); opacity: 0.32; }
+  100% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.18; }
 }
 @keyframes opusGridPulse {
-  0%, 100% { opacity: 0.04; }
-  50% { opacity: 0.09; }
+  0%, 100% { opacity: 0.035; }
+  50% { opacity: 0.07; }
 }
 `;
 
 export const AnimatedBackground = React.memo(() => {
+  const { width, height } = useWindowDimensions();
+
   // Inject CSS keyframes once on web
   useEffect(() => {
     if (Platform.OS === "web" && typeof document !== "undefined") {
       const styleId = "opus-animated-bg-style";
-      if (!document.getElementById(styleId)) {
-        const styleEl = document.createElement("style");
+      let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
+      if (!styleEl) {
+        styleEl = document.createElement("style");
         styleEl.id = styleId;
-        styleEl.textContent = WEB_KEYFRAMES;
         document.head.appendChild(styleEl);
       }
+      styleEl.textContent = WEB_KEYFRAMES;
     }
   }, []);
 
   if (Platform.OS === "web") {
     return (
       <View style={[styles.container, { pointerEvents: "none" as any }]}>
-        {/* Base dark backdrop — completely black/obsidian, never white */}
+        {/* Base dark backdrop — #050811 deep obsidian */}
         <View style={styles.baseDark} />
 
-        {/* Ambient Subtle Grid Pattern */}
+        {/* Ambient Symmetrical Centered Grid */}
         <View
           style={[
             StyleSheet.absoluteFill,
             {
               backgroundImage:
-                "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
-              backgroundSize: "48px 48px",
+                "linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)",
+              backgroundSize: "40px 40px",
+              backgroundPosition: "center center",
               animation: "opusGridPulse 8s ease-in-out infinite",
             } as any,
           ]}
         />
 
-        {/* Orb 1 — Aerospace Cyan */}
+        {/* Centered Symmetrical Deep Core Pulse (Deep Blue / Violet) */}
         <View
           style={
             {
               position: "absolute",
-              top: "-5%",
-              left: "5%",
-              width: 550,
-              height: 550,
-              borderRadius: 275,
+              top: "50%",
+              left: "50%",
+              width: 750,
+              height: 750,
+              borderRadius: 375,
               background:
-                "radial-gradient(circle, rgba(0, 210, 255, 0.35) 0%, rgba(0, 210, 255, 0) 70%)",
-              filter: "blur(50px)",
-              animation: "opusOrb1 12s ease-in-out infinite",
+                "radial-gradient(circle, rgba(59, 130, 246, 0.22) 0%, rgba(139, 92, 246, 0.12) 40%, rgba(5, 8, 17, 0) 70%)",
+              filter: "blur(60px)",
+              animation: "opusCorePulse 12s ease-in-out infinite",
               pointerEvents: "none",
             } as any
           }
         />
 
-        {/* Orb 2 — Electric Blue */}
+        {/* Left Symmetrical Radiant Wing — Cyan Accent */}
         <View
           style={
             {
               position: "absolute",
-              top: "25%",
-              right: "5%",
+              top: "10%",
+              left: "-100px",
               width: 500,
               height: 500,
               borderRadius: 250,
               background:
-                "radial-gradient(circle, rgba(59, 130, 246, 0.30) 0%, rgba(59, 130, 246, 0) 70%)",
-              filter: "blur(55px)",
-              animation: "opusOrb2 14s ease-in-out infinite",
+                "radial-gradient(circle, rgba(0, 210, 255, 0.20) 0%, rgba(0, 210, 255, 0) 70%)",
+              filter: "blur(50px)",
+              animation: "opusOrbLeft 14s ease-in-out infinite",
               pointerEvents: "none",
             } as any
           }
         />
 
-        {/* Orb 3 — Indigo / Violet */}
+        {/* Right Symmetrical Radiant Wing — Cyan Accent */}
         <View
           style={
             {
               position: "absolute",
-              bottom: "5%",
-              left: "25%",
-              width: 600,
-              height: 600,
-              borderRadius: 300,
+              top: "10%",
+              right: "-100px",
+              width: 500,
+              height: 500,
+              borderRadius: 250,
               background:
-                "radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, rgba(139, 92, 246, 0) 70%)",
+                "radial-gradient(circle, rgba(0, 210, 255, 0.20) 0%, rgba(0, 210, 255, 0) 70%)",
+              filter: "blur(50px)",
+              animation: "opusOrbRight 14s ease-in-out infinite",
+              pointerEvents: "none",
+            } as any
+          }
+        />
+
+        {/* Centered Bottom Ambient Horizon Light */}
+        <View
+          style={
+            {
+              position: "absolute",
+              bottom: "-150px",
+              left: "50%",
+              transform: [{ translateX: -350 }],
+              width: 700,
+              height: 400,
+              borderRadius: 200,
+              background:
+                "radial-gradient(ellipse, rgba(0, 210, 255, 0.15) 0%, rgba(59, 130, 246, 0.08) 50%, rgba(5, 8, 17, 0) 80%)",
               filter: "blur(60px)",
-              animation: "opusOrb3 16s ease-in-out infinite",
               pointerEvents: "none",
             } as any
           }
@@ -218,35 +242,35 @@ export const AnimatedBackground = React.memo(() => {
     );
   }
 
-  // Native fallback (Reanimated worklets)
+  // Native Symmetrical Fallback
   return (
     <View style={[styles.container, { pointerEvents: "none" as any }]}>
       <View style={styles.baseDark} />
       <NativeOrb
-        size={350}
-        color="rgba(0, 210, 255, 0.20)"
-        initialX={-40}
-        initialY={-40}
-        driftX={50}
-        driftY={40}
-        durationMs={10000}
-      />
-      <NativeOrb
-        size={320}
-        color="rgba(59, 130, 246, 0.16)"
-        initialX={220}
-        initialY={180}
-        driftX={-40}
-        driftY={60}
+        size={360}
+        color="rgba(0, 210, 255, 0.18)"
+        initialX={-60}
+        initialY={80}
+        driftX={35}
+        driftY={25}
         durationMs={12000}
       />
       <NativeOrb
-        size={300}
-        color="rgba(139, 92, 246, 0.14)"
-        initialX={80}
-        initialY={450}
-        driftX={40}
-        driftY={-50}
+        size={360}
+        color="rgba(0, 210, 255, 0.18)"
+        initialX={width - 300}
+        initialY={80}
+        driftX={-35}
+        driftY={25}
+        durationMs={12000}
+      />
+      <NativeOrb
+        size={400}
+        color="rgba(59, 130, 246, 0.14)"
+        initialX={width / 2 - 200}
+        initialY={height / 2 - 200}
+        driftX={0}
+        driftY={30}
         durationMs={14000}
       />
     </View>
@@ -261,6 +285,6 @@ const styles = StyleSheet.create({
   },
   baseDark: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "#020617",
+    backgroundColor: "#050811",
   },
 });

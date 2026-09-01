@@ -56,7 +56,7 @@ import {
 } from "@/components/jobcardsetup/KanbanBoard";
 
 import { supabase } from "@/lib/supabase";
-import { useAuthStore } from "@/store/authStore";
+import { useAuthStore } from "@/stores/authStore";
 import { colors, radius } from "@/constants/theme";
 
 type ViewMode = "board" | "matrix";
@@ -694,6 +694,12 @@ export default function PipelineScreen() {
                 Synchronizing live application pipeline...
               </Typography>
             </View>
+          ) : viewMode === "board" ? (
+            <KanbanBoard
+              applications={filteredApplications}
+              isLoading={false}
+              onSelectApplication={(app) => setSelectedApp(app)}
+            />
           ) : filteredApplications.length === 0 ? (
             <Card style={styles.emptyStateCard}>
               <AlertCircle size={38} color={colors.accent.cyan} />
@@ -723,12 +729,6 @@ export default function PipelineScreen() {
                 <Text style={styles.btnActionText}>Discover New Roles</Text>
               </Button>
             </Card>
-          ) : viewMode === "board" ? (
-            <KanbanBoard
-              applications={filteredApplications}
-              isLoading={false}
-              onSelectApplication={(app) => setSelectedApp(app)}
-            />
           ) : (
             <MatrixListView
               applications={filteredApplications}
@@ -1271,10 +1271,13 @@ function MatrixListView({
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: colors.bg.deepest,
+    backgroundColor: "transparent",
     paddingHorizontal: Platform.OS === "web" ? 24 : 16,
     paddingTop: 12,
     paddingBottom: 24,
+    maxWidth: 1100,
+    width: "100%",
+    alignSelf: "center",
   },
   topHeader: {
     flexDirection: "row",
