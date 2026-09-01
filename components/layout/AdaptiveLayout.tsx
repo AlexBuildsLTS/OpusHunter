@@ -32,7 +32,7 @@ import {
 const NAV_ITEMS = [
   {
     id: "discover",
-    path: "/(tabs)",
+    path: "/(tabs)/index",
     title: "DISCOVER",
     Icon: Search,
   },

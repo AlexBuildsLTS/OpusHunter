@@ -425,6 +425,8 @@ export type Database = {
       }
       job_vault: {
         Row: {
+          apply_url: import("node_modules/@types/react").JSX.Element
+          apply_url: import("node_modules/@types/react").JSX.Element
           company: string
           company_logo_url: string | null
           country_code: string | null
@@ -509,8 +511,6 @@ export type Database = {
       }
       profiles: {
         Row: {
-          seniority: any
-          seniority: any
           avatar_url: string | null
           bio: string | null
           country_code: string | null

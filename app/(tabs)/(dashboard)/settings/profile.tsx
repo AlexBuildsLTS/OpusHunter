@@ -5,6 +5,8 @@ import {
   Pressable,
   ScrollView,
   Platform,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaWrapper } from "../../../../components/shared/SafeAreaWrapper";
 import { Typography } from "../../../../components/ui/Typography";
@@ -17,6 +19,7 @@ import { useAuthStore } from "../../../../stores/authStore";
 import { supabase } from "../../../../lib/supabase";
 import { useQuery } from "@tanstack/react-query";
 import { colors, radius, shadows } from "../../../../constants/theme";
+import * as ImagePicker from "expo-image-picker";
 import {
   User,
   Briefcase,
@@ -30,6 +33,8 @@ import {
   Coins,
   ShieldCheck,
   Check,
+  Camera,
+  UploadCloud,
 } from "lucide-react-native";
 import type { Database } from "../../../../types/database.types";
 import type { SeniorityLevel, WorkType } from "../../../../types/app.types";
@@ -75,11 +80,13 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Form State
   const [form, setForm] = useState({
     first_name: profile?.first_name || "",
     last_name: profile?.last_name || "",
+    avatar_url: profile?.avatar_url || "",
     professional_title: profile?.professional_title || "",
     bio: profile?.bio || "",
     years_experience:

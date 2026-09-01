@@ -1,5 +1,5 @@
 /**
- * app/(tabs)/index.tsx
+ * app/(tabs)/(dashboard)/index.tsx
  * OpusHunter — Primary Dashboard / Discover Screen.
  * Uses the aerospace cyan/blue theme, existing job components, and real Supabase data.
  * Features: Header, metrics, swipe deck for pending jobs, quick actions, and rate-limit banner.
@@ -255,7 +255,7 @@ export default function DashboardScreen() {
               Job Pipeline
             </Typography>
             <TouchableOpacity
-              onPress={() => router.push("/(tabs)/pipeline")}
+              onPress={() => router.push("./(tabs)/pipeline")}
               style={styles.sectionLink}
             >
               <Typography variant="bodySm" color="accent">

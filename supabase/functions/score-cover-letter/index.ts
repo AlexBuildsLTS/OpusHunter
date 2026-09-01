@@ -5,7 +5,7 @@
  * Updates ats_score, specificity_score, and filler_phrase_count in the cover_letters table.
  */
 
-import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { getSupabaseAdmin, verifyJwt } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
 const supabase = getSupabaseAdmin();
@@ -28,27 +28,44 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { coverLetterId } = await req.json();
-    if (!coverLetterId) throw new Error("Missing coverLetterId");
+    const body = await req.json().catch(() => ({}));
+    const coverLetterId = body.coverLetterId || body.cover_letter_id || body.id;
+    const jobId = body.jobId || body.job_id;
+    const userId = body.userId || body.user_id;
 
-    // 1. Fetch Cover Letter
-    const { data: letter, error: letterError } = await supabase
-      .from("cover_letters")
-      .select("*")
-      .eq("id", coverLetterId)
-      .single();
+    if (!coverLetterId && !jobId) {
+      return Response.json(
+        { error: "missing_fields", message: "Missing coverLetterId or jobId" },
+        { status: 400, headers: corsHeaders },
+      );
+    }
 
-    if (letterError || !letter) {
-      throw new Error("Cover letter not found");
+    let letter: Record<string, unknown> | null = null;
+    let targetJobId = jobId;
+
+    if (coverLetterId) {
+      const { data, error: letterError } = await supabase
+        .from("cover_letters")
+        .select("*")
+        .eq("id", coverLetterId)
+        .single();
+
+      if (letterError || !data) {
+        throw new Error("Cover letter not found");
+      }
+      letter = data;
+      if (!targetJobId && data.job_id) {
+        targetJobId = data.job_id;
+      }
     }
 
     // 2. Fetch Job Vault description if job_id is linked
     let jdText = "";
-    if (letter.job_id) {
+    if (targetJobId) {
       const { data: jobData } = await supabase
         .from("job_vault")
-        .select("description")
-        .eq("id", letter.job_id)
+        .select("description, title, company")
+        .eq("id", targetJobId)
         .maybeSingle();
       jdText = (jobData?.description || "").toLowerCase();
     }
@@ -66,6 +83,8 @@ Deno.serve(async (req: Request) => {
       "that",
       "will",
       "have",
+      "from",
+      "your",
     ]);
     const jdKeywords = jdText
       .replace(/[^a-z0-9\s]/g, " ")
@@ -74,7 +93,9 @@ Deno.serve(async (req: Request) => {
     const uniqueKeywords = [...new Set(jdKeywords)];
 
     // 4. Calculate ATS Score (Keyword Density)
-    const letterText = (letter.body || "").toLowerCase();
+    const letterText = String(
+      letter?.body || body.coverLetterText || "",
+    ).toLowerCase();
     let matchedKeywords = 0;
     for (const keyword of uniqueKeywords) {
       if (letterText.includes(keyword)) matchedKeywords++;
@@ -85,14 +106,13 @@ Deno.serve(async (req: Request) => {
             100,
             Math.round((matchedKeywords / uniqueKeywords.length) * 100),
           )
-        : 50;
+        : 75;
 
     // 5. Calculate Specificity Score (Numerical / Quantifiable claims)
-    const rawBody = letter.body || "";
+    const rawBody = String(letter?.body || body.coverLetterText || "");
     const sentences = rawBody.length > 0 ? rawBody.split(/(?<=[.!?])\s+/) : [];
     let specificSentences = 0;
     for (const sentence of sentences) {
-      // Checks for numbers, percentages, or currencies
       if (
         /\d/.test(sentence) ||
         /%/.test(sentence) ||
@@ -104,7 +124,7 @@ Deno.serve(async (req: Request) => {
     const specificityScore =
       sentences.length > 0
         ? Math.round((specificSentences / sentences.length) * 100)
-        : 0;
+        : 50;
 
     // 6. Detect Filler Phrases
     let fillerCount = 0;
@@ -112,20 +132,37 @@ Deno.serve(async (req: Request) => {
       if (letterText.includes(phrase.toLowerCase())) fillerCount++;
     }
 
-    // 6. Update cover_letters table
-    const { error: updateError } = await supabase
-      .from("cover_letters")
-      .update({
-        ats_score: atsScore,
-        specificity_score: specificityScore,
-        filler_phrase_count: fillerCount,
-      })
-      .eq("id", coverLetterId);
+    // 7. Calculate overall interview probability chance based on ATS + context
+    const interviewProbability = Math.min(
+      98,
+      Math.max(
+        25,
+        Math.round(atsScore * 0.6 + specificityScore * 0.4 - fillerCount * 4),
+      ),
+    );
 
-    if (updateError) throw updateError;
+    // 8. Update cover_letters table if coverLetterId was provided
+    if (coverLetterId) {
+      await supabase
+        .from("cover_letters")
+        .update({
+          ats_score: atsScore,
+          specificity_score: specificityScore,
+          filler_phrase_count: fillerCount,
+        })
+        .eq("id", coverLetterId);
+    }
 
     return Response.json(
-      { atsScore, specificityScore, fillerCount },
+      {
+        success: true,
+        atsScore,
+        specificityScore,
+        fillerCount,
+        interviewProbability,
+        matchedKeywordsCount: matchedKeywords,
+        totalKeywords: uniqueKeywords.length,
+      },
       { headers: corsHeaders },
     );
   } catch (error: unknown) {

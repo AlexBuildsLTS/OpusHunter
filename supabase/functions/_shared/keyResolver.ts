@@ -176,6 +176,16 @@ export async function getCandidateKeys(
     baseNames.push("ADZUNA_KEY", "ADZUNA_API_KEY");
   } else if (normalizedProvider === "geodb") {
     baseNames.push("GEODB_API_KEY", "GEODB_KEY", "RAPIDAPI_KEY");
+  } else if (
+    normalizedProvider === "linkedin" ||
+    normalizedProvider === "linkedinscraper"
+  ) {
+    baseNames.push(
+      "LINKEDIN_API_KEY",
+      "LINKEDINSCRAPER_API_KEY",
+      "LINKEDIN_SCRAPER_API_KEY",
+      "RAPIDAPI_KEY",
+    );
   }
 
   // De-dupe base names (some providers list the same name twice above by design of

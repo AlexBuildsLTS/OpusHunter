@@ -37,7 +37,7 @@ export interface NavItem {
 
 /** Main navigation items — strictly core workflows (Profile/Settings/Admin belong in ProfileDropdown) */
 export const NAV_ITEMS: NavItem[] = [
-  { key: "discover", label: "Discover", icon: Search, route: "/(tabs)" },
+  { key: "discover", label: "Discover", icon: Search, route: "/(tabs)/index" },
   {
     key: "rules",
     label: "Rules",

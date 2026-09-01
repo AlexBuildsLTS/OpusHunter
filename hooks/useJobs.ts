@@ -48,7 +48,7 @@ export function useJobs() {
   });
 
   // Trigger Scrape Edge Function (passing full filters object including lat/lng)
-  const runScrape = async () => {
+  const runScrape = async (overrideParams?: any, options?: any) => {
     if (!user) throw new Error("No user");
     setIsScraping(true);
 
@@ -57,7 +57,9 @@ export function useJobs() {
         userId: user.id,
         searchParams: {
           ...filters, // Includes keywords, workTypes, cities, radiusKm, latitude, longitude
+          ...(overrideParams || {}),
         },
+        ...(options || {}),
       },
     });
 
@@ -75,7 +77,8 @@ export function useJobs() {
   };
 
   const scrapeMutation = useMutation({
-    mutationFn: runScrape,
+    mutationFn: (args?: { overrideParams?: any; options?: any }) =>
+      runScrape(args?.overrideParams, args?.options),
     onError: (error) => {
       console.error("Scrape failed:", error);
     },
@@ -83,6 +86,10 @@ export function useJobs() {
       setIsScraping(false);
     },
   });
+
+  const triggerScrape = async (overrideParams?: any, options?: any) => {
+    return scrapeMutation.mutateAsync({ overrideParams, options });
+  };
 
   // Update Job Status
   const updateStatus = async ({
@@ -118,9 +125,12 @@ export function useJobs() {
     jobs: jobsQuery.data || [],
     isLoading: jobsQuery.isLoading,
     isError: jobsQuery.isError,
-    runScrape: scrapeMutation.mutateAsync,
-    isScraping: scrapeMutation.isPending,
+    runScrape,
+    triggerScrape,
+    isScraping: scrapeMutation.isPending || isScraping,
     rateLimit,
+    rateLimitStatus: rateLimit,
+    checkRateLimit: async () => rateLimit,
     updateStatus: statusMutation.mutateAsync,
     isUpdatingStatus: statusMutation.isPending,
   };

@@ -9,7 +9,7 @@
  *  - Deduplication via SHA-256 hashing into job_vault.
  */
 
-import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { getSupabaseAdmin, verifyJwt } from "../_shared/supabaseAdmin.ts";
 import {
   getCandidateKeys,
   handle429,
@@ -63,21 +63,44 @@ async function fetchJSearch(
   userId: string,
 ): Promise<NormalizedJob[]> {
   const candidateKeys = await getCandidateKeys(supabase, userId, "rapidapi");
-  if (candidateKeys.length === 0) return [];
+  if (candidateKeys.length === 0) {
+    console.log("[JSearch] No RapidAPI keys found for user/system");
+    return [];
+  }
 
-  const queryTerms =
-    params.keywords && params.keywords.length > 0
-      ? params.keywords.join(" ")
-      : "software developer OR engineer OR IT OR fullstack";
+  // Clean up keyword queries: avoid AND-bombing by using OR or top keywords
+  let queryTerms = "software developer OR engineer OR fullstack";
+  if (params.keywords && params.keywords.length > 0) {
+    const cleanKeywords = params.keywords.filter(
+      (k) => k && k.trim().length > 0,
+    );
+    if (cleanKeywords.length === 1) {
+      queryTerms = cleanKeywords[0];
+    } else if (cleanKeywords.length > 1) {
+      // Use top 2-3 keywords joined with OR to broaden instead of impossible AND matching
+      queryTerms = cleanKeywords.slice(0, 3).join(" OR ");
+    }
+  }
 
   const primaryCountry = params.countries?.[0] || "Sweden";
   const primaryCity = params.cities?.[0] || "Stockholm";
 
+  // Map user date filter to JSearch allowed date_posted values: "all" | "today" | "3days" | "week" | "month"
+  let jSearchDatePosted = "all";
+  if (params.datePosted === "24h" || params.datePosted === "today")
+    jSearchDatePosted = "today";
+  else if (params.datePosted === "3d" || params.datePosted === "3days")
+    jSearchDatePosted = "3days";
+  else if (params.datePosted === "7d" || params.datePosted === "week")
+    jSearchDatePosted = "week";
+  else if (params.datePosted === "30d" || params.datePosted === "month")
+    jSearchDatePosted = "month";
+
   const queryParams = new URLSearchParams({
     query: `${queryTerms} in ${primaryCity}, ${primaryCountry}`,
     page: (params.page || 1).toString(),
-    num_pages: "2",
-    date_posted: params.datePosted || "all",
+    num_pages: "1",
+    date_posted: jSearchDatePosted,
   });
 
   if (params.latitude && params.longitude) {
@@ -87,6 +110,9 @@ async function fetchJSearch(
 
   for (const keyObj of candidateKeys) {
     try {
+      console.log(
+        `[JSearch] Querying JSearch via RapidAPI (key source: ${keyObj.source})`,
+      );
       const response = await fetch(
         `https://jsearch.p.rapidapi.com/search?${queryParams}`,
         {
@@ -98,11 +124,18 @@ async function fetchJSearch(
       );
 
       if (response.status === 429) {
+        console.warn("[JSearch] 429 Rate limited, rotating key");
         await handle429(supabase, keyObj.keyId);
-        continue; // Try next key in rotation pool
+        continue;
       }
 
-      if (!response.ok) continue;
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => "");
+        console.warn(
+          `[JSearch] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
+        );
+        continue;
+      }
 
       const data = await response.json();
       await markKeyUsed(supabase, keyObj);
@@ -117,6 +150,7 @@ async function fetchJSearch(
       );
 
       const rawItems = (data.data || []) as Array<Record<string, unknown>>;
+      console.log(`[JSearch] Successfully fetched ${rawItems.length} jobs`);
       return rawItems.map((raw) => ({
         title: String(raw.job_title || "Untitled Role"),
         company: String(raw.employer_name || "Unknown Company"),
@@ -149,7 +183,7 @@ async function fetchJSearch(
         source_url: raw.job_apply_link ? String(raw.job_apply_link) : "",
       }));
     } catch (err) {
-      console.warn("JSearch fetch error with key:", err);
+      console.warn("[JSearch] Fetch error with key:", err);
     }
   }
 
@@ -157,6 +191,28 @@ async function fetchJSearch(
 }
 
 // ── 2. Adzuna Adapter ─────────────────────────────────────────────────────────
+const ADZUNA_SUPPORTED_COUNTRIES = new Set([
+  "gb",
+  "us",
+  "at",
+  "au",
+  "be",
+  "br",
+  "ca",
+  "de",
+  "es",
+  "fr",
+  "in",
+  "it",
+  "mx",
+  "nl",
+  "nz",
+  "pl",
+  "ru",
+  "sg",
+  "za",
+]);
+
 async function fetchAdzuna(
   params: ScrapeParams,
   userId: string,
@@ -164,23 +220,48 @@ async function fetchAdzuna(
   const candidateKeys = await getCandidateKeys(supabase, userId, "adzuna");
   if (candidateKeys.length === 0) return [];
 
-  const country = (params.countries?.[0] || "se").toLowerCase();
+  const rawCountry = (params.countries?.[0] || "se").toLowerCase();
+  // Adzuna only supports specific country endpoints
+  const country = ADZUNA_SUPPORTED_COUNTRIES.has(rawCountry)
+    ? rawCountry
+    : rawCountry === "uk"
+      ? "gb"
+      : null;
+
+  if (!country) {
+    console.log(
+      `[Adzuna] Country '${rawCountry}' not supported by Adzuna, skipping Adzuna adapter.`,
+    );
+    return [];
+  }
+
   const locationName = params.cities?.[0] || "Stockholm";
   const whatQuery =
     params.keywords && params.keywords.length > 0
-      ? params.keywords.join(" ")
-      : "software developer IT engineer";
+      ? params.keywords
+          .filter((k) => k && k.trim().length > 0)
+          .slice(0, 2)
+          .join(" ")
+      : "software developer";
 
-  const appId =
-    params.adzunaAppId || Deno.env.get("ADZUNA_APP_ID") || "opushunter";
+  const defaultAppId = Deno.env.get("ADZUNA_APP_ID") || "opushunter";
 
   for (const keyObj of candidateKeys) {
     try {
+      // Support combined app_id:app_key format
+      let appId = params.adzunaAppId || defaultAppId;
+      let appKey = keyObj.key;
+      if (keyObj.key.includes(":")) {
+        const parts = keyObj.key.split(":");
+        appId = parts[0];
+        appKey = parts[1];
+      }
+
       const endpoint = `https://api.adzuna.com/v1/api/jobs/${country}/search/1`;
       const queryParams = new URLSearchParams({
         app_id: appId,
-        app_key: keyObj.key,
-        results_per_page: "50",
+        app_key: appKey,
+        results_per_page: "25",
         what: whatQuery,
         where: locationName,
       });
@@ -189,13 +270,23 @@ async function fetchAdzuna(
         queryParams.set("distance", params.radiusKm.toString());
       }
 
+      console.log(
+        `[Adzuna] Querying Adzuna for country: ${country}, location: ${locationName}`,
+      );
       const response = await fetch(`${endpoint}?${queryParams}`);
       if (response.status === 429) {
+        console.warn("[Adzuna] 429 Rate limited");
         await handle429(supabase, keyObj.keyId);
         continue;
       }
 
-      if (!response.ok) continue;
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => "");
+        console.warn(
+          `[Adzuna] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
+        );
+        continue;
+      }
 
       const data = (await response.json()) as {
         results?: Array<Record<string, unknown>>;
@@ -212,6 +303,7 @@ async function fetchAdzuna(
       );
 
       const results = data.results || [];
+      console.log(`[Adzuna] Successfully fetched ${results.length} jobs`);
       return results.map((raw) => {
         const companyObj = raw.company as { display_name?: string } | undefined;
         const locObj = raw.location as { display_name?: string } | undefined;
@@ -239,9 +331,9 @@ async function fetchAdzuna(
           salary_max:
             typeof raw.salary_max === "number" ? raw.salary_max : undefined,
           currency: raw.salary_is_predicted
-            ? "SEK"
+            ? "EUR"
             : raw.salary_min
-              ? "SEK"
+              ? "EUR"
               : "EUR",
           source: "adzuna",
           external_job_id: raw.id ? String(raw.id) : undefined,
@@ -249,31 +341,130 @@ async function fetchAdzuna(
         };
       });
     } catch (err) {
-      console.warn("Adzuna fetch error with key:", err);
+      console.warn("[Adzuna] Fetch error with key:", err);
     }
   }
 
   return [];
 }
 
-// ── 3. LinkedIn Adapter (via RapidAPI linkedin-jobs-search) ────────────────────
+// ── 3. LinkedIn Adapter (Direct API & RapidAPI Fallback) ──────────────────────
 async function fetchLinkedIn(
   params: ScrapeParams,
   userId: string,
 ): Promise<NormalizedJob[]> {
-  const candidateKeys = await getCandidateKeys(supabase, userId, "rapidapi");
-  if (candidateKeys.length === 0) return [];
-
   const locationStr = params.cities?.[0]
     ? `${params.cities[0]}, ${params.countries?.[0] || "Sweden"}`
     : "Stockholm, Sweden";
   const queryStr =
     params.keywords && params.keywords.length > 0
-      ? params.keywords.join(" ")
-      : "software engineer developer";
+      ? params.keywords
+          .filter((k) => k && k.trim().length > 0)
+          .slice(0, 2)
+          .join(" ")
+      : "software engineer";
 
-  for (const keyObj of candidateKeys) {
+  // First priority: Check for dedicated linkedinscraperapi.com keys
+  const linkedInKeys = await getCandidateKeys(supabase, userId, "linkedin");
+  for (const keyObj of linkedInKeys) {
     try {
+      console.log(
+        `[LinkedInScraperAPI] Querying linkedinscraperapi.com with key source: ${keyObj.source}`,
+      );
+      const searchUrl = new URL(
+        "https://api.linkedinscraperapi.com/api/v1/linkedin/search",
+      );
+      searchUrl.searchParams.set("keywords", queryStr);
+      searchUrl.searchParams.set("location", locationStr);
+      searchUrl.searchParams.set("api_key", keyObj.key);
+      if (params.page) {
+        searchUrl.searchParams.set("page", params.page.toString());
+      }
+      if (params.datePosted && params.datePosted !== "all") {
+        searchUrl.searchParams.set("time_range", params.datePosted);
+      }
+
+      const response = await fetch(searchUrl.toString());
+
+      if (response.status === 429) {
+        console.warn("[LinkedInScraperAPI] 429 Rate limited");
+        await handle429(supabase, keyObj.keyId);
+        continue;
+      }
+
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => "");
+        console.warn(
+          `[LinkedInScraperAPI] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
+        );
+        continue;
+      }
+
+      const data = (await response.json()) as
+        Record<string, unknown> | Array<Record<string, unknown>>;
+      await markKeyUsed(supabase, keyObj);
+      await logUsage(
+        supabase,
+        userId,
+        "linkedin",
+        keyObj.source,
+        true,
+        0,
+        "scrape-jobs/linkedinscraperapi",
+      );
+
+      const items: Array<Record<string, unknown>> = Array.isArray(data)
+        ? data
+        : ((data.jobs || data.data || data.results || []) as Array<
+            Record<string, unknown>
+          >);
+
+      if (items.length > 0) {
+        console.log(
+          `[LinkedInScraperAPI] Successfully fetched ${items.length} jobs`,
+        );
+        return items.map((raw) => ({
+          title: String(raw.job_title || raw.title || "Untitled Role"),
+          company: String(raw.company_name || raw.company || "Unknown Company"),
+          company_logo_url: raw.company_logo
+            ? String(raw.company_logo)
+            : undefined,
+          location: String(raw.location || locationStr),
+          country_code: params.countries?.[0] || "SE",
+          description: String(
+            raw.job_description ||
+              raw.description ||
+              "LinkedIn live opportunity.",
+          ),
+          apply_url: String(raw.job_url || raw.apply_url || raw.url || ""),
+          posted_at: String(
+            raw.posted_date || raw.posted_at || new Date().toISOString(),
+          ),
+          work_type: String(raw.work_type || "onsite"),
+          salary_min: undefined,
+          salary_max: undefined,
+          currency: "SEK",
+          source: "linkedin",
+          external_job_id: raw.job_id
+            ? String(raw.job_id)
+            : raw.id
+              ? String(raw.id)
+              : undefined,
+          source_url: String(raw.job_url || raw.url || ""),
+        }));
+      }
+    } catch (err) {
+      console.warn("[LinkedInScraperAPI] Fetch error with key:", err);
+    }
+  }
+
+  // Second priority / Fallback: RapidAPI LinkedIn search adapter
+  const rapidKeys = await getCandidateKeys(supabase, userId, "rapidapi");
+  for (const keyObj of rapidKeys) {
+    try {
+      console.log(
+        `[LinkedIn RapidAPI] Querying fallback LinkedIn on RapidAPI with key source: ${keyObj.source}`,
+      );
       const url = `https://linkedin-jobs-search.p.rapidapi.com/`;
       const response = await fetch(url, {
         method: "POST",
@@ -290,11 +481,18 @@ async function fetchLinkedIn(
       });
 
       if (response.status === 429) {
+        console.warn("[LinkedIn RapidAPI] 429 Rate limited");
         await handle429(supabase, keyObj.keyId);
         continue;
       }
 
-      if (!response.ok) continue;
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => "");
+        console.warn(
+          `[LinkedIn RapidAPI] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
+        );
+        continue;
+      }
 
       const data = (await response.json()) as
         Record<string, unknown> | Array<Record<string, unknown>>;
@@ -306,13 +504,16 @@ async function fetchLinkedIn(
         keyObj.source,
         true,
         0,
-        "scrape-jobs/linkedin",
+        "scrape-jobs/linkedin-rapidapi",
       );
 
       const items: Array<Record<string, unknown>> = Array.isArray(data)
         ? data
         : ((data.jobs || data.data || []) as Array<Record<string, unknown>>);
 
+      console.log(
+        `[LinkedIn RapidAPI] Successfully fetched ${items.length} jobs`,
+      );
       return items.map((raw) => ({
         title: String(raw.job_title || raw.title || "Untitled Role"),
         company: String(raw.company_name || raw.company || "Unknown Company"),
@@ -339,7 +540,7 @@ async function fetchLinkedIn(
         source_url: String(raw.job_url || ""),
       }));
     } catch (err) {
-      console.warn("LinkedIn fetch error with key:", err);
+      console.warn("[LinkedIn RapidAPI] Fetch error with key:", err);
     }
   }
 
@@ -353,8 +554,21 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { userId, searchParams = {} } = await req.json();
-    if (!userId) throw new Error("Missing required field: userId");
+    const jwtUser = await verifyJwt(req);
+    const body = await req.json().catch(() => ({}));
+    const userId = body.userId || body.user_id || jwtUser?.userId;
+    const searchParams: ScrapeParams = body.searchParams || body.filters || {};
+
+    if (!userId) {
+      return Response.json(
+        {
+          error: "missing_user",
+          message:
+            "Could not determine user session. Please ensure you are logged in.",
+        },
+        { status: 400, headers: corsHeaders },
+      );
+    }
 
     // 1. Rate Limit Check
     const rateLimitResult = await rateLimit.check(userId);
@@ -416,8 +630,18 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 4. Upsert into job_vault (Max 30 jobs per scrape batch)
-    const finalListings = deduped.slice(0, 30);
+    // 4. Determine batch capacity by tier & upsert into job_vault
+    const { data: userProfile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const userRole = userProfile?.role || "member";
+    const batchCap =
+      userRole === "admin" ? 60 : userRole === "premium" ? 50 : 25;
+    const finalListings = deduped.slice(0, batchCap);
+
     if (finalListings.length > 0) {
       const { error: upsertError } = await supabase.from("job_vault").upsert(
         finalListings.map((listing) => ({

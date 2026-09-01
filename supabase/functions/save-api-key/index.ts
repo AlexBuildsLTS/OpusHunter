@@ -12,11 +12,14 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 const supabase = getSupabaseAdmin();
 
-// Allowed providers (must match database enum)
+// Allowed providers (must match database enum / supported adapters)
 const VALID_PROVIDERS = [
   "gemini",
   "rapidapi",
   "adzuna",
+  "linkedin",
+  "linkedinscraper",
+  "jsearch",
   "openai",
   "anthropic",
   "geodb",

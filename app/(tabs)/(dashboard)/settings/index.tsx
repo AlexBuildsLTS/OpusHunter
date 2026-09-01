@@ -505,8 +505,8 @@ export default function SettingsScreen() {
   };
 
   const isAdmin = profile?.role === "admin";
-  const userSeniority = profile?.seniority
-    ? profile.seniority.toUpperCase()
+  const userSeniority = profile?.seniority_level
+    ? profile.seniority_level.toUpperCase().replace("_", " ")
     : "CONFIGURED";
 
   return (
