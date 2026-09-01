@@ -21,7 +21,13 @@ import { useRouter, usePathname } from "expo-router";
 import { BlurView } from "expo-blur";
 import { ProfileDropdown } from "../shared/ProfileDropdown";
 import { C } from "../../lib/theme";
-import { Search, Kanban, FolderOpen, Zap } from "lucide-react-native";
+import {
+  Search,
+  SlidersHorizontal,
+  Kanban,
+  FolderOpen,
+  Zap,
+} from "lucide-react-native";
 
 const NAV_ITEMS = [
   {
@@ -29,6 +35,12 @@ const NAV_ITEMS = [
     path: "/(tabs)",
     title: "DISCOVER",
     Icon: Search,
+  },
+  {
+    id: "rules",
+    path: "/(tabs)/rules",
+    title: "RULES",
+    Icon: SlidersHorizontal,
   },
   { id: "pipeline", path: "/(tabs)/pipeline", title: "PIPELINE", Icon: Kanban },
   {

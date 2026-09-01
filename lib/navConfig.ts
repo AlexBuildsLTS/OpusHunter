@@ -7,6 +7,7 @@
 
 import {
   Search,
+  SlidersHorizontal,
   Kanban,
   FolderOpen,
   User,
@@ -17,7 +18,13 @@ import {
 
 /** Navigation item keys */
 export type NavItemKey =
-  "discover" | "pipeline" | "vault" | "profile" | "settings" | "admin";
+  | "discover"
+  | "rules"
+  | "pipeline"
+  | "vault"
+  | "profile"
+  | "settings"
+  | "admin";
 
 /** Navigation item interface */
 export interface NavItem {
@@ -31,6 +38,12 @@ export interface NavItem {
 /** Main navigation items — strictly core workflows (Profile/Settings/Admin belong in ProfileDropdown) */
 export const NAV_ITEMS: NavItem[] = [
   { key: "discover", label: "Discover", icon: Search, route: "/(tabs)" },
+  {
+    key: "rules",
+    label: "Rules",
+    icon: SlidersHorizontal,
+    route: "/(tabs)/rules",
+  },
   {
     key: "pipeline",
     label: "Pipeline",
@@ -69,6 +82,7 @@ export const AUTH_ROUTES = {
 /** App routes */
 export const APP_ROUTES = {
   discover: "/(tabs)",
+  rules: "/(tabs)/rules",
   pipeline: "/(tabs)/pipeline",
   vault: "/(tabs)/settings/vault",
   profile: "/(tabs)/settings/profile",
