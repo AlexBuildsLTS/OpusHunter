@@ -27,6 +27,9 @@ import {
   Kanban,
   FolderOpen,
   Zap,
+  AppWindowMac,
+  FolderKanban,
+  Radar,
 } from "lucide-react-native";
 
 const NAV_ITEMS = [
@@ -34,20 +37,20 @@ const NAV_ITEMS = [
     id: "discover",
     path: "/(tabs)/index",
     title: "DISCOVER",
-    Icon: Search,
+    Icon: AppWindowMac,
   },
   {
     id: "rules",
     path: "/(tabs)/rules",
-    title: "RULES",
-    Icon: SlidersHorizontal,
+    title: "Engine",
+    Icon: Radar,
   },
   { id: "pipeline", path: "/(tabs)/pipeline", title: "PIPELINE", Icon: Kanban },
   {
     id: "vault",
     path: "/(tabs)/settings/vault",
     title: "VAULT",
-    Icon: FolderOpen,
+    Icon: FolderKanban,
   },
 ];
 

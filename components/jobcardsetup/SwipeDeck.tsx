@@ -36,6 +36,8 @@ import {
   DollarSign,
   Building2,
   Sparkles,
+  Info,
+  ExternalLink,
 } from "lucide-react-native";
 
 import { Typography } from "../ui/Typography";
@@ -53,6 +55,7 @@ interface SwipeDeckProps {
   onSwipeRight: (job: Job | any) => void;
   onSwipeLeft: (job: Job | any) => void;
   onSwipeUp: (job: Job | any) => void;
+  onSelectJob?: (job: Job | any) => void;
 }
 
 export const SwipeDeck: React.FC<SwipeDeckProps> = ({
@@ -60,6 +63,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
   onSwipeRight,
   onSwipeLeft,
   onSwipeUp,
+  onSelectJob,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -482,7 +486,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
               currentJob.tech_stack.length > 0 ? (
                 <View style={styles.stackRow}>
                   {currentJob.tech_stack
-                    .slice(0, 4)
+                    .slice(0, 5)
                     .map((tech: string, i: number) => (
                       <View key={i} style={styles.techChip}>
                         <Typography variant="caption" color="secondary">
@@ -491,16 +495,38 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
                       </View>
                     ))}
                 </View>
-              ) : currentJob.description ? (
+              ) : null}
+
+              {currentJob.description ? (
                 <Typography
                   variant="bodySm"
                   color="secondary"
-                  numberOfLines={3}
+                  numberOfLines={4}
                   style={styles.descriptionText}
                 >
                   {currentJob.description}
                 </Typography>
               ) : null}
+
+              {/* View Full Specs Trigger */}
+              {onSelectJob && (
+                <Pressable
+                  onPress={() => onSelectJob(currentJob)}
+                  style={({ pressed }) => [
+                    styles.detailsLink,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <Info size={14} color={colors.accent.cyan} />
+                  <Typography
+                    variant="caption"
+                    color="accent"
+                    weight="semiBold"
+                  >
+                    View Full Specifications & Strategy
+                  </Typography>
+                </Pressable>
+              )}
             </Card>
           </Animated.View>
         </GestureDetector>
@@ -519,6 +545,20 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
         >
           <X size={22} color={colors.accent.red} />
         </Pressable>
+
+        {onSelectJob && (
+          <Pressable
+            onPress={() => onSelectJob(currentJob)}
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.buttonInfo,
+              pressed && styles.buttonPressed,
+            ]}
+            accessibilityLabel="View details"
+          >
+            <Info size={20} color={colors.accent.cyan} />
+          </Pressable>
+        )}
 
         <Pressable
           onPress={() => executeSwipe("up")}
@@ -554,8 +594,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  detailsLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 6,
+  },
   deckContainer: {
-    height: 380,
+    height: 420,
     width: "100%",
     position: "relative",
     alignItems: "center",
@@ -701,6 +748,9 @@ const styles = StyleSheet.create({
   },
   buttonSave: {
     borderColor: `${colors.accent.green}4D`,
+  },
+  buttonInfo: {
+    borderColor: `${colors.accent.cyan}4D`,
   },
   buttonApply: {
     width: 64,

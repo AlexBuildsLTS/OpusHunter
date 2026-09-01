@@ -79,6 +79,10 @@ export default function PipelineScreen() {
   const [coverLetterApp, setCoverLetterApp] = useState<Application | null>(
     null,
   );
+  const [selectedFormality, setSelectedFormality] = useState(
+    "technical_deep_dive",
+  );
+  const [selectedStrategy, setSelectedStrategy] = useState("mirror_matching");
   const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
   const [generatedLetter, setGeneratedLetter] = useState<{
     body: string;
@@ -233,11 +237,18 @@ export default function PipelineScreen() {
   };
 
   // ── 3. AI Cover Letter Generator ─────────────────────────────────────────
-  const handleGenerateCoverLetter = async (app: Application) => {
+  const handleGenerateCoverLetter = async (
+    app: Application,
+    formalityOverride?: string,
+    strategyOverride?: string,
+  ) => {
     if (!user) return;
     setCoverLetterApp(app);
     setIsGeneratingLetter(true);
     setGeneratedLetter(null);
+
+    const form = formalityOverride || selectedFormality;
+    const strat = strategyOverride || selectedStrategy;
 
     try {
       if (Platform.OS !== "web") {
@@ -252,7 +263,13 @@ export default function PipelineScreen() {
           body: {
             userId: user.id,
             jobListingId: app.job_id,
-            strategy: "mirror_matching",
+            strategy: strat,
+            formality: form,
+            selected_projects: [
+              "verax_ai",
+              "spring_boot_microservices",
+              "linux_virtualization",
+            ],
           },
         },
       );
@@ -263,13 +280,13 @@ export default function PipelineScreen() {
         setGeneratedLetter({
           body: data.primary.body,
           ats_score: data.primary.ats_score || 94,
-          strategy: data.primary.strategy || "mirror_matching",
+          strategy: data.primary.strategy || strat,
         });
       } else if (data?.body) {
         setGeneratedLetter({
           body: data.body,
           ats_score: data.ats_score || 92,
-          strategy: data.strategy || "mirror_matching",
+          strategy: data.strategy || strat,
         });
       } else {
         throw new Error("No letter content generated");
@@ -283,10 +300,10 @@ export default function PipelineScreen() {
           (app.job_vault?.title || "role") +
           " position at " +
           (app.job_vault?.company || "your team") +
-          ".\n\nWith extensive expertise in building high-performance, mission-critical systems and scalable architectures, my technical background aligns directly with your stack and vision.\n\nThank you for your consideration, and I look forward to connecting.\n\nBest regards,\n" +
-          (user?.email?.split("@")[0] || "Candidate"),
+          ".\n\nWith extensive expertise in building high-performance, mission-critical systems and scalable architectures (Java/Spring Boot, PostgreSQL RLS, React Native, Linux sysadmin), my technical background aligns directly with your stack and engineering vision.\n\nThank you for your consideration, and I look forward to connecting.\n\nBest regards,\n" +
+          (user?.email?.split("@")[0] || "Alex Fredrik Youssef"),
         ats_score: 95,
-        strategy: "mirror_matching",
+        strategy: strat,
       });
     } finally {
       setIsGeneratingLetter(false);
@@ -957,7 +974,7 @@ export default function PipelineScreen() {
                     {coverLetterApp.job_vault?.title}
                   </Typography>
                   <Typography variant="caption" color="secondary">
-                    {coverLetterApp.job_vault?.company} • ATS Mirror Strategy
+                    {coverLetterApp.job_vault?.company}
                   </Typography>
                 </View>
                 {generatedLetter?.ats_score && (
@@ -968,6 +985,52 @@ export default function PipelineScreen() {
                     </Text>
                   </View>
                 )}
+              </View>
+
+              {/* Formality & Strategy Pills */}
+              <View style={styles.strategyConfigBox}>
+                <Typography
+                  variant="caption"
+                  color="dim"
+                  style={{ marginBottom: 6 }}
+                >
+                  Tone & Formality:
+                </Typography>
+                <View style={styles.optionsRow}>
+                  {[
+                    { id: "technical_deep_dive", label: "Technical Deep-Dive" },
+                    { id: "formal_corporate", label: "Corporate Formal" },
+                    { id: "executive_brief", label: "Executive Brief" },
+                    { id: "storytelling", label: "Storytelling" },
+                  ].map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      onPress={() => {
+                        setSelectedFormality(item.id);
+                        handleGenerateCoverLetter(
+                          coverLetterApp,
+                          item.id,
+                          selectedStrategy,
+                        );
+                      }}
+                      style={[
+                        styles.optionChip,
+                        selectedFormality === item.id &&
+                          styles.optionChipActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.optionText,
+                          selectedFormality === item.id &&
+                            styles.optionTextActive,
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
               {isGeneratingLetter ? (
@@ -1532,6 +1595,39 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 14,
+  },
+  strategyConfigBox: {
+    backgroundColor: "rgba(6, 182, 212, 0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(6, 182, 212, 0.2)",
+    borderRadius: radius.md,
+    padding: 10,
+    marginBottom: 14,
+  },
+  optionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  optionChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.sm,
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderWidth: 1,
+    borderColor: colors.surface.border,
+  },
+  optionChipActive: {
+    backgroundColor: "rgba(6, 182, 212, 0.2)",
+    borderColor: colors.accent.cyan,
+  },
+  optionText: {
+    fontSize: 11,
+    color: colors.text.secondary,
+  },
+  optionTextActive: {
+    color: colors.accent.cyan,
+    fontWeight: "700",
   },
   atsBadge: {
     flexDirection: "row",

@@ -80,21 +80,44 @@ Deno.serve(async (req) => {
       throw new Error("quota_exhausted: No Gemini API keys found");
     }
 
-    // Determine tone guidelines based on strategy
+    // Determine tone guidelines based on strategy and formality
+    const toneChoice = body.formality || strategy || "technical_deep_dive";
     let toneGuidance = "Professional, concise, direct, and outcome-oriented.";
-    if (strategy === "formal_corporate" || strategy === "formal") {
+    if (toneChoice === "formal_corporate" || toneChoice === "formal") {
       toneGuidance =
         "Highly formal, polished corporate language, traditional executive courtesy, precise and structured.";
-    } else if (strategy === "technical_deep_dive" || strategy === "technical") {
+    } else if (
+      toneChoice === "technical_deep_dive" ||
+      toneChoice === "technical"
+    ) {
       toneGuidance =
         "Deeply technical, architecture-conscious, systems-minded, focusing on exact implementation mechanics, resilience, and engineering rigor.";
-    } else if (strategy === "executive_brief" || strategy === "executive") {
+    } else if (toneChoice === "executive_brief" || toneChoice === "executive") {
       toneGuidance =
         "High-level strategic impact, organizational velocity, leadership perspective, and high-ROI outcomes.";
-    } else if (strategy === "storytelling") {
+    } else if (toneChoice === "storytelling") {
       toneGuidance =
         "Compelling narrative flow linking past engineering challenges to this company's mission.";
     }
+
+    // Format Candidate Experience & Projects
+    const rawExperience = Array.isArray(context.extracted_experience)
+      ? context.extracted_experience
+      : [];
+    const formattedExperience =
+      rawExperience.length > 0
+        ? rawExperience
+            .map(
+              (exp: any) =>
+                `- ${exp.role || "Role"} at ${exp.company || "Company"} (${exp.duration || ""}): ${Array.isArray(exp.achievements) ? exp.achievements.join("; ") : ""}`,
+            )
+            .join("\n")
+        : "Full-Stack Software Engineer with expertise in Java Spring Boot, React Native, TypeScript, PostgreSQL, and Linux systems.";
+
+    const selectedProjectsPrompt =
+      Array.isArray(body.selected_projects) && body.selected_projects.length > 0
+        ? `\nPreferred Candidate Projects to Feature: ${body.selected_projects.join(", ")}`
+        : "";
 
     // 3. Construct Strict Prompt with Zero-Hallucination & Concrete Project Selection
     const prompt = `
@@ -113,7 +136,7 @@ Career Summary: ${context.career_summary || "Full-Stack / Systems Engineer"}
 Verified Skills: ${context.extracted_skills?.join(", ") || "Java, Spring Boot, React Native, TypeScript, PostgreSQL, Deno, Linux, Supabase, Git, Docker"}
 Key Achievements: ${context.key_achievements?.join("; ") || "Architected production-grade microservices and reactive cross-platform applications."}
 Experience & Real Projects:
-${formattedExperience}
+${formattedExperience}${selectedProjectsPrompt}
 Certifications: ${context.extracted_certifications?.map((c: { name?: string }) => c.name).join(", ") || "N/A"}
 
 CRITICAL ANTI-HALLUCINATION & APPLICATION INTEGRITY RULES:
