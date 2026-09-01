@@ -3,7 +3,7 @@
  * OpusHunter — Shared Application & Domain Types
  *
  * FULLY SYNCHRONIZED WITH SUPABASE (total_structure.sql & database.types.ts)
- * 
+ *
  * Rules, Job Vault, Profiles, Cover Letters, Applications, and Enums
  * derive directly from the verified database schema to guarantee zero type drift.
  */

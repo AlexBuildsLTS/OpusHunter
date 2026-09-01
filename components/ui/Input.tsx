@@ -22,6 +22,9 @@ interface InputProps {
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
   icon?: React.ReactNode;
   disabled?: boolean;
+  multiline?: boolean;
+  numberOfLines?: number;
+  maxLength?: number;
   style?: any;
 }
 
@@ -36,6 +39,9 @@ export function Input({
   autoCapitalize = "none",
   icon,
   disabled = false,
+  multiline = false,
+  numberOfLines,
+  maxLength,
   style,
 }: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
@@ -48,6 +54,7 @@ export function Input({
       <View
         style={[
           styles.inputWrapper,
+          multiline && styles.inputWrapperMultiline,
           isFocused && styles.inputWrapperFocused,
           error && styles.inputWrapperError,
           disabled && styles.inputWrapperDisabled,
@@ -56,7 +63,7 @@ export function Input({
         {icon && <View style={styles.iconLeft}>{icon}</View>}
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, multiline && styles.inputMultiline]}
           placeholder={placeholder}
           placeholderTextColor={colors.text.dim}
           value={value}
@@ -65,6 +72,10 @@ export function Input({
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
           editable={!disabled}
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+          maxLength={maxLength}
+          textAlignVertical={multiline ? "top" : "center"}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           // @ts-ignore: outlineStyle is a web-only TextInput prop absent from RN types.
@@ -116,6 +127,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 
+  inputWrapperMultiline: {
+    alignItems: "flex-start",
+    paddingVertical: 12,
+  },
+
   inputWrapperFocused: {
     borderColor: colors.accent.cyan,
   },
@@ -133,6 +149,11 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 15,
     paddingVertical: 14,
+  },
+
+  inputMultiline: {
+    paddingVertical: 0,
+    minHeight: 100,
   },
 
   iconLeft: {
