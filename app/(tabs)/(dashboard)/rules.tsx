@@ -279,16 +279,19 @@ export default function ScrapingRulesScreen() {
     try {
       const { data, error } = await supabase.functions.invoke("scrape-jobs", {
         body: {
-          keywords,
-          cities,
-          countries,
-          radiusKm,
-          workTypes: selectedWorkTypes,
-          datePosted,
-          enableSources: {
-            jsearch: enableJSearch,
-            adzuna: enableAdzuna,
-            linkedin: enableLinkedIn,
+          userId: user.id,
+          searchParams: {
+            keywords,
+            cities,
+            countries,
+            radiusKm,
+            workTypes: selectedWorkTypes,
+            datePosted,
+            enableSources: {
+              jsearch: enableJSearch,
+              adzuna: enableAdzuna,
+              linkedin: enableLinkedIn,
+            },
           },
         },
       });
