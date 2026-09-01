@@ -1,152 +1,298 @@
 /**
  * types/app.types.ts
- * OpusHunter — Shared Application Types
- * Updated: 2026-06-26
+ * OpusHunter — Shared Application & Domain Types
  *
- * FIX: Removed JobStatus = 'active' | 'expired' | 'filled'
- *      This was wrong — the DB enum is VaultJobStatus below.
- *      Any component importing JobStatus was getting a type error on every query.
+ * FULLY SYNCHRONIZED WITH SUPABASE (total_structure.sql & database.types.ts)
+ * 
+ * Rules, Job Vault, Profiles, Cover Letters, Applications, and Enums
+ * derive directly from the verified database schema to guarantee zero type drift.
  */
 
-// ─── JOB VAULT ───────────────────────────────────────────────────────────────
-// Matches DB enum exactly: "pending" | "approved" | "rejected" | "applied"
+import type { Database, Tables, Enums } from "./database.types";
 
-export const VAULT_JOB_STATUSES = ['pending', 'approved', 'rejected', 'applied'] as const;
-export type VaultJobStatus = typeof VAULT_JOB_STATUSES[number];
+// ─── RE-EXPORT CORE DATABASE TYPES ──────────────────────────────────────────
+export type { Database, Tables, Enums };
 
-// Status used for job_applications table (not DB enum — free text)
-export const APPLICATION_STATUSES = [
-    'pending_auto_apply',
-    'applied',
-    'passed',
-    'interview',
-    'rejected',
-    'offer',
-] as const;
-export type ApplicationStatus = typeof APPLICATION_STATUSES[number];
+// ─── DATABASE ENUMS (Single Source of Truth) ────────────────────────────────
+export type VaultJobStatus = Enums<"job_status">; // 'pending' | 'approved' | 'rejected' | 'applied'
+export const VAULT_JOB_STATUSES: VaultJobStatus[] = [
+  "pending",
+  "approved",
+  "rejected",
+  "applied",
+];
 
+export type ApplicationStatus = Enums<"application_status_enum">; // 'discovered' | 'saved' | 'applied' | 'interview' | 'offer' | 'rejected' | 'withdrawn'
+export const APPLICATION_STATUSES: ApplicationStatus[] = [
+  "discovered",
+  "saved",
+  "applied",
+  "interview",
+  "offer",
+  "rejected",
+  "withdrawn",
+];
+
+export type WorkType = Enums<"work_type_enum">; // 'remote' | 'hybrid' | 'onsite' | 'flexible'
+export const WORK_TYPES: WorkType[] = [
+  "remote",
+  "hybrid",
+  "onsite",
+  "flexible",
+];
+
+export type SeniorityLevel = Enums<"seniority_level_enum">; // 'junior' | 'mid' | 'senior' | 'lead' | 'principal' | 'director' | 'vp' | 'c_level'
+export const SENIORITY_LEVELS: SeniorityLevel[] = [
+  "junior",
+  "mid",
+  "senior",
+  "lead",
+  "principal",
+  "director",
+  "vp",
+  "c_level",
+];
+
+export type JobSource = Enums<"job_source_enum">; // 'jsearch' | 'adzuna' | 'linkedin' | 'indeed' | 'custom'
+export const JOB_SOURCES: JobSource[] = [
+  "jsearch",
+  "adzuna",
+  "linkedin",
+  "indeed",
+  "custom",
+];
+
+export type CoverLetterStrategy = Enums<"cover_letter_strategy_enum">; // 'mirror_matching' | 'achievement_amplification' | 'insider_narrative'
+export type ApiProvider = Enums<"api_provider_enum">; // 'gemini' | 'rapidapi' | 'geodb' | 'adzuna' | 'openai' | 'anthropic'
+export type UserRole = Enums<"user_role">; // 'member' | 'premium' | 'admin'
+
+// ─── DATABASE TABLE ROW TYPES ───────────────────────────────────────────────
+export type JobVaultRow = Tables<"job_vault">;
+export type AutomationRuleRow = Tables<"automation_rules">;
+export type ProfileRow = Tables<"profiles">;
+export type JobApplicationRow = Tables<"job_applications">;
+export type CoverLetterRow = Tables<"cover_letters">;
+export type CertificationRow = Tables<"certifications">;
+export type ResumeDocumentRow = Tables<"resume_documents">;
+export type UserContextRow = Tables<"user_context">;
+export type UserApiKeyRow = Tables<"user_api_keys">;
+export type SystemApiKeyRow = Tables<"system_api_keys">;
+export type ApiKeyUsageLogRow = Tables<"api_key_usage_logs">;
+export type ScrapeRateLimitRow = Tables<"scrape_rate_limits">;
+export type ConnectedEmailAccountRow = Tables<"connected_email_accounts">;
+export type InterviewPrepRow = Tables<"interview_preps">;
+
+// ─── SYNCHRONIZED DOMAIN INTERFACES ─────────────────────────────────────────
+
+/**
+ * Job Interface
+ * Matches job_vault table structure with optional runtime status field
+ * for swipe-deck and triage pipeline compatibility.
+ */
 export interface Job {
-    id: string;
-    title: string;
-    company: string;
-    description: string;
-    salary: string | null;
-    location: string | null;
-    match_score: number | null;
-    tech_stack: string[];
-    status: VaultJobStatus;
-    source_url: string;
-    url?: string;
-    created_at?: string;
+  id: string;
+  user_id?: string;
+  title: string;
+  company: string;
+  company_logo_url?: string | null;
+  description: string | null;
+  salary: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  currency?: string | null;
+  location: string | null;
+  country_code?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  is_remote?: boolean;
+  work_type?: WorkType | null;
+  match_score: number | null;
+  tech_stack: string[];
+  source?: JobSource;
+  source_url: string;
+  url?: string;
+  dedup_hash?: string;
+  posted_at?: string | null;
+  scraped_at?: string;
+  created_at?: string;
+  /** UI / Triage state */
+  status?: VaultJobStatus;
 }
 
-// ─── JOB APPLICATION ─────────────────────────────────────────────────────────
-
-export interface JobApplication {
-    id: string;
-    user_id: string;
-    job_id: string;
-    status: ApplicationStatus;
-    cover_letter_used: string | null;
-    applied_at: string | null;
-    created_at: string;
-    updated_at: string;
-}
-
-// ─── COVER LETTER ────────────────────────────────────────────────────────────
-
-export interface CoverLetter {
-    id: string;
-    user_id: string;
-    title: string;
-    body: string;
-    company: string | null;
-    job_title: string | null;
-    generated_by: 'gemini' | 'template' | 'template_fallback' | 'manual';
-    is_default: boolean;
-    automation_rule_id: string | null;
-    created_at: string;
-    updated_at: string;
-}
-
-// ─── PROFILE ─────────────────────────────────────────────────────────────────
-
-export type UserRole = 'admin' | 'premium' | 'member';
-
-export interface Profile {
-    id: string;
-    email: string;
-    full_name: string | null;
-    cv_storage_path: string | null;
-    role: UserRole;
-    created_at: string;
-    updated_at: string;
-}
-
-// ─── AUTOMATION RULE ─────────────────────────────────────────────────────────
-
+/**
+ * AutomationRule Interface (RULES)
+ * 100% synchronized with public.automation_rules table in Supabase.
+ */
 export interface AutomationRule {
-    id: string;
-    user_id: string;
-    keywords: string[];
-    location: string;
-    work_types: string[];
-    base_cover_letter: string;
-    is_active: boolean | null;
-    created_at: string;
+  id: string;
+  user_id: string;
+  keywords: string[];
+  work_types: string[];
+  experience_levels: string[];
+  location: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  max_distance_km?: number | null;
+  remote_preference: string;
+  salary_min?: number | null;
+  base_cover_letter: string;
+  is_active: boolean | null;
+  created_at: string;
 }
 
-// ─── CERTIFICATION ────────────────────────────────────────────────────────────
+/**
+ * Profile Interface
+ * 100% synchronized with public.profiles table in Supabase.
+ */
+export interface Profile {
+  id: string;
+  email: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  full_name?: string | null; // Virtual helper (first_name + last_name)
+  avatar_url?: string | null;
+  bio?: string | null;
+  professional_title?: string | null;
+  years_experience?: number | null;
+  seniority_level?: SeniorityLevel | null;
+  target_roles?: string[];
+  work_type_preferences?: WorkType[];
+  target_cities?: string[];
+  target_countries?: string[];
+  location_radius_km?: number;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  salary_currency?: string;
+  languages?: string[];
+  role?: UserRole;
+  country_code?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  max_daily_applications?: number;
+  profile_complete?: boolean;
+  last_scrape_time?: string | null;
+  gmail_linked_email?: string | null;
+  cv_storage_path?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
 
+/**
+ * JobApplication Interface
+ * 100% synchronized with public.job_applications table in Supabase.
+ */
+export interface JobApplication {
+  id: string;
+  user_id: string;
+  job_id: string;
+  status: ApplicationStatus;
+  applied_at: string | null;
+  cover_letter_used: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * CoverLetter Interface
+ * 100% synchronized with public.cover_letters table in Supabase.
+ */
+export interface CoverLetter {
+  id: string;
+  user_id: string;
+  job_id?: string | null;
+  title: string;
+  body: string;
+  company?: string | null;
+  job_title?: string | null;
+  tone?: string;
+  strategy_used?: CoverLetterStrategy | null;
+  ats_score?: number | null;
+  specificity_score?: number | null;
+  filler_phrase_count?: number;
+  tokens_used?: number | null;
+  generation_duration_ms?: number | null;
+  user_edited?: boolean;
+  is_default: boolean;
+  automation_rule_id?: string | null;
+  generated_by: string;
+  alternative_versions?: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Certification Interface
+ * 100% synchronized with public.certifications table in Supabase.
+ */
 export interface Certification {
-    id: string;
-    user_id: string;
-    file_name: string;
-    file_type: string;
-    file_size_kb: number | null;
-    storage_path: string;
-    uploaded_at: string;
+  id: string;
+  user_id: string;
+  file_name: string;
+  file_type: string;
+  file_size_kb: number | null;
+  storage_path: string;
+  cert_name?: string | null;
+  cert_issuer?: string | null;
+  issue_date?: string | null;
+  expiry_date?: string | null;
+  uploaded_at: string;
 }
 
-// ─── PIPELINE STORE ──────────────────────────────────────────────────────────
+/**
+ * ResumeDocument Interface
+ * 100% synchronized with public.resume_documents table in Supabase.
+ */
+export interface ResumeDocument {
+  id: string;
+  user_id: string;
+  file_name: string;
+  file_type: string;
+  file_size_kb: number | null;
+  storage_path: string;
+  is_primary: boolean;
+  raw_text: string | null;
+  extraction_status: string;
+  uploaded_at: string;
+}
+
+// ─── PIPELINE & UI STATE ────────────────────────────────────────────────────
 
 export interface PipelineMetrics {
-    matches: number;
-    pending: number;
-    interviews: number;
+  matches: number;
+  pending: number;
+  interviews: number;
 }
 
 export interface CVUploadState {
-    status: 'idle' | 'picking' | 'uploading' | 'success' | 'error';
-    message: string;
-    path: string | null;
+  status: "idle" | "picking" | "uploading" | "success" | "error";
+  message: string;
+  path: string | null;
 }
 
-// ─── SCRAPER ─────────────────────────────────────────────────────────────────
+// ─── SCRAPER ENGINE & AUTOMATION PAYLOADS ───────────────────────────────────
 
 export interface ScrapeSummaryItem {
-    rule: string;
-    fetched: number;
-    new: number;
+  rule: string;
+  fetched: number;
+  new: number;
 }
 
 export interface ScrapeResult {
-    message: string;
-    count: number;
-    summary?: ScrapeSummaryItem[];
-    rules_processed?: number;
-    keywords?: string[];
-    location?: string;
+  message: string;
+  count: number;
+  summary?: ScrapeSummaryItem[];
+  rules_processed?: number;
+  keywords?: string[];
+  location?: string;
 }
 
-// ─── API RESPONSE HELPERS ─────────────────────────────────────────────────────
-
 export interface EdgeFnError {
-    error: string;
+  error: string;
 }
 
 export interface GenerateCoverLetterResponse {
-    cover_letter: string;
-    cover_letter_id: string | null;
-    generated_by: 'gemini' | 'template';
+  cover_letter: string;
+  cover_letter_id: string | null;
+  generated_by: string;
+  strategy_used?: CoverLetterStrategy;
 }

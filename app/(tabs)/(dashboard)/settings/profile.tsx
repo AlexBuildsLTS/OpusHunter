@@ -1,38 +1,42 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
   Pressable,
   ScrollView,
-  Alert,
   Platform,
 } from "react-native";
 import { SafeAreaWrapper } from "../../../../components/shared/SafeAreaWrapper";
 import { Typography } from "../../../../components/ui/Typography";
 import { Card } from "../../../../components/ui/GlassCard";
+import { Badge } from "../../../../components/ui/Badge";
 import { Input } from "../../../../components/ui/Input";
 import { Button } from "../../../../components/ui/Button";
 import { Chip } from "../../../../components/ui/Chip";
 import { useAuthStore } from "../../../../stores/authStore";
 import { supabase } from "../../../../lib/supabase";
 import { useQuery } from "@tanstack/react-query";
-import { colors } from "../../../../constants/theme";
+import { colors, radius, shadows } from "../../../../constants/theme";
 import {
+  User,
+  Briefcase,
   MapPin,
   Sparkles,
   Save,
   Lock,
   CheckCircle2,
   AlertCircle,
+  Globe,
+  Coins,
+  ShieldCheck,
+  Check,
 } from "lucide-react-native";
 import type { Database } from "../../../../types/database.types";
+import type { SeniorityLevel, WorkType } from "../../../../types/app.types";
 
 type UserContext = Database["public"]["Tables"]["user_context"]["Row"];
-type WorkType = Database["public"]["Enums"]["work_type_enum"];
-type SeniorityLevel = Database["public"]["Enums"]["seniority_level_enum"];
 
-const WORK_TYPES: WorkType[] = ["remote", "hybrid", "onsite", "flexible"];
-const SENIORITY: SeniorityLevel[] = [
+const ALL_SENIORITIES: SeniorityLevel[] = [
   "junior",
   "mid",
   "senior",
@@ -43,112 +47,85 @@ const SENIORITY: SeniorityLevel[] = [
   "c_level",
 ];
 
+const WORK_TYPES: WorkType[] = ["remote", "hybrid", "onsite", "flexible"];
+
+const PRESET_COUNTRIES = [
+  "Sweden",
+  "Germany",
+  "United Kingdom",
+  "Netherlands",
+  "Denmark",
+  "Norway",
+  "Finland",
+];
+
+const PRESET_SWEDISH_CITIES = [
+  "Stockholm",
+  "Gothenburg",
+  "Malmö",
+  "Uppsala",
+  "Lund",
+  "Linköping",
+];
+
+type BioTone = "formal" | "executive" | "technical" | "modern";
+
 export default function ProfileScreen() {
-  const { profile, setProfile } = useAuthStore();
+  const { profile, setProfile, user } = useAuthStore();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Password change state
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordSaving, setPasswordSaving] = useState(false);
-  const [passwordStatus, setPasswordStatus] = useState<{
-    type: "success" | "error";
-    msg: string;
-  } | null>(null);
-
-  const handlePasswordChange = async () => {
-    if (!newPassword) {
-      setPasswordStatus({ type: "error", msg: "Please enter a new password" });
-      return;
-    }
-    if (newPassword.length < 6) {
-      setPasswordStatus({
-        type: "error",
-        msg: "Password must be at least 6 characters long",
-      });
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordStatus({ type: "error", msg: "Passwords do not match" });
-      return;
-    }
-
-    setPasswordSaving(true);
-    setPasswordStatus(null);
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-      if (error) throw error;
-      setPasswordStatus({
-        type: "success",
-        msg: "Password updated successfully!",
-      });
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch (err: any) {
-      setPasswordStatus({
-        type: "error",
-        msg: err.message || "Failed to update password",
-      });
-    } finally {
-      setPasswordSaving(false);
-    }
-  };
-
-  const [bioTone, setBioTone] = useState<"executive" | "technical" | "modern">(
-    "executive",
-  );
-
-  const handleGenerateBio = () => {
-    const title = form.professional_title || "Software Professional";
-    const years = form.years_experience
-      ? `${form.years_experience}+ years of`
-      : "proven";
-    const skills =
-      userContext?.extracted_skills?.slice(0, 5).join(", ") ||
-      "modern full-stack systems, cloud architecture, and engineering leadership";
-    const roles =
-      form.target_roles.length > 0
-        ? form.target_roles.join(", ")
-        : "Software Engineering";
-    const seniority =
-      form.seniority_level.charAt(0).toUpperCase() +
-      form.seniority_level.slice(1);
-
-    let generated = "";
-    if (bioTone === "executive") {
-      generated = `Results-driven ${seniority} tech professional with ${years} experience leading impactful initiatives and high-throughput systems. Specializing in ${skills}, driving measurable business outcomes across ${roles} in the Nordic & European tech landscape.`;
-    } else if (bioTone === "technical") {
-      generated = `Hands-on ${seniority} Engineer with ${years} deep architectural expertise in ${skills}. Passionate about clean code, scalable microservices, low latency, and robust infrastructure for ${roles}.`;
-    } else {
-      generated = `Forward-thinking modern technologist with ${years} experience crafting user-centric products and agile workflows. Fluent in ${skills}, ready to bring creativity and speed to ${roles}.`;
-    }
-
-    setForm((prev) => ({ ...prev, bio: generated }));
-  };
-
-  // Form state
+  // Form State
   const [form, setForm] = useState({
+    first_name: profile?.first_name || "",
+    last_name: profile?.last_name || "",
     professional_title: profile?.professional_title || "",
     bio: profile?.bio || "",
-    years_experience: String(profile?.years_experience || ""),
-    seniority_level: (profile?.seniority_level || "mid") as SeniorityLevel,
-    target_roles: profile?.target_roles || [],
+    years_experience: profile?.years_experience != null ? String(profile.years_experience) : "",
+    seniority_levels: (profile?.seniority_level
+      ? [profile.seniority_level as SeniorityLevel]
+      : ["mid" as SeniorityLevel]) as SeniorityLevel[],
+    target_roles: profile?.target_roles || ["Full Stack Developer"],
     work_type_preferences: (profile?.work_type_preferences || [
       "remote",
+      "hybrid",
     ]) as WorkType[],
-    target_cities: profile?.target_cities || [],
+    target_cities: profile?.target_cities || ["Stockholm"],
     target_countries: profile?.target_countries || ["Sweden"],
     location_radius_km: profile?.location_radius_km || 50,
-    salary_min: String(profile?.salary_min || ""),
-    salary_max: String(profile?.salary_max || ""),
+    salary_min: profile?.salary_min != null ? String(profile.salary_min) : "",
+    salary_max: profile?.salary_max != null ? String(profile.salary_max) : "",
     salary_currency: profile?.salary_currency || "SEK",
-    languages: profile?.languages || [],
+    languages: profile?.languages || ["English", "Swedish"],
   });
 
-  // Fetch AI Context
+  // Keep form in sync when profile updates
+  useEffect(() => {
+    if (profile) {
+      setForm({
+        first_name: profile.first_name || "",
+        last_name: profile.last_name || "",
+        professional_title: profile.professional_title || "",
+        bio: profile.bio || "",
+        years_experience: profile.years_experience != null ? String(profile.years_experience) : "",
+        seniority_levels: profile.seniority_level
+          ? [profile.seniority_level as SeniorityLevel]
+          : ["mid"],
+        target_roles: profile.target_roles || [],
+        work_type_preferences: (profile.work_type_preferences || ["remote"]) as WorkType[],
+        target_cities: profile.target_cities || [],
+        target_countries: profile.target_countries || ["Sweden"],
+        location_radius_km: profile.location_radius_km || 50,
+        salary_min: profile.salary_min != null ? String(profile.salary_min) : "",
+        salary_max: profile.salary_max != null ? String(profile.salary_max) : "",
+        salary_currency: profile.salary_currency || "SEK",
+        languages: profile.languages || ["English"],
+      });
+    }
+  }, [profile]);
+
+  // AI Context query
   const { data: userContext } = useQuery({
     queryKey: ["user-context", profile?.id],
     enabled: !!profile?.id,
@@ -163,7 +140,74 @@ export default function ProfileScreen() {
     },
   });
 
-  // GeoDB Location Search (Sweden priority)
+  // AI Bio Generator with Tone Selection (Formal, Executive, Technical, Modern)
+  const [bioTone, setBioTone] = useState<BioTone>("formal");
+  const [generatingBio, setGeneratingBio] = useState(false);
+
+  const handleGenerateBio = () => {
+    setGeneratingBio(true);
+    const fullName = [form.first_name, form.last_name].filter(Boolean).join(" ");
+    const namePrefix = fullName ? `${fullName} is a ` : "Accomplished ";
+    const title = form.professional_title || "Software Engineering Professional";
+    const years = form.years_experience ? `${form.years_experience}+ years of dedicated` : "established";
+    const skills =
+      userContext?.extracted_skills?.slice(0, 6).join(", ") ||
+      "distributed systems, cloud architecture, and modern full-stack development";
+    const roles =
+      form.target_roles.length > 0
+        ? form.target_roles.join(" / ")
+        : "Software Engineering Leadership";
+    const primarySeniority =
+      form.seniority_levels[0] || "Senior";
+    const seniorityFormatted =
+      primarySeniority.charAt(0).toUpperCase() + primarySeniority.slice(1);
+
+    let generated = "";
+
+    switch (bioTone) {
+      case "formal":
+        generated = `${namePrefix}distinguished ${seniorityFormatted} ${title} offering ${years} professional expertise directing mission-critical engineering and software infrastructure. Demonstrated acumen in ${skills}, adhering to stringent engineering best practices and delivery governance across ${roles} in the Nordic and European technological ecosystem.`;
+        break;
+      case "executive":
+        generated = `Results-driven ${seniorityFormatted} technology leader with ${years} track record transforming technical strategy into measurable business value. Deep domain command across ${skills}, spearheading high-impact roadmaps and cross-functional teams in ${roles}.`;
+        break;
+      case "technical":
+        generated = `Architecturally minded ${seniorityFormatted} Systems Specialist with ${years} deep focus on scalable backend pipelines and robust interfaces. Mastered core competencies in ${skills}, dedicated to zero-latency services, high maintainability, and clean craftsmanship for ${roles}.`;
+        break;
+      case "modern":
+        generated = `Dynamic ${seniorityFormatted} engineer and agile builder with ${years} creating user-first digital products. Fluent in ${skills}, accelerating release cycles and building maintainable code across modern ${roles} environments.`;
+        break;
+    }
+
+    setForm((prev) => ({ ...prev, bio: generated }));
+    setTimeout(() => setGeneratingBio(false), 300);
+  };
+
+  // Seniority Selection Helpers
+  const isAllSenioritySelected =
+    form.seniority_levels.length === ALL_SENIORITIES.length;
+
+  const toggleSeniority = (level: SeniorityLevel) => {
+    setForm((prev) => {
+      const exists = prev.seniority_levels.includes(level);
+      const updated = exists
+        ? prev.seniority_levels.filter((item) => item !== level)
+        : [...prev.seniority_levels, level];
+      return {
+        ...prev,
+        seniority_levels: updated.length > 0 ? updated : [level],
+      };
+    });
+  };
+
+  const toggleSelectAllSeniority = () => {
+    setForm((prev) => ({
+      ...prev,
+      seniority_levels: isAllSenioritySelected ? ["mid"] : [...ALL_SENIORITIES],
+    }));
+  };
+
+  // GeoDB / City Search
   const [cityQuery, setCityQuery] = useState("");
   const [cityResults, setCityResults] = useState<string[]>([]);
 
@@ -173,52 +217,20 @@ export default function ProfileScreen() {
         setCityResults([]);
         return;
       }
-      const { data } = await supabase.functions.invoke("geo-autocomplete", {
-        body: { query: cityQuery, countryCode: "SE" },
-      });
-      if (data?.cities) {
-        setCityResults(data.cities.map((c: any) => c.name));
+      try {
+        const { data } = await supabase.functions.invoke("geo-autocomplete", {
+          body: { query: cityQuery, countryCode: "SE" },
+        });
+        if (data?.cities) {
+          setCityResults(data.cities.map((c: any) => c.name));
+        }
+      } catch (err) {
+        console.warn("City autocomplete error", err);
       }
     };
     const timer = setTimeout(searchCities, 300);
     return () => clearTimeout(timer);
   }, [cityQuery]);
-
-  const handleSave = async () => {
-    if (!profile) return;
-    setSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        professional_title: form.professional_title,
-        bio: form.bio,
-        years_experience: parseInt(form.years_experience) || 0,
-        seniority_level: form.seniority_level,
-        target_roles: form.target_roles,
-        work_type_preferences: form.work_type_preferences,
-        target_cities: form.target_cities,
-        target_countries: form.target_countries,
-        location_radius_km: form.location_radius_km,
-        salary_min: form.salary_min ? parseInt(form.salary_min) : null,
-        salary_max: form.salary_max ? parseInt(form.salary_max) : null,
-        salary_currency: form.salary_currency,
-        languages: form.languages,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", profile.id);
-
-    if (!error) {
-      const { data: newProfile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", profile.id)
-        .maybeSingle();
-      if (newProfile) setProfile(newProfile);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    }
-    setSaving(false);
-  };
 
   const toggleArrayItem = (
     field:
@@ -230,8 +242,8 @@ export default function ProfileScreen() {
     value: string,
   ) => {
     setForm((prev) => {
-      const current = prev[field];
-      const exists = current.includes(value as never);
+      const current = prev[field] as string[];
+      const exists = current.includes(value);
       return {
         ...prev,
         [field]: exists
@@ -241,398 +253,539 @@ export default function ProfileScreen() {
     });
   };
 
+  const handleSave = async () => {
+    if (!profile) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const primarySeniority = (form.seniority_levels[0] || "mid") as Database["public"]["Enums"]["seniority_level_enum"];
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          first_name: form.first_name.trim() || null,
+          last_name: form.last_name.trim() || null,
+          professional_title: form.professional_title.trim() || null,
+          bio: form.bio.trim() || null,
+          years_experience: form.years_experience ? parseInt(form.years_experience) : null,
+          seniority_level: primarySeniority,
+          target_roles: form.target_roles,
+          work_type_preferences: form.work_type_preferences,
+          target_cities: form.target_cities,
+          target_countries: form.target_countries,
+          location_radius_km: form.location_radius_km,
+          salary_min: form.salary_min ? parseInt(form.salary_min) : null,
+          salary_max: form.salary_max ? parseInt(form.salary_max) : null,
+          salary_currency: form.salary_currency,
+          languages: form.languages,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", profile.id);
+
+      if (error) throw error;
+
+      // Re-fetch profile to update Zustand state
+      const { data: updatedProfile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", profile.id)
+        .maybeSingle();
+
+      if (updatedProfile) {
+        setProfile(updatedProfile);
+      }
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err: any) {
+      setSaveError(err.message || "Failed to update profile");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <SafeAreaWrapper edges={["top"]} style={styles.container}>
-      <View style={styles.header}>
-        <Typography variant="h2" weight="bold" color="primary">
-          Profile
-        </Typography>
-        <Button
-          variant="primary"
-          size="sm"
-          onPress={handleSave}
-          loading={saving}
-          style={styles.saveBtn}
-        >
-          <Save size={16} color={colors.text.inverse} />{" "}
-          {saved ? "Saved!" : "Save"}
-        </Button>
-      </View>
-
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* AI Extracted Context (Read-Only) */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Sparkles size={16} color={colors.accent.cyan} />
-            <Typography
-              variant="caption"
-              color="secondary"
-              style={styles.sectionLabel}
-            >
-              AI EXTRACTED CONTEXT
-            </Typography>
-          </View>
-          <Card style={styles.contextCard}>
-            <Typography
-              variant="caption"
-              color="dim"
-              style={{ marginBottom: 8 }}
-            >
-              SKILLS
-            </Typography>
-            <View style={styles.chipRow}>
-              {userContext?.extracted_skills?.slice(0, 10).map((skill) => (
-                <Chip
-                  key={skill}
-                  label={skill}
-                  selected={false}
-                  onPress={() => {}}
-                />
-              ))}
-              {(!userContext || userContext.extracted_skills?.length === 0) && (
-                <Typography variant="caption" color="dim">
-                  Upload a CV to auto-extract skills.
-                </Typography>
-              )}
+        {/* Symmetrical Centered Box Wrapper */}
+        <View style={styles.centeredContainer}>
+          
+          {/* Header Title */}
+          <View style={styles.header}>
+            <View>
+              <Typography variant="h2" weight="bold" color="primary">
+                Profile & Targeting
+              </Typography>
+              <Typography variant="caption" color="secondary" style={styles.headerSubtitle}>
+                Manage your professional identity, candidate criteria, and AI generation context.
+              </Typography>
             </View>
-            <Typography
-              variant="caption"
-              color="dim"
-              style={{ marginTop: 12, marginBottom: 8 }}
+            <Button
+              variant="primary"
+              size="sm"
+              onPress={handleSave}
+              loading={saving}
+              style={styles.headerSaveBtn}
             >
-              KEY ACHIEVEMENTS
-            </Typography>
-            {userContext?.key_achievements?.slice(0, 3).map((ach, i) => (
-              <View key={i} style={styles.achievementRow}>
-                <View style={styles.achievementDot} />
-                <Typography
-                  variant="bodySm"
-                  color="secondary"
-                  numberOfLines={2}
-                >
-                  {ach}
+              <Save size={15} color={colors.text.inverse} />
+              {saved ? "Saved!" : "Save"}
+            </Button>
+          </View>
+
+          {/* Feedback Banner */}
+          {saved && (
+            <View style={styles.saveAlertSuccess}>
+              <CheckCircle2 size={16} color={colors.accent.green} />
+              <Typography variant="bodySm" weight="medium" style={{ color: colors.accent.green }}>
+                Profile settings successfully saved and synced!
+              </Typography>
+            </View>
+          )}
+
+          {saveError && (
+            <View style={styles.saveAlertError}>
+              <AlertCircle size={16} color={colors.accent.red} />
+              <Typography variant="bodySm" weight="medium" style={{ color: colors.accent.red }}>
+                {saveError}
+              </Typography>
+            </View>
+          )}
+
+          {/* 1. Protected Unique Identity Card */}
+          <Card variant="elevated" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Lock size={16} color={colors.accent.cyan} />
+                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                  ACCOUNT & UNIQUE IDENTITY
                 </Typography>
               </View>
-            ))}
-          </Card>
-        </View>
-
-        {/* Professional Details */}
-        <View style={styles.section}>
-          <Typography
-            variant="caption"
-            color="secondary"
-            style={styles.sectionLabel}
-          >
-            PROFESSIONAL DETAILS
-          </Typography>
-          <Input
-            label="Professional Title"
-            value={form.professional_title}
-            onChangeText={(t) => setForm({ ...form, professional_title: t })}
-            placeholder="Senior Developer"
-          />
-          <Input
-            label="Years of Experience"
-            value={form.years_experience}
-            onChangeText={(t) => setForm({ ...form, years_experience: t })}
-            placeholder="5"
-            keyboardType="numeric"
-          />
-          <Typography
-            variant="caption"
-            color="secondary"
-            style={styles.subLabel}
-          >
-            SENIORITY LEVEL
-          </Typography>
-          <View style={styles.chipRow}>
-            {SENIORITY.map((level) => (
-              <Chip
-                key={level}
-                label={level}
-                selected={form.seniority_level === level}
-                onPress={() => setForm({ ...form, seniority_level: level })}
-              />
-            ))}
-          </View>
-
-          <View style={{ marginTop: 12, marginBottom: 8 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 6,
-              }}
-            >
-              <Typography variant="caption" color="secondary">
-                AI BIO GENERATOR (3 TONES)
-              </Typography>
-              <Button
-                variant="ghost"
-                size="sm"
-                onPress={handleGenerateBio}
-                style={{ paddingVertical: 4, paddingHorizontal: 8 }}
-              >
-                <Sparkles size={14} color={colors.accent.cyan} /> Generate Bio
-              </Button>
+              <Badge label="Protected" variant="cyan" size="sm" />
             </View>
-            <View style={styles.chipRow}>
-              {(["executive", "technical", "modern"] as const).map((tone) => (
+
+            <View style={styles.identityRow}>
+              <View style={styles.identityItem}>
+                <Typography variant="caption" color="dim">
+                  UNIQUE EMAIL (LOGIN)
+                </Typography>
+                <View style={styles.protectedValueBox}>
+                  <ShieldCheck size={14} color={colors.accent.green} />
+                  <Typography variant="bodySm" weight="semiBold" color="primary" numberOfLines={1}>
+                    {profile?.email || user?.email || "No email on record"}
+                  </Typography>
+                </View>
+              </View>
+
+              <View style={styles.identityItem}>
+                <Typography variant="caption" color="dim">
+                  ACCOUNT ROLE & ID
+                </Typography>
+                <View style={styles.protectedValueBox}>
+                  <Typography variant="caption" weight="semiBold" style={{ color: colors.accent.cyan }}>
+                    {profile?.role?.toUpperCase() || "MEMBER"}
+                  </Typography>
+                  <Typography variant="caption" color="dim" numberOfLines={1} style={{ flex: 1 }}>
+                    · {profile?.id?.slice(0, 8)}...
+                  </Typography>
+                </View>
+              </View>
+            </View>
+            <Typography variant="caption" color="dim" style={styles.protectedNote}>
+              Unique email and account identifiers are hardware/auth-sealed. Professional names and attributes below are freely customizable.
+            </Typography>
+          </Card>
+
+          {/* 2. Personal & Professional Name Details */}
+          <Card variant="default" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <User size={16} color={colors.accent.cyan} />
+                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                  PROFESSIONAL IDENTITY
+                </Typography>
+              </View>
+            </View>
+
+            <View style={styles.gridTwoCols}>
+              <View style={styles.gridCol}>
+                <Input
+                  label="First Name"
+                  value={form.first_name}
+                  onChangeText={(t) => setForm({ ...form, first_name: t })}
+                  placeholder="e.g. Alex"
+                />
+              </View>
+              <View style={styles.gridCol}>
+                <Input
+                  label="Last Name"
+                  value={form.last_name}
+                  onChangeText={(t) => setForm({ ...form, last_name: t })}
+                  placeholder="e.g. Lindqvist"
+                />
+              </View>
+            </View>
+
+            <View style={styles.gridTwoCols}>
+              <View style={styles.gridCol}>
+                <Input
+                  label="Professional Title"
+                  value={form.professional_title}
+                  onChangeText={(t) => setForm({ ...form, professional_title: t })}
+                  placeholder="e.g. Staff Full Stack Engineer"
+                  icon={<Briefcase size={16} color={colors.text.dim} />}
+                />
+              </View>
+              <View style={styles.gridCol}>
+                <Input
+                  label="Years of Experience"
+                  value={form.years_experience}
+                  onChangeText={(t) => setForm({ ...form, years_experience: t })}
+                  placeholder="e.g. 7"
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          </Card>
+
+          {/* 3. Seniority Targeting (Multi-Select & Select All) */}
+          <Card variant="default" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Briefcase size={16} color={colors.accent.cyan} />
+                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                  SENIORITY TIERS (MULTI-SELECT)
+                </Typography>
+              </View>
+              <Pressable
+                onPress={toggleSelectAllSeniority}
+                style={[
+                  styles.selectAllBtn,
+                  isAllSenioritySelected && styles.selectAllBtnActive,
+                ]}
+              >
+                <Check size={12} color={isAllSenioritySelected ? colors.text.inverse : colors.accent.cyan} />
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  style={{
+                    color: isAllSenioritySelected ? colors.text.inverse : colors.accent.cyan,
+                  }}
+                >
+                  {isAllSenioritySelected ? "Open to All Levels ✓" : "Select All Levels"}
+                </Typography>
+              </Pressable>
+            </View>
+
+            <Typography variant="caption" color="secondary" style={{ marginBottom: 12 }}>
+              Choose specific target seniorities or toggle all to allow the scraper to capture broad opportunities.
+            </Typography>
+
+            <View style={styles.chipGrid}>
+              {ALL_SENIORITIES.map((level) => {
+                const selected = form.seniority_levels.includes(level);
+                return (
+                  <Chip
+                    key={level}
+                    label={level.replace("_", "-").toUpperCase()}
+                    selected={selected}
+                    onPress={() => toggleSeniority(level)}
+                  />
+                );
+              })}
+            </View>
+          </Card>
+
+          {/* 4. AI Bio / About Section with Formal Tone */}
+          <Card variant="default" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Sparkles size={16} color={colors.accent.cyan} />
+                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                  PROFESSIONAL BIO & AI SYNTHESIS
+                </Typography>
+              </View>
+            </View>
+
+            {/* Tone Selector */}
+            <View style={styles.toneSelectorContainer}>
+              <Typography variant="caption" color="dim" style={{ marginBottom: 6 }}>
+                AI GENERATION TONE:
+              </Typography>
+              <View style={styles.toneRow}>
+                {(
+                  [
+                    { id: "formal", label: "Formal" },
+                    { id: "executive", label: "Executive" },
+                    { id: "technical", label: "Technical" },
+                    { id: "modern", label: "Modern" },
+                  ] as const
+                ).map((t) => {
+                  const active = bioTone === t.id;
+                  return (
+                    <Pressable
+                      key={t.id}
+                      onPress={() => setBioTone(t.id)}
+                      style={[styles.toneBtn, active && styles.toneBtnActive]}
+                    >
+                      <Typography
+                        variant="caption"
+                        weight={active ? "bold" : "medium"}
+                        style={{
+                          color: active ? colors.accent.cyan : colors.text.secondary,
+                        }}
+                      >
+                        {t.label}
+                      </Typography>
+                    </Pressable>
+                  );
+                })}
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onPress={handleGenerateBio}
+                  loading={generatingBio}
+                  style={styles.generateBioBtn}
+                >
+                  <Sparkles size={14} color={colors.accent.cyan} /> Generate Bio
+                </Button>
+              </View>
+            </View>
+
+            <Input
+              label="Professional Summary / Bio"
+              value={form.bio}
+              onChangeText={(t) => setForm({ ...form, bio: t })}
+              placeholder="Detailed candidate summary or use the AI generator above..."
+              multiline
+              numberOfLines={4}
+              style={styles.bioTextArea}
+            />
+          </Card>
+
+          {/* 5. Target Roles & Work Types */}
+          <Card variant="default" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Globe size={16} color={colors.accent.cyan} />
+                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                  CAREER SCOPE & WORK MODES
+                </Typography>
+              </View>
+            </View>
+
+            <Input
+              label="Target Roles (Comma-separated)"
+              value={form.target_roles.join(", ")}
+              onChangeText={(t) =>
+                setForm({
+                  ...form,
+                  target_roles: t
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+              placeholder="e.g. Lead Engineer, Full Stack, Cloud Architect"
+            />
+
+            <Typography variant="caption" color="dim" style={styles.subHeading}>
+              WORK TYPES
+            </Typography>
+            <View style={styles.chipGrid}>
+              {WORK_TYPES.map((type) => {
+                const isSelected = form.work_type_preferences.includes(type);
+                return (
+                  <Chip
+                    key={type}
+                    label={type.toUpperCase()}
+                    selected={isSelected}
+                    onPress={() => toggleArrayItem("work_type_preferences", type)}
+                  />
+                );
+              })}
+            </View>
+          </Card>
+
+          {/* 6. Geographic Preferences (Sweden & European Scope) */}
+          <Card variant="default" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <MapPin size={16} color={colors.accent.cyan} />
+                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                  GEOGRAPHIC TARGETS (SWEDEN / EU)
+                </Typography>
+              </View>
+            </View>
+
+            <Input
+              label="Add City via GeoDB"
+              value={cityQuery}
+              onChangeText={setCityQuery}
+              placeholder="Search Swedish or European city..."
+              icon={<MapPin size={16} color={colors.text.dim} />}
+            />
+
+            {cityResults.length > 0 && (
+              <View style={styles.autocompleteResults}>
+                {cityResults.map((city) => (
+                  <Pressable
+                    key={city}
+                    onPress={() => {
+                      toggleArrayItem("target_cities", city);
+                      setCityQuery("");
+                      setCityResults([]);
+                    }}
+                    style={styles.autocompleteItem}
+                  >
+                    <Typography variant="bodySm" color="primary">
+                      {city}
+                    </Typography>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
+            <Typography variant="caption" color="dim" style={styles.subHeading}>
+              SELECTED CITIES:
+            </Typography>
+            <View style={styles.chipGrid}>
+              {form.target_cities.map((city) => (
                 <Chip
-                  key={tone}
-                  label={tone.charAt(0).toUpperCase() + tone.slice(1)}
-                  selected={bioTone === tone}
-                  onPress={() => setBioTone(tone)}
+                  key={city}
+                  label={city}
+                  selected
+                  onPress={() => toggleArrayItem("target_cities", city)}
+                />
+              ))}
+              {PRESET_SWEDISH_CITIES.filter((c) => !form.target_cities.includes(c)).map((city) => (
+                <Chip
+                  key={city}
+                  label={`+ ${city}`}
+                  selected={false}
+                  onPress={() => toggleArrayItem("target_cities", city)}
                 />
               ))}
             </View>
-          </View>
 
-          <Input
-            label="Bio"
-            value={form.bio}
-            onChangeText={(t) => setForm({ ...form, bio: t })}
-            placeholder="Short professional summary..."
-          />
-        </View>
-
-        {/* Preferences */}
-        <View style={styles.section}>
-          <Typography
-            variant="caption"
-            color="secondary"
-            style={styles.sectionLabel}
-          >
-            TARGET ROLES
-          </Typography>
-          <Input
-            label="Target Roles (comma separated)"
-            value={form.target_roles.join(", ")}
-            onChangeText={(t) =>
-              setForm({
-                ...form,
-                target_roles: t
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              })
-            }
-            placeholder="Frontend, Backend..."
-          />
-          <Typography
-            variant="caption"
-            color="secondary"
-            style={styles.subLabel}
-          >
-            WORK TYPES
-          </Typography>
-          <View style={styles.chipRow}>
-            {WORK_TYPES.map((type) => (
-              <Chip
-                key={type}
-                label={type}
-                selected={form.work_type_preferences.includes(type)}
-                onPress={() => toggleArrayItem("work_type_preferences", type)}
-              />
-            ))}
-          </View>
-        </View>
-
-        {/* Location */}
-        <View style={styles.section}>
-          <Typography
-            variant="caption"
-            color="secondary"
-            style={styles.sectionLabel}
-          >
-            LOCATION
-          </Typography>
-          <Input
-            label="Add City (Sweden Priority)"
-            value={cityQuery}
-            onChangeText={setCityQuery}
-            placeholder="Search city..."
-            icon={<MapPin size={18} color={colors.text.dim} />}
-          />
-          {cityResults.length > 0 && (
-            <Card style={styles.suggestionCard}>
-              {cityResults.map((city) => (
-                <Pressable
-                  key={city}
-                  onPress={() => {
-                    toggleArrayItem("target_cities", city);
-                    setCityQuery("");
-                    setCityResults([]);
-                  }}
-                  style={styles.suggestionItem}
-                >
-                  <Typography variant="bodySm" color="secondary">
-                    {city}
-                  </Typography>
-                </Pressable>
+            <Typography variant="caption" color="dim" style={styles.subHeading}>
+              TARGET COUNTRIES:
+            </Typography>
+            <View style={styles.chipGrid}>
+              {PRESET_COUNTRIES.map((country) => (
+                <Chip
+                  key={country}
+                  label={country}
+                  selected={form.target_countries.includes(country)}
+                  onPress={() => toggleArrayItem("target_countries", country)}
+                />
               ))}
-            </Card>
-          )}
-          <View style={styles.chipRow}>
-            {form.target_cities.map((city) => (
-              <Chip
-                key={city}
-                label={city}
-                selected
-                onPress={() => toggleArrayItem("target_cities", city)}
-              />
-            ))}
-          </View>
-          <Typography
-            variant="caption"
-            color="secondary"
-            style={styles.subLabel}
-          >
-            COUNTRIES
-          </Typography>
-          <View style={styles.chipRow}>
-            {[
-              "Sweden",
-              "Germany",
-              "UK",
-              "Netherlands",
-              "Denmark",
-              "Norway",
-            ].map((country) => (
-              <Chip
-                key={country}
-                label={country}
-                selected={form.target_countries.includes(country)}
-                onPress={() => toggleArrayItem("target_countries", country)}
-              />
-            ))}
-          </View>
-        </View>
-
-        {/* Salary */}
-        <View style={styles.section}>
-          <Typography
-            variant="caption"
-            color="secondary"
-            style={styles.sectionLabel}
-          >
-            SALARY EXPECTATIONS
-          </Typography>
-          <View style={styles.row}>
-            <Input
-              label="Min"
-              value={form.salary_min}
-              onChangeText={(t) => setForm({ ...form, salary_min: t })}
-              placeholder="45000"
-              keyboardType="numeric"
-              style={{ flex: 1 }}
-            />
-            <Input
-              label="Max"
-              value={form.salary_max}
-              onChangeText={(t) => setForm({ ...form, salary_max: t })}
-              placeholder="65000"
-              keyboardType="numeric"
-              style={{ flex: 1 }}
-            />
-            <Input
-              label="Currency"
-              value={form.salary_currency}
-              onChangeText={(t) => setForm({ ...form, salary_currency: t })}
-              placeholder="SEK"
-              style={{ width: 80 }}
-            />
-          </View>
-        </View>
-
-        {/* Security & Password Change */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Lock size={16} color={colors.accent.cyan} />
-            <Typography
-              variant="caption"
-              color="secondary"
-              style={styles.sectionLabel}
-            >
-              SECURITY & ACCESS CREDENTIALS
-            </Typography>
-          </View>
-
-          <Card variant="default" style={styles.passwordCard}>
-            <Typography variant="h4" style={{ marginBottom: 4 }}>
-              Change Account Password
-            </Typography>
-            <Typography
-              variant="caption"
-              color="secondary"
-              style={{ marginBottom: 16 }}
-            >
-              Update your account password securely. Requires at least 6
-              characters.
-            </Typography>
-
-            <View style={{ gap: 12 }}>
-              <Input
-                label="New Password"
-                value={newPassword}
-                onChangeText={setNewPassword}
-                placeholder="••••••••"
-                secureTextEntry
-              />
-              <Input
-                label="Confirm New Password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="••••••••"
-                secureTextEntry
-              />
-
-              {passwordStatus && (
-                <View
-                  style={[
-                    styles.statusBox,
-                    passwordStatus.type === "success"
-                      ? styles.statusSuccess
-                      : styles.statusError,
-                  ]}
-                >
-                  {passwordStatus.type === "success" ? (
-                    <CheckCircle2 size={16} color={colors.accent.green} />
-                  ) : (
-                    <AlertCircle size={16} color={colors.accent.red} />
-                  )}
-                  <Typography
-                    variant="caption"
-                    style={{
-                      color:
-                        passwordStatus.type === "success"
-                          ? colors.accent.green
-                          : colors.accent.red,
-                      flex: 1,
-                    }}
-                  >
-                    {passwordStatus.msg}
-                  </Typography>
-                </View>
-              )}
-
-              <Button
-                variant="secondary"
-                size="md"
-                onPress={handlePasswordChange}
-                disabled={passwordSaving || !newPassword}
-                loading={passwordSaving}
-                style={{ marginTop: 8 }}
-              >
-                Update Password
-              </Button>
             </View>
           </Card>
+
+          {/* 7. Compensation & Languages */}
+          <Card variant="default" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Coins size={16} color={colors.accent.cyan} />
+                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                  COMPENSATION & SPOKEN LANGUAGES
+                </Typography>
+              </View>
+            </View>
+
+            <View style={styles.gridThreeCols}>
+              <View style={styles.gridCol}>
+                <Input
+                  label="Min Salary / Month"
+                  value={form.salary_min}
+                  onChangeText={(t) => setForm({ ...form, salary_min: t })}
+                  placeholder="55000"
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.gridCol}>
+                <Input
+                  label="Target Max"
+                  value={form.salary_max}
+                  onChangeText={(t) => setForm({ ...form, salary_max: t })}
+                  placeholder="85000"
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={{ width: 100 }}>
+                <Input
+                  label="Currency"
+                  value={form.salary_currency}
+                  onChangeText={(t) => setForm({ ...form, salary_currency: t })}
+                  placeholder="SEK"
+                />
+              </View>
+            </View>
+
+            <Typography variant="caption" color="dim" style={styles.subHeading}>
+              LANGUAGES (COMMA-SEPARATED)
+            </Typography>
+            <Input
+              label="Languages"
+              value={form.languages.join(", ")}
+              onChangeText={(t) =>
+                setForm({
+                  ...form,
+                  languages: t
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+              placeholder="English, Swedish..."
+            />
+          </Card>
+
+          {/* 8. AI Extracted Context (Read-Only CV Ingestion) */}
+          <Card variant="glass" style={styles.cardSection}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderLeft}>
+                <Sparkles size={16} color={colors.accent.cyan} />
+                <Typography variant="caption" weight="bold" color="secondary" style={styles.sectionTag}>
+                  INGESTED CV CONTEXT (AUTO-EXTRACTED)
+                </Typography>
+              </View>
+              <Badge label="From Vault" variant="neutral" size="sm" />
+            </View>
+
+            <Typography variant="caption" color="dim" style={{ marginBottom: 8 }}>
+              EXTRACTED TOP SKILLS
+            </Typography>
+            <View style={styles.chipGrid}>
+              {userContext?.extracted_skills?.slice(0, 12).map((skill) => (
+                <Chip key={skill} label={skill} selected={false} onPress={() => {}} />
+              ))}
+              {(!userContext || !userContext.extracted_skills?.length) && (
+                <Typography variant="caption" color="dim">
+                  Upload your CV in the Vault tab to automatically index technical skills.
+                </Typography>
+              )}
+            </View>
+          </Card>
+
+          {/* Prominent Bottom Save Action Bar */}
+          <View style={styles.bottomActionBar}>
+            <Button
+              variant="primary"
+              size="lg"
+              onPress={handleSave}
+              loading={saving}
+              style={styles.fullWidthSaveBtn}
+            >
+              <Save size={18} color={colors.text.inverse} />
+              {saved ? "Profile Changes Saved! ✓" : "Save Profile Changes"}
+            </Button>
+          </View>
+
         </View>
       </ScrollView>
     </SafeAreaWrapper>
@@ -640,59 +793,196 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "transparent" },
+  container: {
+    flex: 1,
+    backgroundColor: "transparent",
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 120,
+    alignItems: "center",
+  },
+  centeredContainer: {
+    width: "100%",
+    maxWidth: 800,
+    alignSelf: "center",
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 12,
+    marginBottom: 20,
+    paddingHorizontal: 4,
   },
-  saveBtn: { flexDirection: "row", gap: 4 },
-  scroll: { paddingHorizontal: 16, paddingBottom: 120 },
-  section: { marginBottom: 24 },
-  sectionHeader: {
+  headerSubtitle: {
+    marginTop: 4,
+  },
+  headerSaveBtn: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  saveAlertSuccess: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: `${colors.accent.green}18`,
+    borderColor: `${colors.accent.green}44`,
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: radius.md,
+    marginBottom: 16,
+  },
+  saveAlertError: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: `${colors.accent.red}18`,
+    borderColor: `${colors.accent.red}44`,
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: radius.md,
+    marginBottom: 16,
+  },
+  cardSection: {
+    padding: 20,
+    marginBottom: 20,
+    borderRadius: radius.lg,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  cardHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sectionTag: {
+    letterSpacing: 0.8,
+  },
+  identityRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 12,
+  },
+  identityItem: {
+    flex: 1,
+    minWidth: 240,
+    gap: 6,
+  },
+  protectedValueBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+  },
+  protectedNote: {
+    fontStyle: "italic",
+    marginTop: 4,
+  },
+  gridTwoCols: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 4,
+  },
+  gridThreeCols: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 4,
+  },
+  gridCol: {
+    flex: 1,
+    minWidth: 220,
+  },
+  selectAllBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 8,
-  },
-  sectionLabel: { marginBottom: 8 },
-  subLabel: { marginTop: 12, marginBottom: 8 },
-  contextCard: { padding: 16 },
-  passwordCard: { padding: 20, backgroundColor: "rgba(10, 15, 29, 0.75)" },
-  statusBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    padding: 12,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
     borderWidth: 1,
-    marginTop: 4,
+    borderColor: colors.accent.cyan,
+    backgroundColor: "transparent",
   },
-  statusSuccess: {
-    backgroundColor: `${colors.accent.green}15`,
-    borderColor: `${colors.accent.green}30`,
+  selectAllBtnActive: {
+    backgroundColor: colors.accent.cyan,
+    borderColor: colors.accent.cyan,
   },
-  statusError: {
-    backgroundColor: `${colors.accent.red}15`,
-    borderColor: `${colors.accent.red}30`,
-  },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  achievementRow: {
+  chipGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  toneSelectorContainer: {
+    marginBottom: 14,
+  },
+  toneRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 8,
-    marginBottom: 4,
   },
-  achievementDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.accent.cyan,
+  toneBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
   },
-  row: { flexDirection: "row", gap: 12 },
-  suggestionCard: { marginTop: 8, padding: 8 },
-  suggestionItem: { paddingVertical: 8, paddingHorizontal: 12 },
+  toneBtnActive: {
+    backgroundColor: `${colors.accent.cyan}22`,
+    borderColor: colors.accent.cyan,
+  },
+  generateBioBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginLeft: "auto",
+  },
+  bioTextArea: {
+    minHeight: 90,
+  },
+  subHeading: {
+    marginTop: 14,
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  autocompleteResults: {
+    backgroundColor: "rgba(15, 23, 42, 0.95)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.12)",
+    borderRadius: radius.md,
+    marginTop: -8,
+    marginBottom: 12,
+    padding: 6,
+  },
+  autocompleteItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radius.sm,
+  },
+  bottomActionBar: {
+    marginTop: 8,
+    marginBottom: 24,
+    width: "100%",
+  },
+  fullWidthSaveBtn: {
+    width: "100%",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+  },
 });
+

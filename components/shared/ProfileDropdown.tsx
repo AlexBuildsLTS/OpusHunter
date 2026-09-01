@@ -27,6 +27,7 @@ import {
   ChevronDown,
   X,
 } from "lucide-react-native";
+import React from "react";
 
 /**
  * ProfileDropdown — account menu anchored in the nav shell.
