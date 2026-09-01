@@ -409,7 +409,7 @@ async function fetchLinkedIn(
         "linkedin",
         keyObj.source,
         true,
-        0,
+        5, // 5 credits per successful LinkedIn scrape
         "scrape-jobs/linkedinscraperapi",
       );
 
@@ -458,92 +458,7 @@ async function fetchLinkedIn(
     }
   }
 
-  // Second priority / Fallback: RapidAPI LinkedIn search adapter
-  const rapidKeys = await getCandidateKeys(supabase, userId, "rapidapi");
-  for (const keyObj of rapidKeys) {
-    try {
-      console.log(
-        `[LinkedIn RapidAPI] Querying fallback LinkedIn on RapidAPI with key source: ${keyObj.source}`,
-      );
-      const url = `https://linkedin-jobs-search.p.rapidapi.com/`;
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-RapidAPI-Key": keyObj.key,
-          "X-RapidAPI-Host": "linkedin-jobs-search.p.rapidapi.com",
-        },
-        body: JSON.stringify({
-          search_terms: queryStr,
-          location: locationStr,
-          page: (params.page || 1).toString(),
-        }),
-      });
-
-      if (response.status === 429) {
-        console.warn("[LinkedIn RapidAPI] 429 Rate limited");
-        await handle429(supabase, keyObj.keyId);
-        continue;
-      }
-
-      if (!response.ok) {
-        const errBody = await response.text().catch(() => "");
-        console.warn(
-          `[LinkedIn RapidAPI] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
-        );
-        continue;
-      }
-
-      const data = (await response.json()) as
-        Record<string, unknown> | Array<Record<string, unknown>>;
-      await markKeyUsed(supabase, keyObj);
-      await logUsage(
-        supabase,
-        userId,
-        "rapidapi",
-        keyObj.source,
-        true,
-        0,
-        "scrape-jobs/linkedin-rapidapi",
-      );
-
-      const items: Array<Record<string, unknown>> = Array.isArray(data)
-        ? data
-        : ((data.jobs || data.data || []) as Array<Record<string, unknown>>);
-
-      console.log(
-        `[LinkedIn RapidAPI] Successfully fetched ${items.length} jobs`,
-      );
-      return items.map((raw) => ({
-        title: String(raw.job_title || raw.title || "Untitled Role"),
-        company: String(raw.company_name || raw.company || "Unknown Company"),
-        company_logo_url: raw.company_logo
-          ? String(raw.company_logo)
-          : undefined,
-        location: String(raw.location || locationStr),
-        country_code: params.countries?.[0] || "SE",
-        description: String(
-          raw.job_description || raw.description || "LinkedIn job opportunity.",
-        ),
-        apply_url: String(raw.job_url || raw.apply_url || raw.url || ""),
-        posted_at: String(raw.posted_date || new Date().toISOString()),
-        work_type: String(raw.work_type || "onsite"),
-        salary_min: undefined,
-        salary_max: undefined,
-        currency: "SEK",
-        source: "linkedin",
-        external_job_id: raw.job_id
-          ? String(raw.job_id)
-          : raw.id
-            ? String(raw.id)
-            : undefined,
-        source_url: String(raw.job_url || ""),
-      }));
-    } catch (err) {
-      console.warn("[LinkedIn RapidAPI] Fetch error with key:", err);
-    }
-  }
-
+  // If no dedicated LinkedInScraperAPI key is available or no results returned, finish gracefully
   return [];
 }
 
@@ -638,8 +553,12 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     const userRole = userProfile?.role || "member";
-    const batchCap =
+    const defaultCap =
       userRole === "admin" ? 60 : userRole === "premium" ? 50 : 25;
+    const batchCap =
+      typeof searchParams.batchSize === "number" && searchParams.batchSize > 0
+        ? Math.min(searchParams.batchSize, 100)
+        : defaultCap;
     const finalListings = deduped.slice(0, batchCap);
 
     if (finalListings.length > 0) {

@@ -178,13 +178,16 @@ export async function getCandidateKeys(
     baseNames.push("GEODB_API_KEY", "GEODB_KEY", "RAPIDAPI_KEY");
   } else if (
     normalizedProvider === "linkedin" ||
-    normalizedProvider === "linkedinscraper"
+    normalizedProvider === "linkedinscraper" ||
+    normalizedProvider === "linkedin_scraper_api" ||
+    normalizedProvider === "linkedinscraperapi"
   ) {
     baseNames.push(
       "LINKEDIN_API_KEY",
-      "LINKEDINSCRAPER_API_KEY",
+      "LINKEDIN_KEY",
       "LINKEDIN_SCRAPER_API_KEY",
-      "RAPIDAPI_KEY",
+      "LINKEDIN_SCRAPER_KEY",
+      "LINKEDINSCRAPER_API_KEY",
     );
   }
 
