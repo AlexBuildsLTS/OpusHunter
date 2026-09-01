@@ -31,14 +31,192 @@ Deno.serve(async (req) => {
     const jwtUser = await verifyJwt(req);
     const body = await req.json().catch(() => ({}));
     const userId = body.userId || body.user_id || jwtUser?.userId;
-    const documentPath = body.documentPath || body.storagePath || body.path;
-    const bucket = body.bucket || "resumes";
 
-    if (!userId || !documentPath) {
+    if (!userId) {
       return Response.json(
         {
           error: "missing_fields",
-          message: "Missing required fields: userId and documentPath",
+          message: "Missing required field: userId",
+        },
+        { status: 400, headers: corsHeaders },
+      );
+    }
+
+    // =========================================================================
+    // ACTION: REAL AI PROFESSIONAL BIO SYNTHESIS
+    // =========================================================================
+    if (body.action === "generate_bio") {
+      const tone = body.tone || "formal";
+      const candidateKeys = await getCandidateKeys(supabase, userId, "gemini");
+      if (candidateKeys.length === 0) {
+        throw new Error("quota_exhausted: No Gemini API keys found");
+      }
+
+      // Fetch verified candidate context & profile from database
+      const [profileRes, contextRes] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+        supabase
+          .from("user_context")
+          .select("*")
+          .eq("user_id", userId)
+          .maybeSingle(),
+      ]);
+
+      const profile = profileRes.data || {};
+      const context = contextRes.data || {};
+
+      const fullName =
+        [profile.first_name, profile.last_name].filter(Boolean).join(" ") ||
+        body.fullName ||
+        "Candidate";
+      const title =
+        body.professional_title ||
+        profile.professional_title ||
+        "Software Engineer";
+      const years =
+        body.years_experience || profile.years_experience || "established";
+      const skills = body.skills ||
+        context.extracted_skills || [
+          "Full-Stack Engineering",
+          "Systems Architecture",
+        ];
+      const roles = body.target_roles || profile.target_roles || [title];
+      const education = body.education || "";
+      const careerSummary = context.career_summary || "";
+
+      let toneInstruction = "";
+      switch (tone) {
+        case "executive":
+          toneInstruction =
+            "Executive & Strategic: Focus on leadership, business transformation, measurable ROI, architectural governance, and delivering end-to-end strategic impact.";
+          break;
+        case "technical":
+          toneInstruction =
+            "Technical Deep-Dive: Emphasize backend architectures, distributed pipelines, low latency, system reliability, hands-on engineering craftsmanship, and specific technology paradigms.";
+          break;
+        case "modern":
+          toneInstruction =
+            "Modern & Agile: Vibrant, user-first, modern engineering velocity, continuous delivery, rapid execution, product focus, and cross-functional team agility.";
+          break;
+        case "formal":
+        default:
+          toneInstruction =
+            "Formal Corporate: Prestigious, authoritative, standard enterprise governance, rock-solid engineering compliance, structured execution, and industry excellence.";
+          break;
+      }
+
+      const bioPrompt = `You are an expert executive resume writer and career positioning strategist.
+Generate a high-impact, truthful professional summary / biography for ${fullName}.
+
+CANDIDATE PROFILE:
+- Current / Target Title: ${title}
+- Years of Experience: ${years}
+- Core Verified Skills: ${Array.isArray(skills) ? skills.join(", ") : skills}
+- Target Roles: ${Array.isArray(roles) ? roles.join(", ") : roles}
+${education ? `- Education: ${education}` : ""}
+${careerSummary ? `- Career Summary Context: ${careerSummary}` : ""}
+
+TONE DIRECTIVE:
+${toneInstruction}
+
+STRICT CONSTRAINTS:
+1. Ground strictly in the candidate's real skills and experience. Do NOT invent unrelated technologies, fake degrees, or false metrics.
+2. Length: Exactly 2 to 4 concise, powerful sentences.
+3. Return ONLY the raw biography text. No preamble, no quotes, no markdown formatting, no explanations.`;
+
+      let generatedBio = "";
+      let successfulModel = "";
+
+      bioKeyLoop: for (const keyObj of candidateKeys) {
+        for (const model of GEMINI_MODELS) {
+          try {
+            console.log(
+              `[generate_bio] Attempting model ${model} with key source: ${keyObj.source}`,
+            );
+            const geminiResponse = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${keyObj.key}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: bioPrompt }] }],
+                  generationConfig: {
+                    temperature: 0.3,
+                    maxOutputTokens: 512,
+                  },
+                }),
+              },
+            );
+
+            if (geminiResponse.status === 429) {
+              console.warn(
+                `[generate_bio] 429 Rate limited on ${model}, rotating key`,
+              );
+              await handle429(supabase, keyObj.keyId);
+              continue bioKeyLoop;
+            }
+
+            if (geminiResponse.status === 404) continue;
+
+            if (!geminiResponse.ok) {
+              const errText = await geminiResponse.text().catch(() => "");
+              console.warn(
+                `[generate_bio] Error with ${model} (${geminiResponse.status}): ${errText.slice(0, 200)}`,
+              );
+              continue;
+            }
+
+            const geminiData = await geminiResponse.json();
+            const textResult =
+              geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (textResult) {
+              generatedBio = textResult.trim().replace(/^["']|["']$/g, "");
+              successfulModel = model;
+              await markKeyUsed(supabase, keyObj);
+              await logUsage(
+                supabase,
+                userId,
+                "gemini",
+                keyObj.source,
+                true,
+                0,
+                "generate-bio",
+              );
+              break bioKeyLoop;
+            }
+          } catch (e) {
+            console.warn(`[generate_bio] Exception with model ${model}:`, e);
+          }
+        }
+      }
+
+      if (!generatedBio) {
+        throw new Error(
+          "Failed to generate professional bio across all candidate Gemini models & keys",
+        );
+      }
+
+      return Response.json(
+        {
+          success: true,
+          modelUsed: successfulModel,
+          bio: generatedBio,
+        },
+        { headers: corsHeaders },
+      );
+    }
+
+    // =========================================================================
+    // ACTION: RESUME / CERT CONTEXT EXTRACTION
+    // =========================================================================
+    const documentPath = body.documentPath || body.storagePath || body.path;
+    const bucket = body.bucket || "resumes";
+
+    if (!documentPath) {
+      return Response.json(
+        {
+          error: "missing_fields",
+          message: "Missing required field: documentPath",
         },
         { status: 400, headers: corsHeaders },
       );

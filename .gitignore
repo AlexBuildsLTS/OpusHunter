@@ -43,12 +43,16 @@ supabase/db/data/
 !.env.example
 
 # --- 5. AI & TOOLING ARTIFACTS (CLEANUP) ---
+.continue/
+*.continue/
 .claude/
 .gemini/
 .remember/
 .agents/
 .kombai/
 .cursor/
+.kilo/
+*.kilo/
 *.GEMINI.md
 *.md
 .directory
@@ -59,17 +63,18 @@ supabase/db/data/
 STRUCTURE.md
 GEMINI.md
 .GEMINI.md
+repomix-output*
 repomix-output.xml
 repomix-output.md
 repomix-output.txt
 repomix-output-AlexBuildsLTS-VeraxAI.xml
 Expo_SDK_56__Architectural_Evo.txt
+*.agent.MD
+*.CONTINUE.md
+*.prompt.md
+*.instructions.md
 # Whitelist essential documentation
 !README.md
-*.CONTINUE.md
-*.kilo/
-.kilo/
-.github/
 
 # --- 6. IDE & OS ARTIFACTS ---
 .vscode/
