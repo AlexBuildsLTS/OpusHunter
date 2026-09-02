@@ -15,12 +15,12 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 const supabase = getSupabaseAdmin();
 
-const GEMINI_MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-2.5-pro",
-];
+export const GEMINI_MODEL_CASCADE = [
+  "gemini-3.7-flash", // Stable - August 2026 release (Deep reasoning & 64k output)
+  "gemini-3.6-flash", // Stable - High throughput
+  "gemini-3.5-flash", // Stable - Direct Pro-tier intelligence replacement
+  "gemini-3.5-flash-lite", // Stable - Highly economic Free Tier endpoint
+] as const;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -128,7 +128,7 @@ STRICT CONSTRAINTS:
       let successfulModel = "";
 
       bioKeyLoop: for (const keyObj of candidateKeys) {
-        for (const model of GEMINI_MODELS) {
+        for (const model of GEMINI_MODEL_CASCADE) {
           try {
             console.log(
               `[generate_bio] Attempting model ${model} with key source: ${keyObj.source}`,
@@ -313,7 +313,7 @@ Return ONLY a valid JSON object matching this exact structure (do not include ma
 
     // Iterate over candidate keys and supported models
     keyLoop: for (const keyObj of candidateKeys) {
-      for (const model of GEMINI_MODELS) {
+      for (const model of GEMINI_MODEL_CASCADE) {
         try {
           console.log(
             `[extract-context] Attempting model ${model} with key source: ${keyObj.source}`,

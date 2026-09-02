@@ -106,7 +106,7 @@ const PROVIDER_CONFIG: Record<
   gemini: {
     label: "Google Gemini",
     color: "#00F0FF",
-    modelName: "gemini-1.5-flash",
+    modelName: "gemini-3.7-flash",
     defaultTier: "system_tier_1",
   },
   openai: {

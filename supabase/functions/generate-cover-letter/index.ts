@@ -15,19 +15,12 @@ import { corsHeaders } from "../_shared/cors.ts";
 
 const supabase = getSupabaseAdmin();
 
-const STANDARD_MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-2.0-flash-lite",
-];
-
-const EXECUTIVE_MODELS = [
-  "gemini-2.5-pro",
-  "gemini-2.5-flash",
-  "gemini-1.5-pro",
-  "gemini-2.0-flash",
-];
+export const GEMINI_MODEL_CASCADE = [
+  "gemini-3.7-flash", // Stable - August 2026 release (Deep reasoning & 64k output)
+  "gemini-3.6-flash", // Stable - High throughput
+  "gemini-3.5-flash", // Stable - Direct Pro-tier intelligence replacement
+  "gemini-3.5-flash-lite", // Stable - Highly economic Free Tier endpoint
+] as const;
 
 Deno.serve(async (req) => {
   // CORS preflight
@@ -154,10 +147,10 @@ CRITICAL ANTI-HALLUCINATION & APPLICATION INTEGRITY RULES:
 
 Return ONLY the raw cover letter text with no conversational intro, markdown wrappers, or commentary.`;
 
-    // 4. Call Gemini with fallback chain based on strategy tone
+    // 4. Call Gemini with canonical fallback chain
     const isExecutiveTone =
       strategy === "executive_brief" || strategy === "storytelling";
-    const modelsToTry = isExecutiveTone ? EXECUTIVE_MODELS : STANDARD_MODELS;
+    const modelsToTry = GEMINI_MODEL_CASCADE;
 
     let content = "";
     let successfulModel = "";
@@ -176,7 +169,10 @@ Return ONLY the raw cover letter text with no conversational intro, markdown wra
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+                generationConfig: {
+                  temperature: isExecutiveTone ? 0.6 : 0.7,
+                  maxOutputTokens: 2048,
+                },
               }),
             },
           );
