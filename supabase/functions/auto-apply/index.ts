@@ -1,20 +1,40 @@
 /**
  * supabase/functions/auto-apply/index.ts
- * OpusHunter — Autonomous Application & Gmail Dispatcher.
- * Packages AI tailored cover letter, Primary CV, and candidate credentials.
- * Dispatches real emails via Gmail OAuth API if connected, creates Gmail drafts,
- * or prepares verified dispatch payloads.
+ * OpusHunter — Autonomous Application Router & Dispatcher
+ *
+ * Routes job applications to appropriate channels:
+ * 1. Greenhouse/Lever → Direct form submission (API)
+ * 2. mailto: links → Email submission via Gmail/Outlook OAuth
+ * 3. Generic forms → Prepare-and-handoff (user completes form)
+ *
  * Strictly guarantees that status is NEVER marked 'applied' unless verified
  * real transmission to the recipient succeeds.
  */
 
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { refreshEmailToken } from "../_shared/emailTokenManager.ts";
 
 const supabase = getSupabaseAdmin();
 
 /**
- * Base64url encoder for RFC 2822 email payload (Google Gmail API requirement)
+ * Detect submission route by analyzing apply_url
+ */
+function detectSubmissionRoute(
+  applyUrl: string,
+): "greenhouse" | "lever" | "mailto" | "generic" {
+  if (!applyUrl) return "generic";
+
+  const url = applyUrl.toLowerCase();
+  if (url.includes("greenhouse.io")) return "greenhouse";
+  if (url.includes("lever.co")) return "lever";
+  if (url.startsWith("mailto:")) return "mailto";
+
+  return "generic";
+}
+
+/**
+ * Base64url encoder for RFC 2822 email payload (Gmail API)
  */
 function base64UrlEncode(str: string): string {
   const bytes = new TextEncoder().encode(str);
@@ -29,43 +49,231 @@ function base64UrlEncode(str: string): string {
 }
 
 /**
- * Helper to exchange a Google OAuth refresh token for a fresh access token
+ * Submit application via Gmail API
  */
-async function getGoogleAccessToken(
-  refreshToken: string,
-): Promise<string | null> {
-  const clientId =
-    Deno.env.get("GOOGLE_CLIENT_ID") ||
-    Deno.env.get("EXPO_PUBLIC_GOOGLE_CLIENT_ID");
-  const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
-
-  if (!clientId || !clientSecret || !refreshToken) {
-    return null;
-  }
-
+async function submitViaGmail(
+  accessToken: string,
+  senderEmail: string,
+  senderFullName: string,
+  recipientEmail: string,
+  subject: string,
+  emailBody: string,
+  resumeBuffer?: Uint8Array,
+  resumeFileName?: string,
+): Promise<{
+  success: boolean;
+  method: "gmail_send" | "gmail_draft";
+  messageId?: string;
+  confirmation: string;
+}> {
   try {
-    const res = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: "refresh_token",
-      }),
-    });
+    // Build RFC 2822 email
+    const boundaryStr = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-    if (!res.ok) {
-      console.warn("Failed to refresh Google access token:", await res.text());
-      return null;
+    let rfcEmail = [
+      `From: "${senderFullName}" <${senderEmail}>`,
+      `To: <${recipientEmail}>`,
+      `Subject: ${subject}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/mixed; boundary="${boundaryStr}"`,
+      ``,
+      `--${boundaryStr}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      `Content-Transfer-Encoding: 7bit`,
+      ``,
+      emailBody,
+    ];
+
+    // Add resume as attachment if provided
+    if (resumeBuffer && resumeFileName) {
+      const resumeBase64 = btoa(String.fromCharCode(...resumeBuffer));
+      rfcEmail.push(
+        ``,
+        `--${boundaryStr}`,
+        `Content-Type: application/pdf; name="${resumeFileName}"`,
+        `Content-Disposition: attachment; filename="${resumeFileName}"`,
+        `Content-Transfer-Encoding: base64`,
+        ``,
+        resumeBase64.match(/.{1,76}/g)?.join("\n") || "",
+      );
     }
 
-    const data = await res.json();
-    return data.access_token || null;
+    rfcEmail.push(``, `--${boundaryStr}--`);
+
+    const rfcEmailStr = rfcEmail.join("\r\n");
+    const rawEncoded = base64UrlEncode(rfcEmailStr);
+
+    // Send via Gmail API
+    const sendRes = await fetch(
+      "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ raw: rawEncoded }),
+      },
+    );
+
+    if (sendRes.ok) {
+      const data = await sendRes.json();
+      return {
+        success: true,
+        method: "gmail_send",
+        messageId: data.id,
+        confirmation: `Sent via Gmail (Message ID: ${data.id})`,
+      };
+    } else {
+      const errText = await sendRes.text();
+      console.warn("Gmail API send failed:", errText);
+      return {
+        success: false,
+        method: "gmail_draft",
+        confirmation: `Failed to send: ${errText.slice(0, 100)}`,
+      };
+    }
   } catch (err) {
-    console.error("Google token refresh exception:", err);
-    return null;
+    console.error("Gmail submission error:", err);
+    return {
+      success: false,
+      method: "gmail_draft",
+      confirmation: `Email submission error: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
+}
+
+/**
+ * Submit application via Outlook Graph API (Mail.Send)
+ */
+async function submitViaOutlook(
+  accessToken: string,
+  senderEmail: string,
+  senderFullName: string,
+  recipientEmail: string,
+  subject: string,
+  emailBody: string,
+  resumeBuffer?: Uint8Array,
+  resumeFileName?: string,
+): Promise<{
+  success: boolean;
+  method: "outlook_send";
+  confirmation: string;
+}> {
+  try {
+    const attachments: any[] = [];
+
+    if (resumeBuffer && resumeFileName) {
+      const resumeBase64 = btoa(String.fromCharCode(...resumeBuffer));
+      attachments.push({
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        name: resumeFileName,
+        contentBytes: resumeBase64,
+      });
+    }
+
+    const payload = {
+      message: {
+        subject,
+        body: {
+          contentType: "HTML",
+          content: emailBody.replace(/\n/g, "<br/>"),
+        },
+        toRecipients: [
+          {
+            emailAddress: {
+              address: recipientEmail,
+            },
+          },
+        ],
+        attachments,
+      },
+      saveToSentItems: true,
+    };
+
+    const sendRes = await fetch(
+      "https://graph.microsoft.com/v1.0/me/sendMail",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+
+    if (sendRes.ok || sendRes.status === 202) {
+      return {
+        success: true,
+        method: "outlook_send",
+        confirmation: "Sent via Outlook",
+      };
+    } else {
+      const errText = await sendRes.text();
+      console.warn("Outlook API send failed:", errText);
+      return {
+        success: false,
+        method: "outlook_send",
+        confirmation: `Failed to send: ${errText.slice(0, 100)}`,
+      };
+    }
+  } catch (err) {
+    console.error("Outlook submission error:", err);
+    return {
+      success: false,
+      method: "outlook_send",
+      confirmation: `Email submission error: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+/**
+ * Prepare generic form handoff payload
+ */
+function prepareGenericHandoff(
+  job: any,
+  profile: any,
+  coverLetter: any,
+  primaryResume: any,
+  subject: string,
+): {
+  success: boolean;
+  method: "generic_prepare_handoff";
+  payload: any;
+} {
+  return {
+    success: true,
+    method: "generic_prepare_handoff",
+    payload: {
+      openUrl: job.url || job.apply_url,
+      prefilledData: {
+        firstName: profile.first_name || "",
+        lastName: profile.last_name || "",
+        email: profile.email,
+        phone: profile.phone_number || "",
+      },
+      readyToPaste: coverLetter?.body || `Application for ${job.title}`,
+      resumeReady: primaryResume
+        ? {
+            fileName: primaryResume.file_name || "resume.pdf",
+            sizeKb: Math.round((primaryResume.file_size || 0) / 1024),
+            note: "Download and upload this file",
+          }
+        : {
+            fileName: "No resume uploaded",
+            sizeKb: 0,
+            note: "Upload your resume",
+          },
+      steps: [
+        "1. Tap 'Open Apply Page' below",
+        "2. Fill in your information (pre-filled above)",
+        "3. Copy the cover letter and paste into the form",
+        "4. Upload your resume",
+        "5. Submit the application",
+      ],
+    },
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -73,8 +281,7 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { userId, jobId, coverLetterId, recipientEmailOverride, forceDraft } =
-      await req.json();
+    const { userId, jobId, coverLetterId, forceDraft } = await req.json();
     if (!userId || !jobId)
       throw new Error("Missing required fields: userId, jobId");
 
@@ -151,105 +358,129 @@ Deno.serve(async (req: Request) => {
     const emailBody =
       coverLetter?.body ||
       `Dear Hiring Team,\n\nPlease find my application for the ${job.title} position attached.\n\nBest regards,\n${fullName}`;
-    const destinationEmail =
-      recipientEmailOverride || (job as any).contact_email || null;
+
+    // 3. Detect submission route
+    const submissionRoute = detectSubmissionRoute(
+      job.apply_url || job.url || "",
+    );
 
     let submissionMethod = "manual_dispatch";
     let submissionConfirmation =
       "Application prepared for candidate submission";
     let applicationStatus: "applied" | "saved" = "saved";
-    let gmailMessageId: string | null = null;
-    let mailtoLink: string | null = null;
+    let resultPayload: any = {};
 
-    // 3. Attempt Real Google Gmail API Transmission / Draft Creation if OAuth is available
-    if (connectedAccount?.refresh_token) {
-      const accessToken = await getGoogleAccessToken(
-        connectedAccount.refresh_token,
-      );
+    // 4. Route to appropriate submission handler
+    switch (submissionRoute) {
+      case "greenhouse":
+      case "lever":
+        // TODO: Implement direct form submission for Greenhouse/Lever
+        submissionMethod = "greenhouse_lever_direct_pending";
+        submissionConfirmation =
+          "Direct submission endpoint not yet implemented";
+        resultPayload = prepareGenericHandoff(
+          job,
+          profile,
+          coverLetter,
+          primaryResume,
+          subject,
+        );
+        break;
 
-      if (accessToken) {
-        if (destinationEmail && !forceDraft) {
-          // Construct RFC 2822 Email Message
-          const rfcMessage = [
-            `From: "${fullName}" <${senderEmail}>`,
-            `To: <${destinationEmail}>`,
-            `Subject: ${subject}`,
-            `MIME-Version: 1.0`,
-            `Content-Type: text/plain; charset="UTF-8"`,
-            `Content-Transfer-Encoding: 7bit`,
-            ``,
-            emailBody,
-          ].join("\r\n");
+      case "mailto":
+        // Extract recipient email from mailto: link
+        const mailtoMatch = (job.apply_url || "").match(/mailto:([^?&]+)/);
+        const recipientEmail = mailtoMatch ? mailtoMatch[1] : job.contact_email;
 
-          const rawEncoded = base64UrlEncode(rfcMessage);
-
-          const sendRes = await fetch(
-            "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ raw: rawEncoded }),
-            },
+        if (!recipientEmail || !connectedAccount) {
+          // No email account linked or no recipient found - fallback to handoff
+          resultPayload = prepareGenericHandoff(
+            job,
+            profile,
+            coverLetter,
+            primaryResume,
+            subject,
           );
-
-          if (sendRes.ok) {
-            const sendData = await sendRes.json();
-            gmailMessageId = sendData.id || "dispatched";
-            applicationStatus = "applied";
-            submissionMethod = "gmail_oauth_api";
-            submissionConfirmation = `Dispatched via Gmail API (Message ID: ${gmailMessageId})`;
-          } else {
-            const errText = await sendRes.text();
-            console.warn("Gmail API direct send failed:", errText);
-            submissionMethod = "gmail_api_failed";
-            submissionConfirmation = `Direct send failed: ${errText.slice(0, 100)}`;
-          }
-        } else {
-          // Create Draft in candidate's Gmail inbox
-          const rfcDraft = [
-            `From: "${fullName}" <${senderEmail}>`,
-            destinationEmail ? `To: <${destinationEmail}>` : `To: `,
-            `Subject: ${subject}`,
-            `MIME-Version: 1.0`,
-            `Content-Type: text/plain; charset="UTF-8"`,
-            `Content-Transfer-Encoding: 7bit`,
-            ``,
-            emailBody,
-          ].join("\r\n");
-
-          const rawDraftEncoded = base64UrlEncode(rfcDraft);
-
-          const draftRes = await fetch(
-            "https://gmail.googleapis.com/gmail/v1/users/me/drafts",
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ message: { raw: rawDraftEncoded } }),
-            },
-          );
-
-          if (draftRes.ok) {
-            const draftData = await draftRes.json();
-            gmailMessageId = draftData.id || "draft_created";
-            applicationStatus = "saved";
-            submissionMethod = "gmail_draft_created";
-            submissionConfirmation = `Draft ready in your Gmail inbox (Draft ID: ${gmailMessageId})`;
-          }
+          submissionMethod = "email_handoff_no_account";
+          break;
         }
-      }
+
+        // Try to refresh access token
+        const tokenResult = await refreshEmailToken(
+          supabase as any,
+          connectedAccount.id,
+        );
+
+        if (!tokenResult) {
+          // Token refresh failed - fallback to handoff
+          resultPayload = prepareGenericHandoff(
+            job,
+            profile,
+            coverLetter,
+            primaryResume,
+            subject,
+          );
+          submissionMethod = "email_handoff_token_expired";
+          submissionConfirmation =
+            "Email account token expired. Please re-link.";
+          break;
+        }
+
+        // Send via appropriate provider
+        let emailResult: any;
+        if (connectedAccount.provider === "google") {
+          emailResult = await submitViaGmail(
+            tokenResult.accessToken,
+            senderEmail,
+            fullName,
+            recipientEmail,
+            subject,
+            emailBody,
+            primaryResume?.file_buffer,
+            primaryResume?.file_name,
+          );
+        } else if (connectedAccount.provider === "outlook") {
+          emailResult = await submitViaOutlook(
+            tokenResult.accessToken,
+            senderEmail,
+            fullName,
+            recipientEmail,
+            subject,
+            emailBody,
+            primaryResume?.file_buffer,
+            primaryResume?.file_name,
+          );
+        } else {
+          throw new Error(
+            `Unknown email provider: ${connectedAccount.provider}`,
+          );
+        }
+
+        submissionMethod = emailResult.method;
+        submissionConfirmation = emailResult.confirmation;
+        applicationStatus = emailResult.success ? "applied" : "saved";
+        resultPayload = {
+          success: emailResult.success,
+          method: emailResult.method,
+          confirmation: emailResult.confirmation,
+        };
+        break;
+
+      case "generic":
+      default:
+        // Generic form handoff
+        resultPayload = prepareGenericHandoff(
+          job,
+          profile,
+          coverLetter,
+          primaryResume,
+          subject,
+        );
+        submissionMethod = "generic_prepare_handoff";
+        break;
     }
 
-    // 4. Construct Fallback Mailto & Web Application Link
-    const targetEmailParam = destinationEmail || "";
-    mailtoLink = `mailto:${targetEmailParam}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
-
-    // 5. Upsert Job Application with verified submission metadata
+    // 5. Upsert job application with submission metadata
     const { error: appError } = await supabase.from("job_applications").upsert(
       {
         user_id: userId,
@@ -276,11 +507,8 @@ Deno.serve(async (req: Request) => {
         status: applicationStatus,
         submission_method: submissionMethod,
         submission_confirmation: submissionConfirmation,
-        gmail_message_id: gmailMessageId,
-        mailto_link: mailtoLink,
-        job_url: job.url || null,
-        resume_attached: primaryResume?.file_name || "No primary CV found",
-        sender: senderEmail,
+        submission_route: submissionRoute,
+        ...resultPayload,
       },
       { headers: corsHeaders },
     );
@@ -288,6 +516,7 @@ Deno.serve(async (req: Request) => {
     console.error("Auto-apply error:", error);
     return Response.json(
       {
+        success: false,
         error: "apply_failed",
         message: error instanceof Error ? error.message : String(error),
       },
