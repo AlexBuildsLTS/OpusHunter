@@ -430,7 +430,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
                   weight="bold"
                   style={styles.stampTextCyan}
                 >
-                  QUICK APPLY
+                  REVIEW & APPLY
                 </Typography>
               </Animated.View>
 

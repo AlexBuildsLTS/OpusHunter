@@ -386,9 +386,7 @@ export default function DashboardScreen() {
               onSwipeLeft={(job: any) =>
                 updateStatus({ jobId: job.id, status: "rejected" })
               }
-              onSwipeUp={(job: any) =>
-                updateStatus({ jobId: job.id, status: "applied" })
-              }
+              onSwipeUp={(job: any) => setSelectedJob(job)}
               onSelectJob={(job: any) => setSelectedJob(job)}
             />
           ) : (
@@ -686,6 +684,28 @@ export default function DashboardScreen() {
                       </Text>
                     </Button>
                   )}
+
+                  <Button
+                    variant="ghost"
+                    size="md"
+                    onPress={() => {
+                      updateStatus({
+                        jobId: selectedJob.id,
+                        status: "applied",
+                      });
+                      setSelectedJob(null);
+                    }}
+                  >
+                    <CheckCircle2 size={16} color={colors.accent.green} />
+                    <Text
+                      style={[
+                        styles.btnActionText,
+                        { color: colors.accent.green },
+                      ]}
+                    >
+                      Mark Applied
+                    </Text>
+                  </Button>
                 </View>
               </View>
             )}
