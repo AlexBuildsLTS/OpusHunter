@@ -216,7 +216,7 @@ export default function PipelineScreen() {
 
       return { previousApps };
     },
-    onError: (err, variables, context) => {
+    onError: (_, __, context) => {
       if (context?.previousApps) {
         queryClient.setQueryData(
           ["applications", user?.id],
@@ -498,8 +498,15 @@ export default function PipelineScreen() {
             onPress={() => setStatusFilter("all")}
             style={[
               styles.statPill,
-              { borderColor: statusFilter === "all" ? colors.accent.cyan : "rgba(0, 210, 255, 0.3)" },
-              statusFilter === "all" && { backgroundColor: colors.accent.cyan + "15" }
+              {
+                borderColor:
+                  statusFilter === "all"
+                    ? colors.accent.cyan
+                    : "rgba(0, 210, 255, 0.3)",
+              },
+              statusFilter === "all" && {
+                backgroundColor: colors.accent.cyan + "15",
+              },
             ]}
           >
             <Layers size={13} color={colors.accent.cyan} />
@@ -514,8 +521,15 @@ export default function PipelineScreen() {
             onPress={() => setStatusFilter("discovered")}
             style={[
               styles.statPill,
-              { borderColor: statusFilter === "discovered" ? colors.status.discovered : colors.status.discovered + "40" },
-              statusFilter === "discovered" && { backgroundColor: colors.status.discovered + "15" }
+              {
+                borderColor:
+                  statusFilter === "discovered"
+                    ? colors.status.discovered
+                    : colors.status.discovered + "40",
+              },
+              statusFilter === "discovered" && {
+                backgroundColor: colors.status.discovered + "15",
+              },
             ]}
           >
             <View
@@ -540,8 +554,15 @@ export default function PipelineScreen() {
             onPress={() => setStatusFilter("saved")}
             style={[
               styles.statPill,
-              { borderColor: statusFilter === "saved" ? colors.status.saved : colors.status.saved + "40" },
-              statusFilter === "saved" && { backgroundColor: colors.status.saved + "15" }
+              {
+                borderColor:
+                  statusFilter === "saved"
+                    ? colors.status.saved
+                    : colors.status.saved + "40",
+              },
+              statusFilter === "saved" && {
+                backgroundColor: colors.status.saved + "15",
+              },
             ]}
           >
             <View
@@ -563,8 +584,15 @@ export default function PipelineScreen() {
             onPress={() => setStatusFilter("applied")}
             style={[
               styles.statPill,
-              { borderColor: statusFilter === "applied" ? colors.status.applied : colors.status.applied + "40" },
-              statusFilter === "applied" && { backgroundColor: colors.status.applied + "15" }
+              {
+                borderColor:
+                  statusFilter === "applied"
+                    ? colors.status.applied
+                    : colors.status.applied + "40",
+              },
+              statusFilter === "applied" && {
+                backgroundColor: colors.status.applied + "15",
+              },
             ]}
           >
             <View
@@ -586,8 +614,15 @@ export default function PipelineScreen() {
             onPress={() => setStatusFilter("interview")}
             style={[
               styles.statPill,
-              { borderColor: statusFilter === "interview" ? colors.status.interview : colors.status.interview + "40" },
-              statusFilter === "interview" && { backgroundColor: colors.status.interview + "15" }
+              {
+                borderColor:
+                  statusFilter === "interview"
+                    ? colors.status.interview
+                    : colors.status.interview + "40",
+              },
+              statusFilter === "interview" && {
+                backgroundColor: colors.status.interview + "15",
+              },
             ]}
           >
             <View
@@ -609,8 +644,15 @@ export default function PipelineScreen() {
             onPress={() => setStatusFilter("offer")}
             style={[
               styles.statPill,
-              { borderColor: statusFilter === "offer" ? colors.status.offer : colors.status.offer + "40" },
-              statusFilter === "offer" && { backgroundColor: colors.status.offer + "15" }
+              {
+                borderColor:
+                  statusFilter === "offer"
+                    ? colors.status.offer
+                    : colors.status.offer + "40",
+              },
+              statusFilter === "offer" && {
+                backgroundColor: colors.status.offer + "15",
+              },
             ]}
           >
             <Flame size={13} color={colors.status.offer} />
@@ -627,8 +669,15 @@ export default function PipelineScreen() {
             onPress={() => setStatusFilter("rejected")}
             style={[
               styles.statPill,
-              { borderColor: statusFilter === "rejected" ? colors.status.rejected : colors.status.rejected + "40" },
-              statusFilter === "rejected" && { backgroundColor: colors.status.rejected + "15" }
+              {
+                borderColor:
+                  statusFilter === "rejected"
+                    ? colors.status.rejected
+                    : colors.status.rejected + "40",
+              },
+              statusFilter === "rejected" && {
+                backgroundColor: colors.status.rejected + "15",
+              },
             ]}
           >
             <XCircle size={13} color={colors.status.rejected} />
@@ -687,7 +736,6 @@ export default function PipelineScreen() {
                 All Stages
               </Text>
             </TouchableOpacity>
-
             {COLUMNS.map((col) => {
               const isActive = statusFilter === col.key;
               return (
@@ -696,9 +744,10 @@ export default function PipelineScreen() {
                   onPress={() => setStatusFilter(col.key)}
                   style={[
                     styles.filterChip,
+                    isActive && styles.filterChipActive,
                     isActive && {
-                      backgroundColor: col.color + "25",
                       borderColor: col.color,
+                      backgroundColor: col.color + "15",
                     },
                   ]}
                 >
@@ -708,10 +757,8 @@ export default function PipelineScreen() {
                   <Text
                     style={[
                       styles.filterChipText,
-                      isActive && {
-                        color: colors.text.primary,
-                        fontWeight: "700",
-                      },
+                      isActive && styles.filterChipTextActive,
+                      isActive && { color: col.color },
                     ]}
                   >
                     {col.label}
@@ -721,7 +768,6 @@ export default function PipelineScreen() {
             })}
           </ScrollView>
         </View>
-
         {/* ── Main Pipeline Content: Board vs Matrix ── */}
         <View style={styles.contentContainer}>
           {isLoading ? (
