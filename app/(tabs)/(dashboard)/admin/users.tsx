@@ -539,14 +539,7 @@ export default function AdminUsersScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: THEME.obsidian }}>
-      <View
-        style={[StyleSheet.absoluteFill, { zIndex: -1, elevation: -1 }]}
-        pointerEvents="none"
-      >
-        <AmbientArchitecture />
-      </View>
-
+    <View style={{ flex: 1, backgroundColor: "transparent" }}>
       <SafeAreaView style={{ flex: 1 }} edges={["top", "left", "right"]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
