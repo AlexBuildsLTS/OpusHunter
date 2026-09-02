@@ -16,6 +16,7 @@ import {
   Platform,
   StyleSheet,
   ScrollView,
+  Image,
 } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { BlurView } from "expo-blur";
@@ -26,7 +27,6 @@ import {
   SlidersHorizontal,
   Kanban,
   FolderOpen,
-  Zap,
   AppWindowMac,
   FolderKanban,
   Radar,
@@ -97,7 +97,11 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
               activeOpacity={0.8}
             >
               <View style={styles.brandLogo}>
-                <Zap size={22} color="#050811" />
+                <Image
+                  source={require("../../assets/icon.png")}
+                  style={{ width: 32, height: 32, borderRadius: 8 }}
+                  resizeMode="contain"
+                />
               </View>
             </TouchableOpacity>
 
@@ -134,6 +138,11 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
         <View style={styles.topHeader}>
           {!isDesktop ? (
             <View style={styles.mobileBrandBadge}>
+              <Image
+                source={require("../../assets/icon.png")}
+                style={{ width: 18, height: 18, borderRadius: 4 }}
+                resizeMode="contain"
+              />
               <Text style={styles.mobileBrandText}>OpusHunter</Text>
             </View>
           ) : (
