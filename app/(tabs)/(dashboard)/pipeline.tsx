@@ -493,20 +493,29 @@ export default function PipelineScreen() {
           style={styles.metricsScrollView}
           contentContainerStyle={styles.metricsContent}
         >
-          <View
-            style={[styles.statPill, { borderColor: "rgba(0, 210, 255, 0.3)" }]}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setStatusFilter("all")}
+            style={[
+              styles.statPill,
+              { borderColor: statusFilter === "all" ? colors.accent.cyan : "rgba(0, 210, 255, 0.3)" },
+              statusFilter === "all" && { backgroundColor: colors.accent.cyan + "15" }
+            ]}
           >
             <Layers size={13} color={colors.accent.cyan} />
             <Text style={styles.statPillLabel}>Total Pipeline</Text>
             <Text style={[styles.statPillValue, { color: colors.accent.cyan }]}>
               {metrics.total}
             </Text>
-          </View>
+          </TouchableOpacity>
 
-          <View
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setStatusFilter("discovered")}
             style={[
               styles.statPill,
-              { borderColor: colors.status.discovered + "40" },
+              { borderColor: statusFilter === "discovered" ? colors.status.discovered : colors.status.discovered + "40" },
+              statusFilter === "discovered" && { backgroundColor: colors.status.discovered + "15" }
             ]}
           >
             <View
@@ -524,12 +533,15 @@ export default function PipelineScreen() {
             >
               {metrics.discovered}
             </Text>
-          </View>
+          </TouchableOpacity>
 
-          <View
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setStatusFilter("saved")}
             style={[
               styles.statPill,
-              { borderColor: colors.status.saved + "40" },
+              { borderColor: statusFilter === "saved" ? colors.status.saved : colors.status.saved + "40" },
+              statusFilter === "saved" && { backgroundColor: colors.status.saved + "15" }
             ]}
           >
             <View
@@ -544,12 +556,15 @@ export default function PipelineScreen() {
             >
               {metrics.saved}
             </Text>
-          </View>
+          </TouchableOpacity>
 
-          <View
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setStatusFilter("applied")}
             style={[
               styles.statPill,
-              { borderColor: colors.status.applied + "40" },
+              { borderColor: statusFilter === "applied" ? colors.status.applied : colors.status.applied + "40" },
+              statusFilter === "applied" && { backgroundColor: colors.status.applied + "15" }
             ]}
           >
             <View
@@ -564,12 +579,15 @@ export default function PipelineScreen() {
             >
               {metrics.applied}
             </Text>
-          </View>
+          </TouchableOpacity>
 
-          <View
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setStatusFilter("interview")}
             style={[
               styles.statPill,
-              { borderColor: colors.status.interview + "40" },
+              { borderColor: statusFilter === "interview" ? colors.status.interview : colors.status.interview + "40" },
+              statusFilter === "interview" && { backgroundColor: colors.status.interview + "15" }
             ]}
           >
             <View
@@ -584,12 +602,15 @@ export default function PipelineScreen() {
             >
               {metrics.interview}
             </Text>
-          </View>
+          </TouchableOpacity>
 
-          <View
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setStatusFilter("offer")}
             style={[
               styles.statPill,
-              { borderColor: colors.status.offer + "40" },
+              { borderColor: statusFilter === "offer" ? colors.status.offer : colors.status.offer + "40" },
+              statusFilter === "offer" && { backgroundColor: colors.status.offer + "15" }
             ]}
           >
             <Flame size={13} color={colors.status.offer} />
@@ -599,12 +620,15 @@ export default function PipelineScreen() {
             >
               {metrics.offer}
             </Text>
-          </View>
+          </TouchableOpacity>
 
-          <View
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setStatusFilter("rejected")}
             style={[
               styles.statPill,
-              { borderColor: colors.status.rejected + "40" },
+              { borderColor: statusFilter === "rejected" ? colors.status.rejected : colors.status.rejected + "40" },
+              statusFilter === "rejected" && { backgroundColor: colors.status.rejected + "15" }
             ]}
           >
             <XCircle size={13} color={colors.status.rejected} />
@@ -614,7 +638,7 @@ export default function PipelineScreen() {
             >
               {metrics.rejected}
             </Text>
-          </View>
+          </TouchableOpacity>
         </ScrollView>
 
         {/* ── Search & Filter Controls Toolbar ── */}

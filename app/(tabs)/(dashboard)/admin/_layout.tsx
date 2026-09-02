@@ -100,7 +100,7 @@ export default function AdminLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: "#000012" },
+        contentStyle: { backgroundColor: "transparent" },
         animation: "fade",
       }}
     >
