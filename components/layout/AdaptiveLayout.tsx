@@ -59,7 +59,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
   const pathname = usePathname();
 
-  const isDesktop = width >= 768;
+  const isDesktop = Platform.OS !== "web" ? width >= 1024 : width >= 768;
 
   const isItemActive = (item: (typeof NAV_ITEMS)[0]) => {
     if (item.id === "discover") {
