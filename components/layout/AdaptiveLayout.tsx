@@ -75,14 +75,33 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <View style={styles.root}>
+    <View
+      style={[
+        styles.root,
+        Platform.OS === "web" && { height: "100dvh" as any },
+      ]}
+    >
       {Platform.OS === "web" && (
         <style
           dangerouslySetInnerHTML={{
             __html: `
-          * { -ms-overflow-style: none !important; scrollbar-width: none !important; }
+          * { 
+            -ms-overflow-style: none !important; 
+            scrollbar-width: none !important; 
+            box-sizing: border-box !important;
+          }
           *::-webkit-scrollbar { display: none !important; }
-          html, body { overflow: hidden; height: 100%; width: 100%; margin: 0; padding: 0; background-color: transparent; }
+          html, body, #root { 
+            overflow: hidden !important; 
+            height: 100vh !important; 
+            height: 100dvh !important; 
+            min-height: 100vh !important;
+            min-height: 100dvh !important;
+            width: 100% !important; 
+            margin: 0 !important; 
+            padding: 0 !important; 
+            background-color: #020617 !important; 
+          }
         `,
           }}
         />
