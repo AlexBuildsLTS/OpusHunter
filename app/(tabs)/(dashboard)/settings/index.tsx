@@ -730,6 +730,17 @@ export default function SettingsScreen() {
               onPress={() => setActiveModal("gmail")}
             />
 
+            {/* Email Account Linking */}
+            <NavModuleCard
+              icon={Mail}
+              title="Email Accounts & Auto-Apply"
+              subtitle="Link Gmail and Outlook accounts for sending job applications. Set primary sender account."
+              badgeLabel="SETUP"
+              badgeVariant="cyan"
+              accentColor={colors.accent.cyan}
+              onPress={() => router.push("/(tabs)/(dashboard)/settings/email-linking" as any)}
+            />
+
             {/* Conditional Admin Hub */}
             {isAdmin && (
               <NavModuleCard
