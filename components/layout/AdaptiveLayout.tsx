@@ -140,10 +140,9 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
             <View style={styles.mobileBrandBadge}>
               <Image
                 source={require("../../assets/icon.png")}
-                style={{ width: 18, height: 18, borderRadius: 4 }}
+                style={{ width: 28, height: 28, borderRadius: 8 }}
                 resizeMode="contain"
               />
-              <Text style={styles.mobileBrandText}>OpusHunter</Text>
             </View>
           ) : (
             <View /> /* Empty spacer for desktop to push profile right */
