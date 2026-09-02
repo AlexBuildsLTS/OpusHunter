@@ -358,32 +358,46 @@ const SvgDonutChart = memo(
     }
 
     let accumulatedAngle = 0;
+    const renderedSlices = slices.map((slice, idx) => {
+      const fraction = slice.value / total;
+      const strokeDasharray = `${fraction * circumference} ${circumference}`;
+      const strokeDashoffset = -accumulatedAngle * circumference;
+      accumulatedAngle += fraction;
+
+      return (
+        <Circle
+          key={idx}
+          cx={center}
+          cy={center}
+          r={radius}
+          stroke={slice.color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={strokeDasharray}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          fill="transparent"
+        />
+      );
+    });
 
     return (
       <Svg width={size} height={size}>
-        <G rotation="-90" origin={`${center}, ${center}`}>
-          {slices.map((slice, idx) => {
-            const fraction = slice.value / total;
-            const strokeDasharray = `${fraction * circumference} ${circumference}`;
-            const strokeDashoffset = -accumulatedAngle * circumference;
-            accumulatedAngle += fraction;
-
-            return (
-              <Circle
-                key={idx}
-                cx={center}
-                cy={center}
-                r={radius}
-                stroke={slice.color}
-                strokeWidth={strokeWidth}
-                strokeDasharray={strokeDasharray}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="round"
-                fill="transparent"
-              />
-            );
-          })}
-        </G>
+        {Platform.OS === "web" ? (
+          <G
+            style={
+              {
+                transform: "rotate(-90deg)",
+                transformOrigin: `${center}px ${center}px`,
+              } as any
+            }
+          >
+            {renderedSlices}
+          </G>
+        ) : (
+          <G rotation={-90} origin={`${center}, ${center}`}>
+            {renderedSlices}
+          </G>
+        )}
       </Svg>
     );
   },
@@ -740,8 +754,8 @@ export default function AdminApiKeysScreen() {
                 </Text>
               </TouchableOpacity>
 
-              <View className="flex-row items-center justify-between">
-                <View>
+              <View className="flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <View className="flex-1">
                   <Text className="font-mono text-2xl font-black uppercase tracking-widest text-white md:text-3xl">
                     API CASCADE VAULT
                   </Text>
@@ -752,7 +766,7 @@ export default function AdminApiKeysScreen() {
 
                 <TouchableOpacity
                   onPress={() => setAddModalVisible(true)}
-                  className="flex-row items-center gap-2 rounded-2xl bg-[#00F0FF] px-4 py-2.5 shadow-lg shadow-cyan-900/40 active:scale-95"
+                  className="flex-row items-center justify-center gap-2 self-start rounded-2xl bg-[#00F0FF] px-4 py-2.5 shadow-lg shadow-cyan-900/40 active:scale-95 sm:self-auto"
                 >
                   <Plus size={16} color="#000" />
                   <Text className="font-mono text-xs font-black uppercase tracking-wider text-black">
@@ -822,8 +836,8 @@ export default function AdminApiKeysScreen() {
             <FadeIn delay={200} className="mb-10">
               <View className="flex-col gap-6 lg:flex-row">
                 {/* 24H Traffic Trend Chart */}
-                <GlassCard className="flex-1 rounded-3xl border border-white/5 bg-white/[0.015] p-6 md:p-7">
-                  <View className="mb-4 flex-row items-center justify-between">
+                <GlassCard className="w-full flex-1 rounded-3xl border border-white/5 bg-white/[0.015] p-5 md:p-7">
+                  <View className="mb-4 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <View className="flex-row items-center gap-2">
                       <TrendingUp size={16} color={THEME.cyan} />
                       <Text className="font-mono text-xs font-black uppercase tracking-widest text-white">
@@ -852,17 +866,17 @@ export default function AdminApiKeysScreen() {
                     </View>
                   </View>
 
-                  <View className="w-full items-center">
+                  <View className="w-full items-center justify-center overflow-hidden">
                     <SvgMultiLineChart
                       data={analytics.hourlyData}
-                      width={isMobile ? SCREEN_WIDTH - 64 : 520}
+                      width={isMobile ? Math.max(SCREEN_WIDTH - 64, 280) : 520}
                       height={190}
                     />
                   </View>
                 </GlassCard>
 
                 {/* Provider Distribution Donut */}
-                <GlassCard className="w-full rounded-3xl border border-white/5 bg-white/[0.015] p-6 md:p-7 lg:w-[360px]">
+                <GlassCard className="w-full rounded-3xl border border-white/5 bg-white/[0.015] p-5 md:p-7 lg:w-[360px]">
                   <View className="mb-4 flex-row items-center gap-2">
                     <PieChartIcon size={16} color={THEME.purple} />
                     <Text className="font-mono text-xs font-black uppercase tracking-widest text-white">
@@ -870,7 +884,7 @@ export default function AdminApiKeysScreen() {
                     </Text>
                   </View>
 
-                  <View className="mt-2 flex-row items-center justify-between gap-4">
+                  <View className="mt-2 flex-col items-center justify-between gap-4 sm:flex-row">
                     <View className="items-center justify-center">
                       <SvgDonutChart
                         slices={analytics.donutSlices}
@@ -959,7 +973,7 @@ export default function AdminApiKeysScreen() {
                   >
                     <View className="flex-col justify-between gap-4 md:flex-row md:items-center">
                       {/* Left: Provider & Masked Key info */}
-                      <View className="flex-1 flex-row items-center gap-4">
+                      <View className="flex-1 flex-col gap-4 sm:flex-row sm:items-center">
                         <View
                           style={{
                             width: 46,
@@ -1009,7 +1023,7 @@ export default function AdminApiKeysScreen() {
                             {key.priority_order || 1}
                           </Text>
 
-                          <View className="mt-2 flex-row items-center gap-3">
+                          <View className="mt-2 flex-row flex-wrap items-center gap-3">
                             <Text className="font-mono text-[10px] text-white/30">
                               Encrypted Key ID: {key.id.slice(0, 12)}...
                             </Text>

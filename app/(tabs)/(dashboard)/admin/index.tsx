@@ -1002,7 +1002,7 @@ export default function AdminCommandCenter() {
                     Simulation Parameters
                   </Text>
                   <View className="flex-col gap-4">
-                    <View className="flex-row gap-4">
+                    <View className="flex-col gap-4 sm:flex-row">
                       <View className="flex-1">
                         <Text className="mb-2 font-mono text-[9px] font-black uppercase tracking-widest text-white/50">
                           Active Users (MAU)
@@ -1035,7 +1035,7 @@ export default function AdminCommandCenter() {
                       </View>
                     </View>
 
-                    <View className="flex-row gap-4">
+                    <View className="flex-col gap-4 sm:flex-row">
                       <View className="flex-1">
                         <View className="mb-2 flex-row items-center gap-1.5">
                           <Clock size={12} color={THEME.warning} />
@@ -1096,16 +1096,16 @@ export default function AdminCommandCenter() {
 
                 {/* Outputs */}
                 <View className="flex-1 justify-center">
-                  <View className="mb-6 flex-row items-end justify-between border-b border-white/5 pb-6">
+                  <View className="mb-6 flex-col gap-4 border-b border-white/5 pb-6 sm:flex-row sm:items-end sm:justify-between">
                     <View>
                       <Text className="mb-1 font-mono text-[10px] font-black uppercase tracking-widest text-white/40">
                         Gross MRR
                       </Text>
-                      <Text className="font-mono text-4xl font-black tracking-tighter text-white">
+                      <Text className="font-mono text-3xl font-black tracking-tighter text-white sm:text-4xl">
                         {formatter.format(saasFinancials.gross)}
                       </Text>
                     </View>
-                    <View className="items-end gap-1">
+                    <View className="items-start gap-1 sm:items-end">
                       <Text className="font-mono text-[10px] text-[#FF007F]">
                         - {formatter.format(saasFinancials.storeCut)} (Platform)
                       </Text>
@@ -1119,19 +1119,19 @@ export default function AdminCommandCenter() {
                     </View>
                   </View>
 
-                  <View className="flex-row items-end justify-between">
+                  <View className="flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <View>
                       <Text className="mb-1 font-mono text-[10px] font-black uppercase tracking-widest text-[#32FF00]">
                         Net MRR Forecast
                       </Text>
-                      <Text className="font-mono text-3xl font-black tracking-tighter text-[#32FF00]">
+                      <Text className="font-mono text-2xl font-black tracking-tighter text-[#32FF00] sm:text-3xl">
                         {formatter.format(saasFinancials.net)}
                       </Text>
                       <Text className="mt-1 font-mono text-[10px] text-white/40">
                         ARR: {formatter.format(saasFinancials.arr)}
                       </Text>
                     </View>
-                    <View className="items-end">
+                    <View className="items-start sm:items-end">
                       <Text className="mb-1 font-mono text-[9px] font-black uppercase tracking-widest text-white/40">
                         Net Margin
                       </Text>
