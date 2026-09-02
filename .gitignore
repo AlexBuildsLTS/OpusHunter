@@ -31,10 +31,12 @@ supabase/.temp/
 supabase/.branches/
 supabase/.env*
 supabase/db/data/
+supabase/migrations/
 # Explicitly whitelist critical infrastructure
 !supabase/functions/
 !supabase/seed.sql
 !supabase/config.toml
+
 
 # --- 4. ENVIRONMENT & SECRETS (CRITICAL) ---
 .env
@@ -107,3 +109,4 @@ migrations/
 supabase/.env
 *.repomix-output.xml
 .repomix-output.xml
+.ADMINExFull/

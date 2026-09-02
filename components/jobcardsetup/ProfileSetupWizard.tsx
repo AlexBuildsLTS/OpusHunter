@@ -413,38 +413,49 @@ export function ProfileSetupWizard({
   };
 
   // AI Bio Generator
-  const handleGenerateBio = () => {
+  const handleGenerateBio = async () => {
+    if (!user) return;
     setGeneratingBio(true);
-    const fullName = `${formData.first_name} ${formData.last_name}`.trim();
-    const name = fullName || "Professional";
-    const title = formData.professional_title || "Software Developer";
-    const years =
-      parseInt(formData.years_experience) > 0
-        ? `${formData.years_experience}+ years of`
-        : "strong hands-on";
-    const skillsList =
-      formData.skills.length > 0
-        ? formData.skills.slice(0, 6).join(", ")
-        : "modern software architecture, system reliability, and full-stack development";
-    const rolesList =
-      formData.target_roles.length > 0
-        ? formData.target_roles.join(", ")
-        : title;
-    const edu = formData.education
-      ? ` Backed by diploma/education in ${formData.education}.`
-      : "";
+    try {
+      const fullName = `${formData.first_name} ${formData.last_name}`.trim();
+      const title = formData.professional_title || "Software Developer";
+      const years = formData.years_experience || "established";
+      const skillsList =
+        formData.skills.length > 0
+          ? formData.skills
+          : ["Full-Stack", "Backend", "Frontend"];
+      const rolesList =
+        formData.target_roles.length > 0 ? formData.target_roles : [title];
 
-    let generated = "";
-    if (bioTone === "executive") {
-      generated = `${name} is a results-driven professional specializing as a ${title} with ${years} expertise in driving high-impact technical initiatives. Proficient across ${skillsList}, dedicated to delivering measurable business value and rock-solid architecture in ${rolesList}.${edu}`;
-    } else if (bioTone === "technical") {
-      generated = `Hands-on ${title} with ${years} practical experience engineering scalable systems, clean microservices, and reliable workflows. Core competencies include ${skillsList}. Focused on performance, resilient coding, and technical problem-solving for ${rolesList}.${edu}`;
-    } else {
-      generated = `Forward-looking ${title} passionate about building modern, human-centric software solutions. Skilled in ${skillsList}, bringing curiosity, agile speed, and craftsmanship to high-velocity teams targeting ${rolesList}.${edu}`;
+      const { data, error } = await supabase.functions.invoke(
+        "extract-context",
+        {
+          body: {
+            action: "generate_bio",
+            userId: user.id,
+            tone: bioTone,
+            fullName,
+            professional_title: title,
+            years_experience: years,
+            target_roles: rolesList,
+            skills: skillsList,
+            education: formData.education,
+          },
+        },
+      );
+
+      if (error) throw error;
+      if (data?.bio) {
+        setFormData((prev) => ({ ...prev, bio: data.bio }));
+      } else {
+        throw new Error("No bio returned from AI model");
+      }
+    } catch (err: any) {
+      console.warn("AI bio generation fallback in wizard:", err);
+      setError(err.message || "Failed to generate bio with AI");
+    } finally {
+      setGeneratingBio(false);
     }
-
-    setFormData((prev) => ({ ...prev, bio: generated }));
-    setGeneratingBio(false);
   };
 
   // Step Validation & Navigation

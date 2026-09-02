@@ -130,17 +130,17 @@ export function ProfileDropdown() {
                   <View style={styles.menu}>
                     <Pressable
                       style={styles.menuItem}
-                      onPress={() => handleNavigate("/(tabs)/settings/profile")}
-                    >
-                      <User size={16} color={colors.accent.cyan} />
-                      <Text style={styles.menuText}>Profile Settings</Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.menuItem}
-                      onPress={() => handleNavigate("/(tabs)/settings")}
+                      onPress={() => handleNavigate("/(tabs)/settings/")}
                     >
                       <Settings size={16} color={colors.accent.cyan} />
                       <Text style={styles.menuText}>Settings</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.menuItem}
+                      onPress={() => handleNavigate("/(tabs)/settings/profile")}
+                    >
+                      <User size={16} color={colors.accent.cyan} />
+                      <Text style={styles.menuText}>Settings Profile</Text>
                     </Pressable>
                     {profile?.role === "admin" && (
                       <Pressable

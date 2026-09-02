@@ -6,8 +6,46 @@
  */
 
 import React from "react";
-import { View, Pressable, StyleSheet, Platform } from "react-native";
+import { View, Pressable, StyleSheet, Platform, ViewProps } from "react-native";
 import { colors, shadows, radius } from "../../constants/theme";
+import { cn } from "../../lib/utils";
+
+export interface GlassCardProps extends ViewProps {
+  children: React.ReactNode;
+  className?: string;
+  glowColor?: "cyan" | "purple" | "pink" | "lime" | "red" | "green";
+}
+
+export const GlassCard: React.FC<GlassCardProps> = ({
+  children,
+  className,
+  glowColor = "cyan",
+  style,
+  ...props
+}) => {
+  const glowStyles = {
+    cyan: "border-[#00F0FF]/20 shadow-[0_0_30px_rgba(0,240,255,0.05)]",
+    purple: "border-[#8A2BE2]/20 shadow-[0_0_30px_rgba(138,43,226,0.05)]",
+    pink: "border-[#FF007F]/20 shadow-[0_0_30px_rgba(255,0,127,0.05)]",
+    lime: "border-[#32FF00]/20 shadow-[0_0_30px_rgba(50,255,0,0.05)]",
+    red: "border-[#ff4d6d]/20 shadow-[0_0_30px_rgba(255,77,109,0.05)]",
+    green: "border-[#4ade80]/20 shadow-[0_0_30px_rgba(74,222,128,0.05)]",
+  };
+
+  return (
+    <View
+      className={cn(
+        "rounded-[32px] border bg-[#0f172a]/40",
+        glowStyles[glowColor],
+        className,
+      )}
+      style={style}
+      {...props}
+    >
+      {children}
+    </View>
+  );
+};
 
 interface CardProps {
   children: React.ReactNode;

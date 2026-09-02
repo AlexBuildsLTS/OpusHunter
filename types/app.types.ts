@@ -63,7 +63,7 @@ export const JOB_SOURCES: JobSource[] = [
 ];
 
 export type CoverLetterStrategy = Enums<"cover_letter_strategy_enum">; // 'mirror_matching' | 'achievement_amplification' | 'insider_narrative'
-export type ApiProvider = Enums<"api_provider_enum">; // 'gemini' | 'rapidapi' | 'geodb' | 'adzuna' | 'openai' | 'anthropic'
+export type ApiProvider = Enums<"api_provider_enum"> | "linkedin"; // 'gemini' | 'rapidapi' | 'geodb' | 'adzuna' | 'openai' | 'anthropic' | 'linkedin'
 export type UserRole = Enums<"user_role">; // 'member' | 'premium' | 'admin'
 
 // ─── DATABASE TABLE ROW TYPES ───────────────────────────────────────────────

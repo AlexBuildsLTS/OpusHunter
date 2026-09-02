@@ -55,12 +55,17 @@ interface ApiKeyItem {
   created_at: string;
 }
 
-// NOTE: OpenAI removed per architectural directive; only Gemini, Anthropic, and live feeds
+// Supported AI & Job Aggregator Key Providers
 const SUPPORTED_PROVIDERS: { id: ApiProvider; name: string; hint: string }[] = [
   {
     id: "gemini",
     name: "Google Gemini AI",
     hint: "Cover Letters, Scoring & AI Context",
+  },
+  {
+    id: "linkedin",
+    name: "LinkedIn Scraper API",
+    hint: "Direct LinkedIn Job Scraping & Live Postings",
   },
   {
     id: "rapidapi",

@@ -58,17 +58,15 @@ const ProfileMenu = ({
         </View>
 
         <Pressable
-          onPress={() => navigateTo("/(tabs)/settings/profile")}
+          onPress={() => navigateTo("/(tabs)/settings")}
           className="flex-row items-center rounded-lg p-3 active:bg-white/10"
         >
-          <User size={18} color="#94A3B8" />
-          <Text className="ml-3 font-medium text-slate-200">
-            Profile & Vault
-          </Text>
+          <Settings size={18} color="#94A3B8" />
+          <Text className="ml-3 font-medium text-slate-200">Settings</Text>
         </Pressable>
 
         <Pressable
-          onPress={() => navigateTo("/(tabs)/settings")}
+          onPress={() => navigateTo("/(tabs)/settings/profile")}
           className="flex-row items-center rounded-lg p-3 active:bg-white/10"
         >
           <Settings size={18} color="#94A3B8" />

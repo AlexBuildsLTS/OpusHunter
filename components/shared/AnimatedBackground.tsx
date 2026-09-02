@@ -2,8 +2,9 @@
  * components/shared/AnimatedBackground.tsx
  * OpusHunter — Unified Symmetrical Cybernetic Ambient Background
  *
- * Symmetrical, centered, aerospace-grade dark obsidian background (#050811).
- * Balanced dual-hemisphere ambient radiant glow mesh with centered orbital harmony.
+ * Symmetrical, centered, Aero space very dark blue, little metal (#050811).
+ * radiant glow pipelines and white dots subtle wave on them being a 3d looking perception of a grid ( imagine all the functions dynamic subtle glow lines in the area wehre it subtly fits in with the dark aero space )
+ * 
  *
  * Runs on:
  * - Web: Hardware-accelerated CSS compositor keyframes (smooth 60-120fps, zero GPU crash)
@@ -20,7 +21,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 
-// ─── Native Reanimated Symmetric Orb Component ───────────────────────────────
+// ─── Native Reanimated DYnamic Grid dots  ───────────────────────────────
 interface OrbProps {
   size: number;
   color: string;

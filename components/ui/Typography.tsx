@@ -51,18 +51,18 @@ const variantStyles: Record<string, { fontSize: number; lineHeight: number }> =
     label: { fontSize: 11, lineHeight: 14 },
   };
 
-const weightFontFamily: Record<string, string> = {
-  regular: "Inter-Regular",
-  medium: "Inter-Medium",
-  semiBold: "Inter-SemiBold",
-  bold: "Inter-Bold",
+const weightValues: Record<string, "400" | "500" | "600" | "700"> = {
+  regular: "400",
+  medium: "500",
+  semiBold: "600",
+  bold: "700",
 };
 
 const colorStyles: Record<string, string> = {
-  primary: colors.text.primary,
-  secondary: colors.text.secondary,
-  dim: colors.text.dim,
-  inverse: colors.text.inverse,
+  primary: "#FFFFFF",
+  secondary: "#CBD5E1",
+  dim: "#94A3B8",
+  inverse: "#050811",
   accent: colors.accent.cyan,
   success: colors.accent.green,
   warning: colors.accent.amber,
@@ -79,8 +79,8 @@ export function Typography({
   children,
 }: TypographyProps) {
   const vStyle = variantStyles[variant] || variantStyles.body;
-  const fontFamily = weightFontFamily[weight] || "Inter-Regular";
-  const textColor = colorStyles[color] || colors.text.primary;
+  const fontWeight = weightValues[weight] || "400";
+  const textColor = colorStyles[color] || "#FFFFFF";
 
   return (
     <Text
@@ -88,7 +88,7 @@ export function Typography({
         {
           fontSize: vStyle.fontSize,
           lineHeight: vStyle.lineHeight,
-          fontFamily,
+          fontWeight,
           color: textColor,
           textAlign,
         },

@@ -159,47 +159,65 @@ export default function ProfileScreen() {
   const [bioTone, setBioTone] = useState<BioTone>("formal");
   const [generatingBio, setGeneratingBio] = useState(false);
 
-  const handleGenerateBio = () => {
-    setGeneratingBio(true);
-    const fullName = [form.first_name, form.last_name]
-      .filter(Boolean)
-      .join(" ");
-    const namePrefix = fullName ? `${fullName} is a ` : "Accomplished ";
-    const title =
-      form.professional_title || "Software Engineering Professional";
-    const years = form.years_experience
-      ? `${form.years_experience}+ years of dedicated`
-      : "established";
-    const skills =
-      userContext?.extracted_skills?.slice(0, 6).join(", ") ||
-      "distributed systems, cloud architecture, and modern full-stack development";
-    const roles =
-      form.target_roles.length > 0
-        ? form.target_roles.join(" / ")
-        : "Software Engineering Leadership";
-    const primarySeniority = form.seniority_levels[0] || "Senior";
-    const seniorityFormatted =
-      primarySeniority.charAt(0).toUpperCase() + primarySeniority.slice(1);
-
-    let generated = "";
-
-    switch (bioTone) {
-      case "formal":
-        generated = `${namePrefix}distinguished ${seniorityFormatted} ${title} offering ${years} professional expertise directing mission-critical engineering and software infrastructure. Demonstrated acumen in ${skills}, adhering to stringent engineering best practices and delivery governance across ${roles} in the Nordic and European technological ecosystem.`;
-        break;
-      case "executive":
-        generated = `Results-driven ${seniorityFormatted} technology leader with ${years} track record transforming technical strategy into measurable business value. Deep domain command across ${skills}, spearheading high-impact roadmaps and cross-functional teams in ${roles}.`;
-        break;
-      case "technical":
-        generated = `Architecturally minded ${seniorityFormatted} Systems Specialist with ${years} deep focus on scalable backend pipelines and robust interfaces. Mastered core competencies in ${skills}, dedicated to zero-latency services, high maintainability, and clean craftsmanship for ${roles}.`;
-        break;
-      case "modern":
-        generated = `Dynamic ${seniorityFormatted} engineer and agile builder with ${years} creating user-first digital products. Fluent in ${skills}, accelerating release cycles and building maintainable code across modern ${roles} environments.`;
-        break;
+  const handleGenerateBio = async () => {
+    if (!user) {
+      showToast({ message: "Please log in to generate bio", type: "error" });
+      return;
     }
+    setGeneratingBio(true);
+    try {
+      const fullName = [form.first_name, form.last_name]
+        .filter(Boolean)
+        .join(" ");
+      const title =
+        form.professional_title || "Software Engineering Professional";
+      const years = form.years_experience || "established";
+      const skills = userContext?.extracted_skills || [
+        "Java",
+        "Spring Boot",
+        "TypeScript",
+        "React Native",
+        "PostgreSQL",
+        "Deno",
+        "Linux",
+      ];
+      const roles = form.target_roles || [title];
 
-    setForm((prev) => ({ ...prev, bio: generated }));
-    setTimeout(() => setGeneratingBio(false), 300);
+      const { data, error } = await supabase.functions.invoke(
+        "extract-context",
+        {
+          body: {
+            action: "generate_bio",
+            userId: user.id,
+            tone: bioTone,
+            fullName,
+            professional_title: title,
+            years_experience: years,
+            target_roles: roles,
+            skills,
+          },
+        },
+      );
+
+      if (error) throw error;
+      if (data?.bio) {
+        setForm((prev) => ({ ...prev, bio: data.bio }));
+        showToast({
+          message: `AI Bio generated via ${data.modelUsed || "Gemini"}`,
+          type: "success",
+        });
+      } else {
+        throw new Error(data?.message || "No bio returned from AI model");
+      }
+    } catch (err: any) {
+      console.warn("Real AI bio generation fallback error:", err);
+      showToast({
+        message: err.message || "Failed to generate bio with AI",
+        type: "error",
+      });
+    } finally {
+      setGeneratingBio(false);
+    }
   };
 
   // Seniority Selection Helpers
