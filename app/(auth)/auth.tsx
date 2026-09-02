@@ -325,7 +325,9 @@ const TermsModal = ({ visible, onClose, onAccept }: TermsModalProps) => {
               color="dim"
               style={styles.modalFooterText}
             >
-              {canAccept ? "You've reached the end" : "Scroll to bottom to accept"}
+              {canAccept
+                ? "You've reached the end"
+                : "Scroll to bottom to accept"}
             </Typography>
             <TouchableOpacity
               disabled={!canAccept}
