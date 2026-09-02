@@ -6,7 +6,7 @@
  * Reusable in standalone onboarding (profile-setup) and dashboard (rules tab).
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -260,9 +260,25 @@ export function ProfileSetupWizard({
     loadUserData();
   }, [loadUserData]);
 
-  // Sync profile props if updated
+  // Sync profile props if updated — but ONLY the first time profile data
+  // arrives, not on every reference change.
+  //
+  // ROOT CAUSE of "leave the tab, come back, everything's gone": Supabase's
+  // client auto-refreshes the session when a browser tab regains focus. In
+  // stores/authStore.ts, EVERY onAuthStateChange event (including that
+  // routine focus-triggered refresh — not just real sign-ins) re-fetches
+  // the profiles row and calls set({ profile }) with a brand-new object,
+  // even when nothing changed server-side. This effect was keyed on
+  // [profile], so each of those silent background refreshes re-ran it and
+  // force-overwrote target_roles/target_cities/salary/etc. with whatever
+  // was already saved in the DB — discarding anything typed but not yet
+  // submitted. hasHydratedRef makes this run once, on first real profile
+  // load, instead of every time the object reference changes.
+  const hasHydratedFromProfileRef = useRef(false);
+
   useEffect(() => {
-    if (profile) {
+    if (profile && !hasHydratedFromProfileRef.current) {
+      hasHydratedFromProfileRef.current = true;
       setFormData((prev) => ({
         ...prev,
         first_name: profile.first_name || prev.first_name,
