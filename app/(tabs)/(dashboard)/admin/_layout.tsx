@@ -12,12 +12,14 @@ import { Typography } from "../../../../components/ui/Typography";
 import { Button } from "../../../../components/ui/Button";
 import { colors } from "../../../../constants/theme";
 import { ShieldAlert } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function AdminLayout() {
   const router = useRouter();
-  const { profile, loading } = useAuthStore();
+  const { profile, isLoading } = useAuthStore();
+  const insets = useSafeAreaInsets();
 
-  if (loading) {
+  if (isLoading) {
     return (
       <View
         style={{
@@ -83,10 +85,11 @@ export default function AdminLayout() {
         </Typography>
         <View style={{ marginTop: 24, width: "100%", maxWidth: 200 }}>
           <Button
-            title="Return to Dashboard"
             variant="primary"
             onPress={() => router.replace("/(tabs)/(dashboard)")}
-          />
+          >
+            Return to Dashboard
+          </Button>
         </View>
       </View>
     );

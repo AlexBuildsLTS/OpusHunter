@@ -645,11 +645,12 @@ export default function AdminApiKeysScreen() {
     }
   };
 
-  // Delete Key RPC
+  // Disable Key RPC
   const handleDeleteKey = async (keyId: string) => {
     try {
-      const { error } = await supabase.rpc("admin_delete_api_key", {
+      const { error } = await supabase.rpc("admin_set_api_key_active", {
         p_key_id: keyId,
+        p_active: false,
       });
       if (error) throw error;
       setSystemKeys((prev) => prev.filter((k) => k.id !== keyId));
