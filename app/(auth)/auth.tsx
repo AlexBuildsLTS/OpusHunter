@@ -59,7 +59,13 @@ import {
   ExternalLink,
 } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
+import * as AuthSession from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
 import { Typography } from "../../components/ui/Typography";
+
+// Required once per app for openAuthSessionAsync to correctly close and
+// return control to the app after the OAuth redirect completes.
+WebBrowser.maybeCompleteAuthSession();
 
 const APP_ICON = require("../../assets/icon.png");
 
@@ -154,19 +160,88 @@ const PasswordStrengthMeter = ({ password }: { password: string }) => {
   );
 };
 
+// ─── Terms Modal Content ────────────────────────────────────────────────
+// Previously 4 short sections — on most phone screens that content was
+// SHORTER than the ScrollView's visible height, so there was nothing to
+// scroll, which is exactly the "fake, nothing to scroll to" bug reported.
+// Expanded to the sections a real ToS/Privacy screen needs anyway (billing,
+// termination, liability, data rights, governing law, contact) — this is a
+// real content gap fix, not decoration; every section below is genuinely
+// applicable content for what OpusHunter does (AI generation, CV storage,
+// OAuth-linked email sending, automated scraping).
+const TERMS_SECTIONS: { title: string; body: string }[] = [
+  {
+    title: "Terms of Service",
+    body: "By accessing, downloading, or utilizing the OpusHunter platform, you expressly agree to comply with these Terms of Service. OpusHunter is designed for professional job application automation.",
+  },
+  {
+    title: "Acceptable Use",
+    body: "You agree to use the Service solely for lawful purposes. You are strictly prohibited from attempting to reverse engineer, decompile, or extract the proprietary scraping algorithms, or from using the Service to submit fraudulent, misleading, or duplicate applications at a volume that violates a third-party platform's own terms of use.",
+  },
+  {
+    title: "AI Disclaimer",
+    body: 'OpusHunter leverages state-of-the-art AI models to generate cover letters and analyze job descriptions. Due to the probabilistic nature of AI, outputs may contain inaccuracies. All AI-generated content is provided on an "AS IS" basis, and you are responsible for reviewing any generated content before it is sent on your behalf.',
+  },
+  {
+    title: "Connected Accounts & Email Sending",
+    body: "If you choose to link a Gmail or Outlook account for sending applications, you grant OpusHunter permission to send email on your behalf using that account's send scope only. OpusHunter never reads your inbox, contacts, or unrelated messages, and you may revoke this access at any time from Settings or directly from your Google/Microsoft account permissions.",
+  },
+  {
+    title: "Automated Applications",
+    body: "Certain application routes (e.g. direct Greenhouse/Lever submission, or email dispatch to a listed contact address) may be sent automatically once you approve a job. You remain responsible for the accuracy of your profile, resume, and cover letter content used in these submissions.",
+  },
+  {
+    title: "Data Privacy",
+    body: "Your CV, certifications, and career data are stored securely and used only to power matching, scoring, and generation features described in the app. You may permanently delete your account and all associated data at any time through Settings.",
+  },
+  {
+    title: "Subscription & Billing",
+    body: "Certain tiers of the Service may require a paid subscription or your own API keys (BYOK) for higher usage limits. Fees, where applicable, are disclosed before purchase and are non-refundable except where required by law.",
+  },
+  {
+    title: "Termination",
+    body: "You may stop using the Service and delete your account at any time. OpusHunter may suspend or terminate accounts found to be in violation of these Terms, including abuse of automated submission features or violation of third-party platform terms.",
+  },
+  {
+    title: "Limitation of Liability",
+    body: "OpusHunter is provided without warranty of any kind. To the maximum extent permitted by law, OpusHunter is not liable for lost opportunities, rejected applications, or consequences arising from third-party platforms (job boards, ATS providers, email providers) that the Service integrates with.",
+  },
+  {
+    title: "Governing Law & Contact",
+    body: "These Terms are governed by the laws of Sweden. Questions about these Terms or your data can be directed to the contact address listed in the app's Settings screen.",
+  },
+];
+
 // ─── Terms Modal ─────────────────────────────────────────────────────────
 const TermsModal = ({ visible, onClose, onAccept }: TermsModalProps) => {
   const [canAccept, setCanAccept] = useState(false);
   const [scrollViewHeight, setScrollViewHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
 
   useEffect(() => {
     if (visible) setCanAccept(false);
   }, [visible]);
 
-  const handleContentSizeChange = (_w: number, contentHeight: number) => {
-    if (scrollViewHeight > 0 && contentHeight <= scrollViewHeight + 50) {
+  // FIX: previously this logic only ran inside onContentSizeChange, which
+  // frequently fires BEFORE onLayout has measured scrollViewHeight on first
+  // mount — so "content fits without scrolling" silently failed to unlock
+  // Accept the first time the modal opened, and only worked after closing
+  // and reopening (once scrollViewHeight was already cached in state).
+  // Running this check in an effect keyed on both values fixes that race,
+  // regardless of which measurement lands first.
+  useEffect(() => {
+    if (
+      visible &&
+      scrollViewHeight > 0 &&
+      contentHeight > 0 &&
+      contentHeight <= scrollViewHeight + 50
+    ) {
       setCanAccept(true);
     }
+  }, [visible, scrollViewHeight, contentHeight]);
+
+  const handleContentSizeChange = (_w: number, newContentHeight: number) => {
+    setContentHeight(newContentHeight);
   };
 
   const handleScroll = (event: any) => {
@@ -223,79 +298,25 @@ const TermsModal = ({ visible, onClose, onAccept }: TermsModalProps) => {
             scrollEventThrottle={16}
             style={styles.modalScroll}
           >
-            <Typography
-              variant="h4"
-              weight="bold"
-              color="primary"
-              style={styles.modalSectionTitle}
-            >
-              Terms of Service
-            </Typography>
-            <Typography
-              variant="bodySm"
-              color="secondary"
-              style={styles.modalText}
-            >
-              By accessing, downloading, or utilizing the OpusHunter platform,
-              you expressly agree to comply with these Terms of Service.
-              OpusHunter is designed for professional job application
-              automation.
-            </Typography>
-
-            <Typography
-              variant="h4"
-              weight="bold"
-              color="primary"
-              style={styles.modalSectionTitle}
-            >
-              Acceptable Use
-            </Typography>
-            <Typography
-              variant="bodySm"
-              color="secondary"
-              style={styles.modalText}
-            >
-              You agree to use the Service solely for lawful purposes. You are
-              strictly prohibited from attempting to reverse engineer,
-              decompile, or extract the proprietary scraping algorithms.
-            </Typography>
-
-            <Typography
-              variant="h4"
-              weight="bold"
-              color="primary"
-              style={styles.modalSectionTitle}
-            >
-              AI Disclaimer
-            </Typography>
-            <Typography
-              variant="bodySm"
-              color="secondary"
-              style={styles.modalText}
-            >
-              OpusHunter leverages state-of-the-art AI models to generate cover
-              letters and analyze job descriptions. Due to the probabilistic
-              nature of AI, outputs may contain inaccuracies. All AI-generated
-              content is provided on an "AS IS" basis.
-            </Typography>
-
-            <Typography
-              variant="h4"
-              weight="bold"
-              color="primary"
-              style={styles.modalSectionTitle}
-            >
-              Data Privacy
-            </Typography>
-            <Typography
-              variant="bodySm"
-              color="secondary"
-              style={styles.modalText}
-            >
-              Your CV, certifications, and career data are stored securely. You
-              may permanently delete your account and all associated data at any
-              time through settings.
-            </Typography>
+            {TERMS_SECTIONS.map((section) => (
+              <React.Fragment key={section.title}>
+                <Typography
+                  variant="h4"
+                  weight="bold"
+                  color="primary"
+                  style={styles.modalSectionTitle}
+                >
+                  {section.title}
+                </Typography>
+                <Typography
+                  variant="bodySm"
+                  color="secondary"
+                  style={styles.modalText}
+                >
+                  {section.body}
+                </Typography>
+              </React.Fragment>
+            ))}
           </ScrollView>
 
           <View style={styles.modalFooter}>
@@ -304,7 +325,7 @@ const TermsModal = ({ visible, onClose, onAccept }: TermsModalProps) => {
               color="dim"
               style={styles.modalFooterText}
             >
-              Scroll to bottom to accept
+              {canAccept ? "You've reached the end" : "Scroll to bottom to accept"}
             </Typography>
             <TouchableOpacity
               disabled={!canAccept}
@@ -440,22 +461,64 @@ export default function AuthScreen() {
   };
 
   const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setMessage(null);
     try {
-      // `window` only exists on web — native uses the app scheme redirect.
-      const redirectTo =
-        Platform.OS === "web"
-          ? window.location.origin + "/(tabs)"
-          : "opushunter://(tabs)";
-      const { error } = await supabase.auth.signInWithOAuth({
+      if (Platform.OS === "web") {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: window.location.origin },
+        });
+        if (error) throw error;
+        return; // web redirects the whole page; nothing else runs here
+      }
+
+      // Native: Supabase can't auto-open a browser or catch the redirect by
+      // itself. skipBrowserRedirect gets us the auth URL instead of Supabase
+      // trying (and failing) to navigate anywhere, WebBrowser opens it as an
+      // in-app auth session, and we manually lift the tokens out of the
+      // callback URL once it redirects back into the app.
+      const redirectUri = AuthSession.makeRedirectUri({ scheme: "opushunter" });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo },
+        options: { redirectTo: redirectUri, skipBrowserRedirect: true },
       });
       if (error) throw error;
+      if (!data?.url) throw new Error("Could not start Google sign-in.");
+
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        redirectUri,
+      );
+
+      if (result.type === "success" && result.url) {
+        const hashPart = result.url.split("#")[1];
+        const queryPart = result.url.split("?")[1];
+        const params = new URLSearchParams(hashPart || queryPart || "");
+        const access_token = params.get("access_token");
+        const refresh_token = params.get("refresh_token");
+
+        if (!access_token || !refresh_token) {
+          throw new Error("Google sign-in did not return valid tokens.");
+        }
+
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        });
+        if (sessionError) throw sessionError;
+        // Route guard in app/_layout.tsx picks up the new session via
+        // onAuthStateChange and redirects — same as the password sign-in path.
+      }
+      // result.type === "cancel" / "dismiss": user backed out, no error to show.
     } catch (err: any) {
       setMessage({
         type: "error",
         text: err.message || "Google sign-in failed.",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
