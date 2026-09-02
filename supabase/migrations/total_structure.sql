@@ -67,7 +67,8 @@ CREATE TYPE "public"."api_provider_enum" AS ENUM (
     'geodb',
     'adzuna',
     'openai',
-    'anthropic'
+    'anthropic',
+    'linkedin'
 );
 
 
@@ -188,36 +189,45 @@ CREATE TYPE "public"."work_type_enum" AS ENUM (
 ALTER TYPE "public"."work_type_enum" OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."admin_add_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text" DEFAULT 'System Key'::"text", "p_tier" "text" DEFAULT 'standard'::"text") RETURNS "uuid"
+CREATE OR REPLACE FUNCTION "public"."admin_add_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text" DEFAULT NULL::"text") RETURNS "uuid"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
     AS $$
-declare v_id uuid;
-begin
-  if not public.is_admin() then raise exception 'admin only'; end if;
-  insert into public.system_api_keys (provider, encrypted_key, label, tier, created_by)
-  values (p_provider, pgp_sym_encrypt(p_api_key, current_setting('app.key_secret', true))::text, p_label, p_tier, auth.uid())
-  returning id into v_id;
-  return v_id;
-end;
+DECLARE
+    v_key_id uuid;
+BEGIN
+    IF NOT public.is_admin() THEN
+        RAISE EXCEPTION 'Access denied. Admin privileges required.';
+    END IF;
+
+    IF p_api_key IS NULL OR length(trim(p_api_key)) = 0 THEN
+        RAISE EXCEPTION 'API key cannot be empty.';
+    END IF;
+
+    INSERT INTO public.system_api_keys (
+        provider,
+        encrypted_key,
+        label,
+        tier,
+        is_active,
+        created_at
+    )
+    VALUES (
+        p_provider,
+        p_api_key,
+        COALESCE(p_label, initcap(p_provider::text) || ' Fallback Key'),
+        'fallback',
+        true,
+        now()
+    )
+    RETURNING id INTO v_key_id;
+
+    RETURN v_key_id;
+END;
 $$;
 
 
-ALTER FUNCTION "public"."admin_add_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text", "p_tier" "text") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "public"."admin_delete_api_key"("p_key_id" "uuid") RETURNS "void"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public', 'extensions'
-    AS $$
-begin
-  if not public.is_admin() then raise exception 'admin only'; end if;
-  delete from public.system_api_keys where id = p_key_id;
-end;
-$$;
-
-
-ALTER FUNCTION "public"."admin_delete_api_key"("p_key_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "public"."admin_add_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."admin_delete_user"("target_id" "uuid") RETURNS "void"
@@ -234,32 +244,53 @@ $$;
 ALTER FUNCTION "public"."admin_delete_user"("target_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."admin_list_api_keys"() RETURNS TABLE("id" "uuid", "provider" "public"."api_provider_enum", "tier" "text", "label" "text", "is_active" boolean, "priority_order" integer, "last_used_at" timestamp with time zone, "throttled_until" timestamp with time zone, "key_preview" "text", "created_at" timestamp with time zone)
-    LANGUAGE "sql" SECURITY DEFINER
+CREATE OR REPLACE FUNCTION "public"."admin_list_api_keys"() RETURNS TABLE("id" "uuid", "provider" "public"."api_provider_enum", "key_preview" "text", "label" "text", "is_active" boolean, "last_used_at" timestamp with time zone, "created_at" timestamp with time zone)
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
     AS $$
-  select k.id, k.provider, k.tier, k.label, k.is_active, k.priority_order,
-         k.last_used_at, k.throttled_until,
-         '••••' || right(pgp_sym_decrypt(k.encrypted_key::bytea, current_setting('app.key_secret', true)), 4),
-         k.created_at
-  from public.system_api_keys k
-  where public.is_admin()
-  order by k.provider, k.priority_order asc;
+BEGIN
+    IF NOT public.is_admin() THEN
+        RAISE EXCEPTION 'Access denied. Admin privileges required.';
+    END IF;
+
+    RETURN QUERY
+    SELECT 
+        k.id,
+        k.provider,
+        CASE 
+            WHEN length(k.encrypted_key) > 8 THEN '••••' || right(k.encrypted_key, 4)
+            ELSE '••••'
+        END AS key_preview,
+        k.label,
+        k.is_active,
+        k.last_used_at,
+        k.created_at
+    FROM public.system_api_keys k
+    ORDER BY k.provider, k.created_at DESC;
+END;
 $$;
 
 
 ALTER FUNCTION "public"."admin_list_api_keys"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "public"."admin_list_users"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 50) RETURNS TABLE("id" "uuid", "email" "text", "first_name" "text", "last_name" "text", "role" "public"."user_role", "profile_complete" boolean, "created_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."admin_list_users"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 50) RETURNS TABLE("id" "uuid", "email" "text", "first_name" "text", "last_name" "text", "avatar_url" "text", "role" "public"."user_role", "profile_complete" boolean, "created_at" timestamp with time zone)
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
     AS $$
-  select p.id, p.email, p.first_name, p.last_name, p.role, p.profile_complete, p.created_at
-  from public.profiles p
-  where public.is_admin()
-  order by p.created_at desc
-  limit p_page_size offset ((greatest(p_page,1) - 1) * p_page_size);
+  SELECT
+    p.id,
+    p.email,
+    p.first_name,
+    p.last_name,
+    p.avatar_url,
+    p.role,
+    p.profile_complete,
+    p.created_at
+  FROM public.profiles p
+  WHERE public.is_admin()
+  ORDER BY p.created_at DESC
+  LIMIT p_page_size OFFSET ((greatest(p_page, 1) - 1) * p_page_size);
 $$;
 
 
@@ -346,20 +377,77 @@ CREATE OR REPLACE FUNCTION "public"."get_admin_dashboard_stats"() RETURNS "jsonb
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
     AS $$
-  select case when public.is_admin() then
+  SELECT CASE WHEN public.is_admin() THEN
     jsonb_build_object(
-      'total_users', (select count(*) from public.profiles),
-      'new_users_7d', (select count(*) from public.profiles where created_at > now() - interval '7 days'),
-      'total_applications', (select count(*) from public.job_applications),
-      'total_cover_letters', (select count(*) from public.cover_letters),
-      'api_cost_this_month', (select coalesce(sum(cost_estimate_usd),0) from public.api_key_usage_logs
-                               where created_at >= date_trunc('month', now()))
+      'total_users', (SELECT count(*) FROM public.profiles),
+      'new_users_7d', (SELECT count(*) FROM public.profiles WHERE created_at > now() - interval '7 days'),
+      'total_applications', (SELECT count(*) FROM public.job_applications),
+      'total_cover_letters', (SELECT count(*) FROM public.cover_letters),
+      'total_jobs_discovered', (SELECT count(*) FROM public.job_vault),
+      'active_api_keys', (SELECT count(*) FROM public.system_api_keys WHERE is_active = true),
+      'api_cost_this_month', (SELECT coalesce(sum(cost_estimate_usd), 0) FROM public.api_key_usage_logs
+                               WHERE created_at >= date_trunc('month', now())),
+      'failed_api_calls_24h', (SELECT count(*) FROM public.api_key_usage_logs
+                               WHERE created_at >= now() - interval '24 hours' AND success = false),
+      'total_tokens_used_24h', (SELECT coalesce(sum(tokens_used), 0) FROM public.api_key_usage_logs
+                                WHERE created_at >= now() - interval '24 hours')
     )
-  else '{}'::jsonb end;
+  ELSE '{}'::jsonb END;
 $$;
 
 
 ALTER FUNCTION "public"."get_admin_dashboard_stats"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."get_key_for_provider"("p_provider" "text", "p_user_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("key_id" "uuid", "api_key" "text", "source" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+DECLARE
+    v_provider_enum public.api_provider_enum;
+BEGIN
+    BEGIN
+        v_provider_enum := p_provider::public.api_provider_enum;
+    EXCEPTION WHEN OTHERS THEN
+        RETURN;
+    END;
+
+    -- Check User Key
+    IF p_user_id IS NOT NULL THEN
+        RETURN QUERY
+        SELECT 
+            id,
+            encrypted_key,
+            'user'::text
+        FROM public.user_api_keys
+        WHERE user_id = p_user_id 
+          AND provider = v_provider_enum 
+          AND is_active = true
+          AND (rate_limited_until IS NULL OR rate_limited_until < now())
+        LIMIT 1;
+
+        IF FOUND THEN
+            RETURN;
+        END IF;
+    END IF;
+
+    -- Check System Fallback Key
+    RETURN QUERY
+    SELECT 
+        id,
+        encrypted_key,
+        'system'::text
+    FROM public.system_api_keys
+    WHERE provider = v_provider_enum 
+      AND is_active = true
+      AND (rate_limited_until IS NULL OR rate_limited_until < now())
+    ORDER BY total_calls ASC, created_at ASC
+    LIMIT 1;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."get_key_for_provider"("p_provider" "text", "p_user_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."get_key_for_provider"("p_user_id" "uuid", "p_provider" "public"."api_provider_enum") RETURNS "text"
@@ -408,16 +496,18 @@ CREATE OR REPLACE FUNCTION "public"."get_user_pipeline_metrics"() RETURNS "jsonb
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'public', 'extensions'
     AS $$
-  select jsonb_build_object(
-    'discovered', count(*) filter (where status = 'discovered'),
-    'saved',      count(*) filter (where status = 'saved'),
-    'applied',    count(*) filter (where status = 'applied'),
-    'interview',  count(*) filter (where status = 'interview'),
-    'offer',      count(*) filter (where status = 'offer'),
-    'rejected',   count(*) filter (where status = 'rejected')
+  SELECT jsonb_build_object(
+    'discovered', (SELECT count(*) FROM public.job_vault WHERE user_id = auth.uid()),
+    'total_discovered_all_time', (SELECT count(*) FROM public.job_vault WHERE user_id = auth.uid()),
+    'global_discovered_all_time', (SELECT count(*) FROM public.job_vault),
+    'saved',      count(*) FILTER (WHERE status = 'saved'),
+    'applied',    count(*) FILTER (WHERE status = 'applied'),
+    'interview',  count(*) FILTER (WHERE status = 'interview'),
+    'offer',      count(*) FILTER (WHERE status = 'offer'),
+    'rejected',   count(*) FILTER (WHERE status = 'rejected')
   )
-  from public.job_applications
-  where user_id = auth.uid();
+  FROM public.job_applications
+  WHERE user_id = auth.uid();
 $$;
 
 
@@ -554,6 +644,20 @@ $$;
 ALTER FUNCTION "public"."resolve_key_pool"("p_user_id" "uuid", "p_provider" "public"."api_provider_enum") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."resolve_key_pool"("p_provider" "public"."api_provider_enum", "p_user_id" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("key_id" "uuid", "api_key" "text", "source" "text")
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+BEGIN
+    RETURN QUERY
+    SELECT * FROM public.get_key_for_provider(p_provider::text, p_user_id);
+END;
+$$;
+
+
+ALTER FUNCTION "public"."resolve_key_pool"("p_provider" "public"."api_provider_enum", "p_user_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."rls_auto_enable"() RETURNS "event_trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'pg_catalog'
@@ -613,6 +717,55 @@ $$;
 
 
 ALTER FUNCTION "public"."set_my_api_key"("p_provider" "public"."api_provider_enum", "p_key" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."set_my_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text" DEFAULT NULL::"text") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'public', 'extensions'
+    AS $$
+DECLARE
+    v_user_id uuid := auth.uid();
+    v_key_id uuid;
+BEGIN
+    IF v_user_id IS NULL THEN
+        RAISE EXCEPTION 'Authentication required.';
+    END IF;
+
+    IF p_api_key IS NULL OR length(trim(p_api_key)) = 0 THEN
+        RAISE EXCEPTION 'API key cannot be empty.';
+    END IF;
+
+    INSERT INTO public.user_api_keys (
+        user_id,
+        provider,
+        encrypted_key,
+        key_label,
+        is_active,
+        created_at,
+        updated_at
+    )
+    VALUES (
+        v_user_id,
+        p_provider,
+        p_api_key,
+        COALESCE(p_label, initcap(p_provider::text) || ' Personal Key'),
+        true,
+        now(),
+        now()
+    )
+    ON CONFLICT (user_id, provider) DO UPDATE SET
+        encrypted_key = EXCLUDED.encrypted_key,
+        key_label = COALESCE(p_label, EXCLUDED.key_label),
+        is_active = true,
+        updated_at = now()
+    RETURNING id INTO v_key_id;
+
+    RETURN v_key_id;
+END;
+$$;
+
+
+ALTER FUNCTION "public"."set_my_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."set_primary_resume"("p_document_id" "uuid") RETURNS "void"
@@ -1547,6 +1700,10 @@ ALTER TABLE "public"."user_context" ENABLE ROW LEVEL SECURITY;
 ALTER PUBLICATION "supabase_realtime" OWNER TO "postgres";
 
 
+
+
+
+
 GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
@@ -1710,15 +1867,9 @@ GRANT USAGE ON SCHEMA "public" TO "service_role";
 
 
 
-GRANT ALL ON FUNCTION "public"."admin_add_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text", "p_tier" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."admin_add_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text", "p_tier" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."admin_add_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text", "p_tier" "text") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."admin_delete_api_key"("p_key_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."admin_delete_api_key"("p_key_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."admin_delete_api_key"("p_key_id" "uuid") TO "service_role";
+GRANT ALL ON FUNCTION "public"."admin_add_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."admin_add_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."admin_add_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text") TO "service_role";
 
 
 
@@ -1767,6 +1918,12 @@ GRANT ALL ON FUNCTION "public"."force_set_role"("target_email" "text", "target_r
 GRANT ALL ON FUNCTION "public"."get_admin_dashboard_stats"() TO "anon";
 GRANT ALL ON FUNCTION "public"."get_admin_dashboard_stats"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."get_admin_dashboard_stats"() TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."get_key_for_provider"("p_provider" "text", "p_user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."get_key_for_provider"("p_provider" "text", "p_user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."get_key_for_provider"("p_provider" "text", "p_user_id" "uuid") TO "service_role";
 
 
 
@@ -1824,6 +1981,12 @@ GRANT ALL ON FUNCTION "public"."resolve_key_pool"("p_user_id" "uuid", "p_provide
 
 
 
+GRANT ALL ON FUNCTION "public"."resolve_key_pool"("p_provider" "public"."api_provider_enum", "p_user_id" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "public"."resolve_key_pool"("p_provider" "public"."api_provider_enum", "p_user_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."resolve_key_pool"("p_provider" "public"."api_provider_enum", "p_user_id" "uuid") TO "service_role";
+
+
+
 GRANT ALL ON FUNCTION "public"."rls_auto_enable"() TO "anon";
 GRANT ALL ON FUNCTION "public"."rls_auto_enable"() TO "authenticated";
 GRANT ALL ON FUNCTION "public"."rls_auto_enable"() TO "service_role";
@@ -1839,6 +2002,12 @@ GRANT ALL ON FUNCTION "public"."set_current_timestamp_updated_at"() TO "service_
 GRANT ALL ON FUNCTION "public"."set_my_api_key"("p_provider" "public"."api_provider_enum", "p_key" "text") TO "anon";
 GRANT ALL ON FUNCTION "public"."set_my_api_key"("p_provider" "public"."api_provider_enum", "p_key" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."set_my_api_key"("p_provider" "public"."api_provider_enum", "p_key" "text") TO "service_role";
+
+
+
+GRANT ALL ON FUNCTION "public"."set_my_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text") TO "anon";
+GRANT ALL ON FUNCTION "public"."set_my_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_my_api_key"("p_provider" "public"."api_provider_enum", "p_api_key" "text", "p_label" "text") TO "service_role";
 
 
 
