@@ -15,20 +15,17 @@ import {
   TouchableOpacity,
   Platform,
   StyleSheet,
-  ScrollView,
   Image,
 } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { BlurView } from "expo-blur";
 import { ProfileDropdown } from "../shared/ProfileDropdown";
-import { C } from "../../lib/theme";
+import { C } from "../../constants/theme";
 import {
-  Search,
   SlidersHorizontal,
   Kanban,
-  FolderOpen,
-  AppWindowMac,
   FolderKanban,
+  AppWindowMac,
   Radar,
 } from "lucide-react-native";
 
@@ -42,10 +39,15 @@ const NAV_ITEMS = [
   {
     id: "rules",
     path: "/(tabs)/rules",
-    title: "Engine",
+    title: "ENGINE",
     Icon: Radar,
   },
-  { id: "pipeline", path: "/(tabs)/pipeline", title: "PIPELINE", Icon: Kanban },
+  {
+    id: "pipeline",
+    path: "/(tabs)/pipeline",
+    title: "PIPELINE",
+    Icon: Kanban,
+  },
   {
     id: "vault",
     path: "/(tabs)/settings/vault",
@@ -100,7 +102,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
             width: 100% !important; 
             margin: 0 !important; 
             padding: 0 !important; 
-            background-color: #020617 !important; 
+            background-color: transparent !important; 
           }
         `,
           }}
@@ -110,7 +112,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
       {/* ── DESKTOP & TABLET SIDEBAR (≥768px) ────────────────────── */}
       {isDesktop && (
         <View style={styles.sidebar}>
-          <View style={{ width: "100%", alignItems: "center", gap: 32 }}>
+          <View style={styles.sidebarInner}>
             <TouchableOpacity
               onPress={() => router.push("/(tabs)/index" as any)}
               activeOpacity={0.8}
@@ -118,13 +120,13 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
               <View style={styles.brandLogo}>
                 <Image
                   source={require("../../assets/icon.png")}
-                  style={{ width: 32, height: 32, borderRadius: 8 }}
+                  style={styles.brandLogoImage}
                   resizeMode="contain"
                 />
               </View>
             </TouchableOpacity>
 
-            <View style={{ width: "100%", alignItems: "center", gap: 16 }}>
+            <View style={styles.navStack}>
               {NAV_ITEMS.map((item) => {
                 const isActive = isItemActive(item);
                 return (
@@ -159,12 +161,12 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
             <View style={styles.mobileBrandBadge}>
               <Image
                 source={require("../../assets/icon.png")}
-                style={{ width: 28, height: 28, borderRadius: 8 }}
+                style={styles.mobileBrandImage}
                 resizeMode="contain"
               />
             </View>
           ) : (
-            <View /> /* Empty spacer for desktop to push profile right */
+            <View /> /* Empty spacer for desktop */
           )}
 
           <ProfileDropdown />
@@ -179,12 +181,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
 
         {/* ── MOBILE BOTTOM FLOATING TAB BAR (<768px) ─────────────── */}
         {!isDesktop && (
-          <View
-            style={[
-              styles.mobileTabBarContainer,
-              { pointerEvents: "box-none" },
-            ]}
-          >
+          <View style={styles.mobileTabBarContainer} pointerEvents="box-none">
             <BlurView
               intensity={Platform.OS === "web" ? 30 : 60}
               tint="dark"
@@ -230,15 +227,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 24,
   },
+  sidebarInner: {
+    width: "100%",
+    alignItems: "center",
+    gap: 32,
+  },
   brandLogo: {
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: C.cyan,
+    backgroundColor: "rgba(0, 242, 254, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 242, 254, 0.3)",
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: `0 0 16px ${C.cyan}44`,
+    boxShadow: `0 0 20px rgba(0, 242, 254, 0.15)`,
     marginBottom: 16,
+  },
+  brandLogoImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+  },
+  navStack: {
+    width: "100%",
+    alignItems: "center",
+    gap: 16,
   },
   navItem: {
     width: 64,
@@ -292,12 +306,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
-  mobileBrandText: {
-    fontSize: 12,
-    fontWeight: "900",
-    color: C.cyan,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
+  mobileBrandImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
   },
   mobileTabBarContainer: {
     position: "absolute",
