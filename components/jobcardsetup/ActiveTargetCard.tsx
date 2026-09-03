@@ -19,7 +19,7 @@ import {
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, radius } from "../../constants/theme";
-import { C } from "../../lib/theme";
+import { C } from "../../constants/theme";
 import {
   Play,
   CheckCircle2,
@@ -194,7 +194,7 @@ export function ActiveTargetCard({
             <View style={{ flex: 1 }}>
               <Text style={styles.paramLabel}>WORK MODEL & SENIORITY</Text>
               <Text style={styles.paramValue} numberOfLines={1}>
-                {workTypes.map((w) => w.toUpperCase()).join(" / ")} •{" "}
+                {workTypes.map((w: string) => w.toUpperCase()).join(" / ")} •{" "}
                 {seniority.toUpperCase()}
               </Text>
             </View>
@@ -319,27 +319,21 @@ const styles = StyleSheet.create({
   },
   glowUnderlay: {
     position: "absolute",
-    top: 4,
-    left: 4,
-    right: 4,
-    bottom: 4,
+    top: 4, left: 4, right: 4, bottom: 4,
     borderRadius: radius.xl,
     backgroundColor: "rgba(0, 242, 254, 0.08)",
-    ...Platform.select({
-      web: { filter: "blur(24px)" } as any,
-    }),
+    // REMOVED: filter: "blur(24px)" - Fatal to Android performance
   },
   cardBox: {
-    backgroundColor: "rgba(10, 15, 29, 0.92)",
+    backgroundColor: "rgba(10, 15, 29, 0.95)", // Increased opacity slightly to compensate for no blur
     borderRadius: radius.xl,
     borderWidth: 1.5,
     borderColor: "rgba(0, 242, 254, 0.35)",
     padding: 20,
     ...Platform.select({
       web: {
-        backdropFilter: "blur(20px)",
-        boxShadow:
-          "0 12px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 242, 254, 0.12)",
+        // REMOVED: backdropFilter: "blur(20px)"
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 242, 254, 0.08)",
       } as any,
     }),
   },

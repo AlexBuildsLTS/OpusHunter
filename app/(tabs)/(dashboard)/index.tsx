@@ -1,7 +1,7 @@
 /**
  * app/(tabs)/(dashboard)/index.tsx
- * OpusHunter — Primary Dashboard / Discover Screen (Performance Optimized).
- * Features: Header, metrics, swipe deck, quick actions, Modal processing.
+ * OpusHunter — Primary Dashboard / Discover Screen.
+ * Features: Header, compact factual metrics, swipe deck, perfectly routed quick actions.
  */
 
 import React, { useState, useCallback } from "react";
@@ -22,7 +22,6 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import {
   Zap,
   CheckCircle2,
-  Clock,
   Briefcase,
   AlertCircle,
   RefreshCw,
@@ -54,7 +53,7 @@ import * as Clipboard from "expo-clipboard";
 
 const IS_WEB = Platform.OS === "web";
 
-// ── Metric Card Component (Memoized to prevent re-renders) ───────────
+// ── Compact Horizontal Metric Card ───────────
 const MetricCard = React.memo(
   ({ label, value, color, icon: Icon, delay = 0 }: any) => (
     <Animated.View
@@ -62,43 +61,49 @@ const MetricCard = React.memo(
       style={styles.metricCardWrapper}
     >
       <Card style={styles.metricCard}>
-        <View
-          style={[
-            styles.metricIcon,
-            { backgroundColor: `${color}15`, borderColor: `${color}30` },
-          ]}
-        >
-          <Icon size={18} color={color} />
+        <View style={styles.metricCardContent}>
+          <View
+            style={[
+              styles.metricIcon,
+              { backgroundColor: `${color}15`, borderColor: `${color}30` },
+            ]}
+          >
+            <Icon size={18} color={color} />
+          </View>
+          <View style={styles.metricTextWrap}>
+            <Text style={[styles.metricValue, { color }]}>{value}</Text>
+            <Text style={styles.metricLabel}>{label}</Text>
+          </View>
         </View>
-        <Text style={[styles.metricValue, { color }]}>{value}</Text>
-        <Text style={styles.metricLabel}>{label}</Text>
       </Card>
     </Animated.View>
   ),
 );
 
-// ── Quick Action Card (Memoized) ───────────────────────────────────────
+// ── Quick Action Card (FIXED: Wrapped in TouchableOpacity for routing) ──
 const QuickAction = React.memo(
   ({ label, sub, route, color, icon: Icon, router }: any) => (
-    <Card
-      variant="interactive"
-      style={styles.quickActionCard}
+    <TouchableOpacity
+      activeOpacity={0.7}
       onPress={() => router.push(route)}
+      style={{ marginBottom: 8 }}
     >
-      <View
-        style={[
-          styles.quickIcon,
-          { backgroundColor: `${color}15`, borderColor: `${color}30` },
-        ]}
-      >
-        <Icon size={18} color={color} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.quickLabel, { color }]}>{label}</Text>
-        <Text style={styles.quickSub}>{sub}</Text>
-      </View>
-      <ChevronRight size={18} color={`${color}70`} />
-    </Card>
+      <Card variant="interactive" style={[styles.quickActionCard, { marginBottom: 0 }]}>
+        <View
+          style={[
+            styles.quickIcon,
+            { backgroundColor: `${color}15`, borderColor: `${color}30` },
+          ]}
+        >
+          <Icon size={18} color={color} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.quickLabel, { color }]}>{label}</Text>
+          <Text style={styles.quickSub}>{sub}</Text>
+        </View>
+        <ChevronRight size={18} color={`${color}70`} />
+      </Card>
+    </TouchableOpacity>
   ),
 );
 
@@ -172,9 +177,8 @@ export default function DashboardScreen() {
       }
     } catch (err: any) {
       console.error("Cover letter synthesis error:", err);
-      // Fallback
       setGeneratedLetter({
-        body: `Dear Hiring Team at ${job.company},\n\nI am writing to express my strong interest in the ${job.title} position...`,
+        body: `Dear Hiring Team at ${job.company},\n\nI am writing to express my strong interest in the ${job.title} position. With my background in modern system architecture, I am confident in my ability to drive technical impact.\n\nBest regards,\n${firstName}`,
         ats_score: 95,
         strategy: selectedStrategy,
       });
@@ -236,9 +240,9 @@ export default function DashboardScreen() {
           style={styles.metricsRow}
         >
           {metricsLoading ? (
-            [0, 1, 2, 3].map((i) => (
+            [0, 1, 2].map((i) => (
               <View key={i} style={{ flex: 1 }}>
-                <Skeleton height={100} borderRadius={16} />
+                <Skeleton height={72} borderRadius={16} />
               </View>
             ))
           ) : (
@@ -263,13 +267,6 @@ export default function DashboardScreen() {
                 color={colors.accent.green}
                 icon={CheckCircle2}
                 delay={200}
-              />
-              <MetricCard
-                label="Interviews"
-                value={metrics?.interview ?? 0}
-                color={colors.accent.amber}
-                icon={Clock}
-                delay={250}
               />
             </>
           )}
@@ -411,6 +408,17 @@ export default function DashboardScreen() {
                     {selectedJob.location || "Remote"}
                   </Typography>
                 </View>
+                {selectedJob.salary && (
+                  <View style={styles.modalMetaItem}>
+                    <DollarSign size={15} color={colors.accent.green} />
+                    <Typography
+                      variant="caption"
+                      style={{ color: colors.accent.green, fontWeight: "700" }}
+                    >
+                      {selectedJob.salary}
+                    </Typography>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -465,6 +473,48 @@ export default function DashboardScreen() {
                 </Typography>
               </View>
 
+              <Typography
+                variant="caption"
+                color="dim"
+                style={{ marginBottom: 6 }}
+              >
+                Formality Profile:
+              </Typography>
+              <View style={styles.optionsRow}>
+                {[
+                  { id: "technical_deep_dive", label: "Technical Deep-Dive" },
+                  { id: "formal_corporate", label: "Formal Corporate" },
+                  { id: "executive_brief", label: "Executive Brief" },
+                  { id: "storytelling", label: "Storytelling" },
+                ].map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    onPress={() => setSelectedFormality(item.id)}
+                    style={[
+                      styles.optionChip,
+                      selectedFormality === item.id && styles.optionChipActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.optionText,
+                        selectedFormality === item.id &&
+                          styles.optionTextActive,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Typography
+                variant="caption"
+                color="dim"
+                style={{ marginTop: 10, marginBottom: 6 }}
+              >
+                Targeting Method:
+              </Typography>
               <View style={styles.optionsRow}>
                 {[
                   { id: "mirror_matching", label: "ATS Keyword Mirroring" },
@@ -546,6 +596,43 @@ export default function DashboardScreen() {
                 </View>
               </View>
             )}
+
+            {!generatedLetter && (
+              <View style={styles.modalBottomRow}>
+                {selectedJob.url && (
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onPress={() => {
+                      if (selectedJob.url) {
+                        Linking.openURL(selectedJob.url);
+                      }
+                    }}
+                    style={{ flex: 1 }}
+                  >
+                    <ExternalLink size={16} color={colors.accent.cyan} />
+                    <Text
+                      style={[
+                        styles.btnActionText,
+                        { color: colors.accent.cyan },
+                      ]}
+                    >
+                      Open Application URL
+                    </Text>
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="md"
+                  onPress={() => {
+                    updateStatus({ jobId: selectedJob.id, status: "saved" });
+                    setSelectedJob(null);
+                  }}
+                >
+                  Save to Pipeline
+                </Button>
+              </View>
+            )}
           </ScrollView>
         )}
       </Modal>
@@ -565,18 +652,26 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 24,
   },
-  metricCardWrapper: { flex: 1, minWidth: 140 },
-  metricCard: { padding: 16, width: "100%" },
+  metricCardWrapper: { flex: 1, minWidth: 100 },
+  metricCard: { padding: 12, width: "100%" },
+  metricCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
   metricIcon: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     borderRadius: 10,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 8,
   },
-  metricValue: { fontSize: 24, fontWeight: "900", marginTop: 4 },
+  metricTextWrap: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  metricValue: { fontSize: 22, fontWeight: "900", lineHeight: 26 },
   metricLabel: {
     fontSize: 10,
     fontWeight: "700",
@@ -687,7 +782,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(6, 182, 212, 0.15)",
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: radius.full,
     borderWidth: 1,
     borderColor: "rgba(6, 182, 212, 0.3)",
   },
@@ -705,4 +800,5 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
   },
   letterActionsRow: { flexDirection: "row", gap: 10 },
+  modalBottomRow: { flexDirection: "row", gap: 10, marginTop: 8 },
 });
