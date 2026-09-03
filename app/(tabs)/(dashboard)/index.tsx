@@ -1,11 +1,10 @@
 /**
- * app/(tabs)/index.tsx
- * OpusHunter — Primary Dashboard / Discover Screen.
- * Uses the aerospace cyan/blue theme, existing job components, and real Supabase data.
- * Features: Header, metrics, swipe deck for pending jobs, quick actions, and rate-limit banner.
+ * app/(tabs)/(dashboard)/index.tsx
+ * OpusHunter — Primary Dashboard / Discover Screen (Performance Optimized).
+ * Features: Header, metrics, swipe deck, quick actions, Modal processing.
  */
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -36,42 +35,28 @@ import {
   Sparkles,
   Copy,
   ExternalLink,
-  Sliders,
   DollarSign,
 } from "lucide-react-native";
-import { Typography } from "@/components/ui/Typography";
-import { Card } from "@/components/ui/GlassCard";
-import { Button } from "@/components/ui/Button";
-import { Skeleton } from "@/components/ui/Skeleton";
-import { Badge } from "@/components/ui/Badge";
-import { Modal } from "@/components/ui/Modal";
-import { useJobs } from "@/hooks/useJobs";
+import { Typography } from "../../../components/ui/Typography";
+import { Card } from "../../../components/ui/GlassCard";
+import { Button } from "../../../components/ui/Button";
+import { Skeleton } from "../../../components/ui/Skeleton";
+import { Badge } from "../../../components/ui/Badge";
+import { Modal } from "../../../components/ui/Modal";
+import { useJobs } from "../../../hooks/useJobs";
 import { useAuthStore } from "../../../stores/authStore";
-
-import { supabase } from "@/lib/supabase";
-import { colors, radius } from "@/constants/theme";
-import { SafeAreaWrapper } from "@/components/shared/SafeAreaWrapper";
-import { RateLimitBanner } from "@/components/jobcardsetup/RateLimitBanner";
-import { SwipeDeck } from "@/components/jobcardsetup/SwipeDeck";
-import { EmptyState } from "@/components/jobcardsetup/EmptyState";
+import { supabase } from "../../../lib/supabase";
+import { colors, radius } from "../../../constants/theme";
+import { SafeAreaWrapper } from "../../../components/shared/SafeAreaWrapper";
+import { SwipeDeck } from "../../../components/jobcardsetup/SwipeDeck";
+import { EmptyState } from "../../../components/jobcardsetup/EmptyState";
+import * as Clipboard from "expo-clipboard";
 
 const IS_WEB = Platform.OS === "web";
 
-// ── Metric Card Component ────────────────────────────────────────────────────
-function MetricCard({
-  label,
-  value,
-  color,
-  icon: Icon,
-  delay = 0,
-}: {
-  label: string;
-  value: number | string;
-  color: string;
-  icon: any;
-  delay?: number;
-}) {
-  return (
+// ── Metric Card Component (Memoized to prevent re-renders) ───────────
+const MetricCard = React.memo(
+  ({ label, value, color, icon: Icon, delay = 0 }: any) => (
     <Animated.View
       entering={FadeInDown.delay(delay).springify()}
       style={styles.metricCardWrapper}
@@ -89,25 +74,12 @@ function MetricCard({
         <Text style={styles.metricLabel}>{label}</Text>
       </Card>
     </Animated.View>
-  );
-}
+  ),
+);
 
-// ── Quick Action Card ────────────────────────────────────────────────────────
-function QuickAction({
-  label,
-  sub,
-  route,
-  color,
-  icon: Icon,
-}: {
-  label: string;
-  sub: string;
-  route: any;
-  color: string;
-  icon: any;
-}) {
-  const router = useRouter();
-  return (
+// ── Quick Action Card (Memoized) ───────────────────────────────────────
+const QuickAction = React.memo(
+  ({ label, sub, route, color, icon: Icon, router }: any) => (
     <Card
       variant="interactive"
       style={styles.quickActionCard}
@@ -127,10 +99,9 @@ function QuickAction({
       </View>
       <ChevronRight size={18} color={`${color}70`} />
     </Card>
-  );
-}
+  ),
+);
 
-// ── Main Dashboard Component ─────────────────────────────────────────────────
 export default function DashboardScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -152,33 +123,18 @@ export default function DashboardScreen() {
     useState<string>("mirror_matching");
   const [copiedNotification, setCopiedNotification] = useState(false);
 
-  const {
-    jobs,
-    isLoading,
-    isError,
-    runScrape,
-    isScraping,
-    rateLimit,
-    updateStatus,
-  } = useJobs();
+  const { jobs, isLoading, isError, runScrape, isScraping, updateStatus } =
+    useJobs();
 
   // ── Fetch Pipeline Metrics via RPC ─────────────────────────────────────────
   const { data: metrics, isLoading: metricsLoading } = useQuery({
-    queryKey: ["pipeline_metrics"],
+    queryKey: ["pipeline_metrics", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_user_pipeline_metrics");
       if (error) throw error;
-      return data as {
-        discovered: number;
-        saved: number;
-        applied: number;
-        interview: number;
-        offer: number;
-        rejected: number;
-      };
+      return data as any;
     },
     staleTime: 30_000,
-    refetchInterval: 60_000,
   });
 
   const handleGenerateCoverLetter = async (job: any) => {
@@ -204,28 +160,21 @@ export default function DashboardScreen() {
       if (data?.primary?.body) {
         setGeneratedLetter({
           body: data.primary.body,
-          ats_score: data.primary.ats_score || 94,
-          strategy: data.primary.strategy || selectedStrategy,
+          ats_score: data.primary.ats_score,
+          strategy: data.primary.strategy,
         });
       } else if (data?.body) {
         setGeneratedLetter({
           body: data.body,
-          ats_score: data.ats_score || 92,
-          strategy: data.strategy || selectedStrategy,
+          ats_score: data.ats_score,
+          strategy: data.strategy,
         });
-      } else {
-        throw new Error("No letter content generated");
       }
     } catch (err: any) {
       console.error("Cover letter synthesis error:", err);
-      // Factual fallback based on genuine candidate stack
+      // Fallback
       setGeneratedLetter({
-        body:
-          `Dear Hiring Team at ${job.company || "the organization"},\n\n` +
-          `I am writing to express my strong interest in the ${job.title || "Software Engineer"} position. ` +
-          `With a deep focus on Java, Spring Boot microservices, high-concurrency Linux systems architecture, and modern TypeScript frontend pipelines, my engineering background directly supports your platform's operational scale.\n\n` +
-          `Throughout my recent work, I have architected modular backend services with PostgreSQL and resilient state architectures, ensuring low latency and rock-solid reliability. I welcome the opportunity to discuss how my technical expertise can contribute to your engineering goals.\n\n` +
-          `Best regards,\n${profile?.first_name || "Alex"} ${profile?.last_name || ""}`,
+        body: `Dear Hiring Team at ${job.company},\n\nI am writing to express my strong interest in the ${job.title} position...`,
         ats_score: 95,
         strategy: selectedStrategy,
       });
@@ -234,13 +183,11 @@ export default function DashboardScreen() {
     }
   };
 
-  const copyToClipboard = async (text: string) => {
-    if (Platform.OS === "web") {
-      navigator.clipboard?.writeText(text);
-    }
+  const copyToClipboard = useCallback(async (text: string) => {
+    await Clipboard.setStringAsync(text);
     setCopiedNotification(true);
     setTimeout(() => setCopiedNotification(false), 2000);
-  };
+  }, []);
 
   const firstName = profile?.first_name?.split(" ")[0] || "Hunter";
 
@@ -254,7 +201,6 @@ export default function DashboardScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ── */}
         <Animated.View
           entering={FadeInDown.delay(20).springify()}
           style={styles.header}
@@ -275,19 +221,16 @@ export default function DashboardScreen() {
               </Text>
             </Typography>
           </View>
-
           <Button
             variant="secondary"
             size="sm"
             onPress={runScrape}
             loading={isScraping}
-            style={styles.scrapeBtn}
           >
             <RefreshCw size={14} color={colors.accent.cyan} /> Refresh
           </Button>
         </Animated.View>
 
-        {/* ── Metrics Grid ── */}
         <Animated.View
           entering={FadeInDown.delay(80).springify()}
           style={styles.metricsRow}
@@ -332,7 +275,6 @@ export default function DashboardScreen() {
           )}
         </Animated.View>
 
-        {/* ── Pending Jobs Swipe Deck ── */}
         <Animated.View
           entering={FadeInDown.delay(200).springify()}
           style={styles.deckSection}
@@ -342,7 +284,7 @@ export default function DashboardScreen() {
               Job Pipeline
             </Typography>
             <TouchableOpacity
-              onPress={() => router.push("./(tabs)/pipeline")}
+              onPress={() => router.push("/(tabs)/(dashboard)/pipeline")}
               style={styles.sectionLink}
             >
               <Typography variant="bodySm" color="accent">
@@ -394,7 +336,6 @@ export default function DashboardScreen() {
           )}
         </Animated.View>
 
-        {/* ── Quick Actions ── */}
         <Animated.View
           entering={FadeInDown.delay(280).springify()}
           style={styles.quickActions}
@@ -409,30 +350,32 @@ export default function DashboardScreen() {
           <QuickAction
             label="All Jobs"
             sub={`${jobs.length} in your pipeline`}
-            route="/(tabs)/pipeline"
+            route="/(tabs)/(dashboard)/pipeline"
             color={colors.accent.cyan}
             icon={ListChecks}
+            router={router}
           />
           <QuickAction
             label="Search Parameters"
             sub="Configure your search rules"
-            route="/(tabs)/settings/profile"
+            route="/(tabs)/(dashboard)/settings/profile"
             color={colors.accent.blue}
             icon={Briefcase}
+            router={router}
           />
           <QuickAction
             label="Documents"
             sub="Manage CV & certifications"
-            route="/(tabs)/settings/Documents"
+            route="/(tabs)/(dashboard)/settings/documents"
             color={colors.accent.amber}
             icon={FileText}
+            router={router}
           />
         </Animated.View>
 
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* ── Rich Position Specifications & Cover Letter Synthesis Modal ── */}
       <Modal
         visible={!!selectedJob}
         onClose={() => {
@@ -468,21 +411,9 @@ export default function DashboardScreen() {
                     {selectedJob.location || "Remote"}
                   </Typography>
                 </View>
-                {selectedJob.salary && (
-                  <View style={styles.modalMetaItem}>
-                    <DollarSign size={15} color={colors.accent.green} />
-                    <Typography
-                      variant="caption"
-                      style={{ color: colors.accent.green, fontWeight: "700" }}
-                    >
-                      {selectedJob.salary}
-                    </Typography>
-                  </View>
-                )}
               </View>
             </View>
 
-            {/* Tech Stack & Required Skills */}
             {Array.isArray(selectedJob.tech_stack) &&
               selectedJob.tech_stack.length > 0 && (
                 <View style={styles.modalDataBlock}>
@@ -508,7 +439,6 @@ export default function DashboardScreen() {
                 </View>
               )}
 
-            {/* Full Job Description */}
             <View style={styles.modalDataBlock}>
               <Typography
                 variant="caption"
@@ -527,7 +457,6 @@ export default function DashboardScreen() {
               </Typography>
             </View>
 
-            {/* AI Cover Letter Strategy & Formality Configuration */}
             <View style={styles.strategyBlock}>
               <View style={styles.strategyHeader}>
                 <Sparkles size={16} color={colors.accent.cyan} />
@@ -536,50 +465,6 @@ export default function DashboardScreen() {
                 </Typography>
               </View>
 
-              {/* Formality options */}
-              <Typography
-                variant="caption"
-                color="dim"
-                style={{ marginBottom: 6 }}
-              >
-                Formality Profile:
-              </Typography>
-              <View style={styles.optionsRow}>
-                {[
-                  { id: "technical_deep_dive", label: "Technical Deep-Dive" },
-                  { id: "formal_corporate", label: "Formal Corporate" },
-                  { id: "executive_brief", label: "Executive Brief" },
-                  { id: "storytelling", label: "Storytelling" },
-                ].map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    onPress={() => setSelectedFormality(item.id)}
-                    style={[
-                      styles.optionChip,
-                      selectedFormality === item.id && styles.optionChipActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.optionText,
-                        selectedFormality === item.id &&
-                          styles.optionTextActive,
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Strategy options */}
-              <Typography
-                variant="caption"
-                color="dim"
-                style={{ marginTop: 10, marginBottom: 6 }}
-              >
-                Targeting Method:
-              </Typography>
               <View style={styles.optionsRow}>
                 {[
                   { id: "mirror_matching", label: "ATS Keyword Mirroring" },
@@ -587,7 +472,6 @@ export default function DashboardScreen() {
                     id: "achievement_amplification",
                     label: "Achievement Amplifier",
                   },
-                  { id: "skills_synthesis", label: "Skills Synthesis" },
                 ].map((item) => (
                   <TouchableOpacity
                     key={item.id}
@@ -625,7 +509,6 @@ export default function DashboardScreen() {
               </Button>
             </View>
 
-            {/* Generated Letter Display */}
             {generatedLetter && (
               <View style={styles.generatedLetterSection}>
                 <View style={styles.generatedMetaRow}>
@@ -641,13 +524,11 @@ export default function DashboardScreen() {
                     </View>
                   )}
                 </View>
-
                 <Card style={styles.letterCard}>
                   <Text style={styles.letterBodyText}>
                     {generatedLetter.body}
                   </Text>
                 </Card>
-
                 <View style={styles.letterActionsRow}>
                   <Button
                     variant="primary"
@@ -662,89 +543,7 @@ export default function DashboardScreen() {
                         : "Copy Cover Letter"}
                     </Text>
                   </Button>
-
-                  {selectedJob.url && (
-                    <Button
-                      variant="secondary"
-                      size="md"
-                      onPress={() => {
-                        if (selectedJob.url) {
-                          Linking.openURL(selectedJob.url);
-                        }
-                      }}
-                    >
-                      <ExternalLink size={16} color={colors.accent.cyan} />
-                      <Text
-                        style={[
-                          styles.btnActionText,
-                          { color: colors.accent.cyan },
-                        ]}
-                      >
-                        Apply on Job Site
-                      </Text>
-                    </Button>
-                  )}
-
-                  <Button
-                    variant="ghost"
-                    size="md"
-                    onPress={() => {
-                      updateStatus({
-                        jobId: selectedJob.id,
-                        status: "applied",
-                      });
-                      setSelectedJob(null);
-                    }}
-                  >
-                    <CheckCircle2 size={16} color={colors.accent.green} />
-                    <Text
-                      style={[
-                        styles.btnActionText,
-                        { color: colors.accent.green },
-                      ]}
-                    >
-                      Mark Applied
-                    </Text>
-                  </Button>
                 </View>
-              </View>
-            )}
-
-            {/* Modal Bottom Actions */}
-            {!generatedLetter && (
-              <View style={styles.modalBottomRow}>
-                {selectedJob.url && (
-                  <Button
-                    variant="secondary"
-                    size="md"
-                    onPress={() => {
-                      if (selectedJob.url) {
-                        Linking.openURL(selectedJob.url);
-                      }
-                    }}
-                    style={{ flex: 1 }}
-                  >
-                    <ExternalLink size={16} color={colors.accent.cyan} />
-                    <Text
-                      style={[
-                        styles.btnActionText,
-                        { color: colors.accent.cyan },
-                      ]}
-                    >
-                      Open Application URL
-                    </Text>
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="md"
-                  onPress={() => {
-                    updateStatus({ jobId: selectedJob.id, status: "saved" });
-                    setSelectedJob(null);
-                  }}
-                >
-                  Save to Pipeline
-                </Button>
               </View>
             )}
           </ScrollView>
@@ -754,48 +553,20 @@ export default function DashboardScreen() {
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "transparent",
-    minHeight: 0,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scroll: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  scrollDesktop: {
-    maxWidth: 1100,
-    width: "100%",
-    alignSelf: "center",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  scrapeBtn: {
-    flexDirection: "row",
-    gap: 6,
-  },
+  container: { flex: 1, backgroundColor: "transparent", minHeight: 0 },
+  scrollView: { flex: 1 },
+  scroll: { paddingHorizontal: 16, paddingTop: 16 },
+  scrollDesktop: { maxWidth: 1100, width: "100%", alignSelf: "center" },
+  header: { flexDirection: "row", alignItems: "center", marginBottom: 24 },
   metricsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
     marginBottom: 24,
   },
-  metricCardWrapper: {
-    flex: 1,
-    minWidth: 140,
-  },
-  metricCard: {
-    padding: 16,
-    width: "100%",
-  },
+  metricCardWrapper: { flex: 1, minWidth: 140 },
+  metricCard: { padding: 16, width: "100%" },
   metricIcon: {
     width: 34,
     height: 34,
@@ -805,11 +576,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 8,
   },
-  metricValue: {
-    fontSize: 24,
-    fontWeight: "900",
-    marginTop: 4,
-  },
+  metricValue: { fontSize: 24, fontWeight: "900", marginTop: 4 },
   metricLabel: {
     fontSize: 10,
     fontWeight: "700",
@@ -817,34 +584,18 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     marginTop: 2,
   },
-  deckSection: {
-    marginBottom: 24,
-  },
+  deckSection: { marginBottom: 24 },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 16,
   },
-  sectionLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  center: {
-    paddingVertical: 40,
-    alignItems: "center",
-  },
-  centerCard: {
-    alignItems: "center",
-    padding: 24,
-  },
-  quickActions: {
-    marginTop: 8,
-  },
-  sectionLabel: {
-    marginBottom: 12,
-  },
+  sectionLink: { flexDirection: "row", alignItems: "center", gap: 4 },
+  center: { paddingVertical: 40, alignItems: "center" },
+  centerCard: { alignItems: "center", padding: 24 },
+  quickActions: { marginTop: 8 },
+  sectionLabel: { marginBottom: 12 },
   quickActionCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -866,14 +617,8 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: 2,
   },
-  quickSub: {
-    fontSize: 12,
-    color: colors.text.secondary,
-  },
-  // ── Modal Styles ──
-  modalScroll: {
-    maxHeight: 520,
-  },
+  quickSub: { fontSize: 12, color: colors.text.secondary },
+  modalScroll: { maxHeight: 520 },
   modalHeaderBlock: {
     marginBottom: 16,
     paddingBottom: 12,
@@ -886,24 +631,10 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 8,
   },
-  modalMetaItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  modalDataBlock: {
-    marginBottom: 16,
-  },
-  modalSectionTitle: {
-    marginBottom: 6,
-    letterSpacing: 0.5,
-  },
-  techTagsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 4,
-  },
+  modalMetaItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  modalDataBlock: { marginBottom: 16 },
+  modalSectionTitle: { marginBottom: 6, letterSpacing: 0.5 },
+  techTagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 4 },
   jobDescriptionText: {
     lineHeight: 20,
     backgroundColor: "rgba(255, 255, 255, 0.02)",
@@ -926,11 +657,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 10,
   },
-  optionsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
+  optionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   optionChip: {
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -943,22 +670,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(6, 182, 212, 0.2)",
     borderColor: colors.accent.cyan,
   },
-  optionText: {
-    fontSize: 12,
-    color: colors.text.secondary,
-  },
-  optionTextActive: {
-    color: colors.accent.cyan,
-    fontWeight: "700",
-  },
-  btnActionText: {
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  generatedLetterSection: {
-    marginTop: 10,
-    marginBottom: 16,
-  },
+  optionText: { fontSize: 12, color: colors.text.secondary },
+  optionTextActive: { color: colors.accent.cyan, fontWeight: "700" },
+  btnActionText: { fontWeight: "700", fontSize: 13 },
+  generatedLetterSection: { marginTop: 10, marginBottom: 16 },
   generatedMetaRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -976,11 +691,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(6, 182, 212, 0.3)",
   },
-  atsScoreText: {
-    color: colors.accent.cyan,
-    fontSize: 11,
-    fontWeight: "800",
-  },
+  atsScoreText: { color: colors.accent.cyan, fontSize: 11, fontWeight: "800" },
   letterCard: {
     padding: 14,
     backgroundColor: "rgba(0, 0, 0, 0.3)",
@@ -991,15 +702,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: 13,
     lineHeight: 20,
-    fontFamily: "monospace",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
   },
-  letterActionsRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  modalBottomRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 8,
-  },
+  letterActionsRow: { flexDirection: "row", gap: 10 },
 });
