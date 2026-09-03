@@ -5,15 +5,22 @@
  * Avoids nesting issues with screens inside tabs/stack.
  */
 
-import React, { useEffect, useRef } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View, StyleSheet } from 'react-native';
-import { colors } from '../../constants/theme';
+import React, { useRef } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  View,
+  StyleSheet,
+  StyleProp,
+  ViewStyle,
+} from "react-native";
 
 interface KeyboardAvoidingWrapperProps {
   children: React.ReactNode;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
   scrollEnabled?: boolean;
-  behavior?: 'padding' | 'height' | 'position';
+  behavior?: "padding" | "height" | "position";
 }
 
 export function KeyboardAvoidingWrapper({
@@ -25,13 +32,13 @@ export function KeyboardAvoidingWrapper({
   const scrollRef = useRef<ScrollView>(null);
 
   // Default behavior per platform
-  const defaultBehavior = Platform.OS === 'ios' ? 'padding' : 'height';
+  const defaultBehavior = Platform.OS === "ios" ? "padding" : "height";
 
   return (
     <KeyboardAvoidingView
       style={[styles.base, style]}
       behavior={behavior ?? defaultBehavior}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 0}
     >
       {scrollEnabled ? (
         <ScrollView
