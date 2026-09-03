@@ -1,8 +1,9 @@
 /**
  * components/ui/Modal.tsx
- * OpusHunter — Cross-platform Modal Component.
+ * OpusHunter — Cross-platform Modal Component (Performance Optimized).
  * Native: Bottom-sheet style with pan gesture. Web: Centered glass dialog.
- * Uses Reanimated for smooth 300ms fade/scale/blur transitions.
+ * Uses Reanimated for smooth 300ms fade/scale transitions.
+ * Android/Web: Native BlurView removed to eliminate extreme GPU lag.
  */
 
 import React, { useEffect } from "react";
@@ -18,7 +19,6 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   Easing,
-  runOnJS,
 } from "react-native-reanimated";
 import { BlurView } from "expo-blur";
 import { X } from "lucide-react-native";
@@ -43,7 +43,6 @@ export function Modal({
   const opacity = useSharedValue(0);
   const scale = useSharedValue(0.95);
 
-  // Animate in/out based on visibility
   useEffect(() => {
     if (visible) {
       opacity.value = withTiming(1, {
@@ -71,27 +70,26 @@ export function Modal({
     transform: [{ scale: scale.value }],
   }));
 
-  const handleClose = () => {
-    onClose();
-  };
+  if (!visible && opacity.value === 0) return null;
 
   return (
     <RNModal
       transparent
       visible={visible}
       animationType="none"
-      onRequestClose={handleClose}
+      onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        {/* Native blur backdrop */}
-        {Platform.OS !== "web" && (
+        {Platform.OS === "ios" ? (
           <BlurView
             intensity={20}
             tint="dark"
-            style={StyleSheet.absoluteFill} 
+            style={StyleSheet.absoluteFill}
           />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.fallbackBackdrop]} />
         )}
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
         <Animated.View
           style={[
@@ -107,7 +105,7 @@ export function Modal({
                 {title}
               </Typography>
               <Pressable
-                onPress={handleClose}
+                onPress={onClose}
                 hitSlop={8}
                 style={styles.closeBtn}
               >
@@ -125,21 +123,37 @@ export function Modal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: colors.bg.overlay,
+    backgroundColor: Platform.OS === "ios" ? "rgba(5, 8, 17, 0.4)" : "transparent",
     justifyContent: Platform.OS === "web" ? "center" : "flex-end",
     alignItems: "center",
     padding: Platform.OS === "web" ? 16 : 0,
   },
+  fallbackBackdrop: {
+    backgroundColor: "rgba(5, 8, 17, 0.85)", 
+  },
   container: {
     width: "100%",
     maxHeight: "90%",
-    backgroundColor: colors.surface.card,
+    backgroundColor: Platform.OS === "ios" ? colors.surface.card : "rgba(13, 20, 38, 0.98)",
     borderColor: colors.surface.border,
     borderWidth: 1,
-    borderRadius: Platform.OS === "web" ? radius.xl : radius.xl,
+    borderRadius: radius.xl,
     borderBottomLeftRadius: Platform.OS === "web" ? radius.xl : 0,
     borderBottomRightRadius: Platform.OS === "web" ? radius.xl : 0,
-    boxShadow: shadows.glassLg,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -10 },
+        shadowOpacity: 0.5,
+        shadowRadius: 20,
+      },
+      web: {
+        boxShadow: shadows.glassLg,
+      } as any,
+      default: {
+        elevation: 24,
+      }
+    }),
     overflow: "hidden",
   },
   header: {
