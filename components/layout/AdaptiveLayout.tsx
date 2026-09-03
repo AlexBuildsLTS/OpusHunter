@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { BlurView } from "expo-blur";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProfileDropdown } from "../shared/ProfileDropdown";
 import { C } from "../../constants/theme";
 import {
@@ -58,6 +59,7 @@ const NAV_ITEMS = [
 
 export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -109,7 +111,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
         />
       )}
 
-      {/* ── DESKTOP & TABLET SIDEBAR (≥768px) ────────────────────── */}
+      {/* ── DESKTOP & TABLET SIDEBAR ────────────────────────────── */}
       {isDesktop && (
         <View style={styles.sidebar}>
           <View style={styles.sidebarInner}>
@@ -155,37 +157,57 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
 
       {/* ── MAIN CONTENT CONTAINER ──────────────────────────────── */}
       <View style={styles.mainContent}>
-        {/* ── UNIFIED HEADER (Profile ALWAYS Top-Right) ──────────── */}
-        <View style={styles.topHeader}>
-          {!isDesktop ? (
-            <View style={styles.mobileBrandBadge}>
-              <Image
-                source={require("../../assets/icon.png")}
-                style={styles.mobileBrandImage}
-                resizeMode="contain"
-              />
-            </View>
-          ) : (
-            <View /> /* Empty spacer for desktop */
-          )}
-
-          <ProfileDropdown />
-        </View>
-
-        {/* ── CHILDREN BODY ───────────────────────────────────────── */}
+        {/* 1. SCROLLABLE CONTENT (Bottom Layer with automatic top spacing to clear header) */}
         <View
-          style={[styles.contentBody, { paddingBottom: isDesktop ? 20 : 90 }]}
+          style={[
+            styles.mainContent,
+            { paddingTop: Math.max(insets.top, 8) + 68 },
+          ]}
         >
           {children}
         </View>
 
-        {/* ── MOBILE BOTTOM FLOATING TAB BAR (<768px) ─────────────── */}
+        {/* 2. ABSOLUTE FLOATING HEADER (Top Layer) */}
+        <View
+          style={[
+            styles.floatingHeader,
+            { paddingTop: Math.max(insets.top, 16) },
+          ]}
+          pointerEvents="box-none"
+        >
+          <View style={styles.headerLayout} pointerEvents="box-none">
+            {!isDesktop ? (
+              <View style={styles.mobileBrandBadge} pointerEvents="auto">
+                <Image
+                  source={require("../../assets/icon.png")}
+                  style={styles.mobileBrandImage}
+                  resizeMode="contain"
+                />
+              </View>
+            ) : (
+              <View pointerEvents="none" style={{ flex: 1 }} />
+            )}
+
+            <View pointerEvents="auto">
+              <ProfileDropdown />
+            </View>
+          </View>
+        </View>
+
+        {/* 3. ABSOLUTE FLOATING TAB BAR (Top Layer, Mobile Only) */}
         {!isDesktop && (
-          <View style={styles.mobileTabBarContainer} pointerEvents="box-none">
+          <View
+            style={[
+              styles.floatingTabBarContainer,
+              { paddingBottom: Math.max(insets.bottom, 24) },
+            ]}
+            pointerEvents="box-none"
+          >
             <BlurView
               intensity={Platform.OS === "web" ? 30 : 60}
               tint="dark"
               style={styles.mobileTabBar}
+              pointerEvents="auto"
             >
               {NAV_ITEMS.map((item) => {
                 const isActive = isItemActive(item);
@@ -282,20 +304,25 @@ const styles = StyleSheet.create({
     height: "100%",
     minHeight: 0,
     overflow: "hidden",
+    backgroundColor: "transparent",
   },
   contentBody: {
-    flex: 1,
-    minHeight: 0,
-    height: "100%",
+    ...StyleSheet.absoluteFill,
+    zIndex: 1,
   },
-  topHeader: {
-    height: 68,
+  floatingHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 60,
+    paddingHorizontal: 24,
+  },
+  headerLayout: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 24,
-    backgroundColor: "transparent",
-    zIndex: 60,
+    height: 68,
   },
   mobileBrandBadge: {
     paddingHorizontal: 12,
@@ -311,19 +338,18 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 8,
   },
-  mobileTabBarContainer: {
+  floatingTabBarContainer: {
     position: "absolute",
-    bottom: 24,
+    bottom: 0,
     left: 24,
     right: 24,
-    height: 68,
     zIndex: 50,
   },
   mobileTabBar: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
+    height: 68,
     borderRadius: 24,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
