@@ -20,7 +20,7 @@ import {
 import { useRouter } from "expo-router";
 import { SafeAreaWrapper } from "../../../components/shared/SafeAreaWrapper";
 import { colors, radius } from "../../../constants/theme";
-import { C } from "../../../lib/theme";
+import { C } from "../../../constants/theme";
 import {
   Radar,
   Sliders,
