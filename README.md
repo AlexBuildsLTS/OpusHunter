@@ -1,15 +1,14 @@
 <div align="center">
   <img src="assets/icon.png" width="120" alt="OpusHunter Logo" />
   <h1>OpusHunter 🎯</h1>
-  <p><strong>Autonomous Cross-Platform Job Application Engine & AI Agent Network</strong></p>
+  <p><strong>Autonomous Cross-Platform Job Application Engine & Local AI Gateway</strong></p>
   <p><i>Engineered for the future of work. Stop hunting. Let OpusHunter do it for you.</i></p>
 
   <p>
     <a href="https://expo.dev"><img src="https://img.shields.io/badge/Platform-Web%20%7C%20iOS%20%7C%20Android-0A0D14.svg?style=flat-square&logo=expo" alt="Platform" /></a>
     <a href="https://reactnative.dev"><img src="https://img.shields.io/badge/Framework-Expo%20Router%20v57%20%2B%20React%20Native%200.86-61DAFB.svg?style=flat-square&logo=react" alt="Framework" /></a>
     <a href="https://supabase.com"><img src="https://img.shields.io/badge/Backend-Supabase%20Edge%20Network-3ECF8E.svg?style=flat-square&logo=supabase" alt="Backend" /></a>
-    <a href="#architecture"><img src="https://img.shields.io/badge/State-Zustand%20%2B%20TanStack%20Query%20v5-18181B.svg?style=flat-square" alt="State" /></a>
-    <a href="#trilateral-system-architecture"><img src="https://img.shields.io/badge/Inference-Gemini%203.1%20Flash%20Lite-FF6F00.svg?style=flat-square" alt="Inference" /></a>
+    <a href="#trilateral-system-architecture"><img src="https://img.shields.io/badge/Inference-Antigravity%20Proxy%20%7C%20Gemini%20%7C%20Claude-FF6F00.svg?style=flat-square" alt="Inference" /></a>
   </p>
 </div>
 
@@ -17,8 +16,9 @@
 
 ## 🏗️ Trilateral System Architecture
 
-OpusHunter operates through three integrated, highly segregated layers working in orchestration to deliver secure, atomic data ingestion, fast local state synchronization, and high-fidelity client interactions.
+OpusHunter operates through three integrated, highly segregated layers working in orchestration to deliver secure data ingestion, fast local state synchronization, and high-fidelity client interactions.
 
+### The Network Topology
 ```mermaid
 flowchart LR
   U[User] --> C[Expo Client\nWeb/iOS/Android]
@@ -30,8 +30,12 @@ flowchart LR
   E --> GCL[Synthesis Layer\ngenerate-cover-letter]
   E --> AA[Orchestration Layer\nauto-apply]
 
-  SJ --> RAPID[RapidAPI\nJSearch Aggregator]
-  GCL --> GEMINI[Cloud Synthesis\nGemini 3.1 Flash]
+  SJ --> RAPID[RapidAPI\nJSearch, LinkedIn, Adzuna]
+  
+  %% Local AI Gateway Integration
+  GCL --> AG[Antigravity Local Gateway\nLocalhost Proxy: 8420]
+  AG --> GEM[Gemini Flash / Pro]
+  AG --> CLAUDE[Claude Opus / Sonnet]
 
   C --> DB[(Supabase DB + Storage)]
   E --> DB
@@ -68,7 +72,7 @@ sequenceDiagram
   DB-->>App: Realtime status + data updates
 ```
 
-- **Inference & Orchestration Layer (Backend):** Built with Deno-based Supabase Edge Functions executing modern TypeScript. Orchestrates job scraping, geo-spatial city autocompletion, Gmail OAuth capture, and context extraction. It utilizes a highly resilient triple-tier credential cascade to dispatch optimized structured JSON prompts directly to Google Gemini models.
+- **Inference & Orchestration Layer (Backend):** 11 dedicated Deno-based Supabase Edge Functions orchestrate job scraping, Gmail OAuth linking, resume ATS-quality extraction, and automated applying. High-context LLM payloads are routed dynamically via a local Antigravity Gateway (Port 8420) to bypass strict provider quotas.
 - **State & Motion Layer (Frontend Client):** An adaptive Expo Router v57 and React Native 0.86 client compiling to iOS, Android, and Web from a unified source of truth. Handles complex UI caching via TanStack Query and utilizes a lightweight Zustand store for high-throughput layout manipulation, rendering interactive 120fps swipeable triage decks and ambient animation loops directly on the native UI thread.
 - **Cryptographic Persistence Layer (Database & Storage):** Powered by PostgreSQL in Supabase. Ensures ironclad multi-tenant isolation using Row-Level Security (RLS) policies on all tables. Personal assets (CVs, cover letters, certifications) are cryptographically stored, while sensitive items like third-party Gmail OAuth tokens are locked behind Service-Role-only visibility, preventing direct client exposure.
 
@@ -111,7 +115,7 @@ sequenceDiagram
 
 | Component            | Technology                | Version         | Purpose                                                 |
 | :------------------- | :------------------------ | :-------------- | :------------------------------------------------------ |
-| **Frontend Shell**   | Expo SDK                  | ~57.0.14        | Cross-platform build system & SDK orchestration         |
+| **Frontend Shell**   | Expo SDK                  | ~57.0.19       | Cross-platform build system & SDK orchestration         |
 | **Router**           | Expo Router               | ~57.0.14        | Typed filesystem-based routing schema                   |
 | **UI Core**          | React Native / React      | 0.86.2 / 19.2.3 | Native UI engine and layout shell                       |
 | **Styles**           | NativeWind / Tailwind CSS | 4.2.5 / 3.4.19  | Utility-first compilation across Native and Web targets |

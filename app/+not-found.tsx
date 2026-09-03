@@ -1,7 +1,7 @@
 // app/+not-found.tsx
 import { Link, Stack } from "expo-router";
 import { View, Text, StyleSheet } from "react-native";
-import { C } from "../lib/theme";
+import { C } from "../constants/theme";
 
 export default function NotFoundScreen() {
   return (
