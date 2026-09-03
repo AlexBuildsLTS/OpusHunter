@@ -1,33 +1,32 @@
 /**
  * components/ui/LoadingOverlay.tsx
- * OpusHunter — Full-screen Loading Overlay.
- * Used for AI generation, scraping, and background tasks.
- * Features: Backdrop blur, orbiting cyan/blue radar icon, fade-in/out transitions.
+ * OpusHunter — Full-screen Loading Overlay (Performance Optimized).
+ * Features: Orbiting cyan/blue radar icon, fade-in/out transitions.
+ * Android/Web: Native BlurView removed to eliminate extreme GPU lag.
+ * iOS: Maintains hardware-accelerated BlurView.
  */
 
 import React, { useEffect } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, StyleSheet, Platform } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   Easing,
   withRepeat,
-  withSequence,
 } from "react-native-reanimated";
 import { BlurView } from "expo-blur";
-import { Radar, Loader2 } from "lucide-react-native";
+import { Radar } from "lucide-react-native";
 import * as Haptics from "expo-haptics";
-import { colors, radius, shadows } from "../../constants/theme";
+import { colors, radius } from "../../constants/theme";
 import { durations } from "../../constants/animations";
 import { Typography } from "./Typography";
-import { LinearGradient } from "expo-linear-gradient";
 
 interface LoadingOverlayProps {
   visible: boolean;
   message?: string;
   subMessage?: string;
-  progress?: number; // 0 to 1
+  progress?: number;
 }
 
 export function LoadingOverlay({
@@ -38,15 +37,14 @@ export function LoadingOverlay({
 }: LoadingOverlayProps) {
   const opacity = useSharedValue(0);
 
-  // Fade in/out + haptic on visibility change
   useEffect(() => {
     if (visible) {
       opacity.value = withTiming(1, {
         duration: durations.slow,
         easing: Easing.out(Easing.quad),
       });
-      if (Platform.OS !== "web") {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      if (Platform.OS === "ios") {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       }
     } else {
       opacity.value = withTiming(0, {
@@ -60,7 +58,6 @@ export function LoadingOverlay({
     opacity: opacity.value,
   }));
 
-  // Rotating radar animation
   const rotate = useSharedValue(0);
   useEffect(() => {
     if (visible) {
@@ -76,19 +73,25 @@ export function LoadingOverlay({
     transform: [{ rotate: `${rotate.value * 360}deg` }],
   }));
 
-  if (!visible) return null;
+  if (!visible && opacity.value === 0) return null;
 
   return (
-    <Animated.View style={[styles.overlay, animatedStyle]} pointerEvents="auto">
-      {/* Native blur backdrop (iOS/Android) */}
-      {Platform.OS !== "web" && (
+    <Animated.View
+      style={[styles.overlay, animatedStyle]}
+      pointerEvents={visible ? "auto" : "none"}
+    >
+      {Platform.OS === "ios" ? (
         <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
+      ) : (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: "rgba(5, 8, 17, 0.9)" },
+          ]}
+        />
       )}
-      {/* Web overlay */}
-      {Platform.OS === "web" && <View style={StyleSheet.absoluteFill} />}
 
       <View style={styles.content}>
-        {/* Orbiting Radar Icon */}
         <View style={styles.iconContainer}>
           <Animated.View style={[styles.radarWrap, rotateStyle]}>
             <Radar size={48} color={colors.accent.cyan} strokeWidth={1.5} />
@@ -143,19 +146,31 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 999,
-    backgroundColor: colors.bg.overlay,
+    backgroundColor:
+      Platform.OS === "ios" ? "rgba(5, 8, 17, 0.5)" : "transparent",
     justifyContent: "center",
     alignItems: "center",
   },
   content: {
     alignItems: "center",
     maxWidth: 400,
+    width: "90%",
     padding: 24,
-    backgroundColor: colors.surface.card,
+    backgroundColor: "rgba(10, 15, 29, 0.98)",
     borderWidth: 1,
-    borderColor: colors.surface.border,
+    borderColor: "rgba(0, 242, 254, 0.35)",
     borderRadius: radius.xl,
-    boxShadow: shadows.glassLg,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.5,
+        shadowRadius: 20,
+      },
+      default: {
+        elevation: 10,
+      },
+    }),
   },
   iconContainer: {
     width: 80,
@@ -181,6 +196,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
   },
   message: {
     marginTop: 8,
@@ -203,6 +219,7 @@ const styles = StyleSheet.create({
     shadowColor: colors.accent.cyan,
     shadowOpacity: 0.5,
     shadowRadius: 6,
+    elevation: 2,
   },
   dotContainer: {
     flexDirection: "row",
