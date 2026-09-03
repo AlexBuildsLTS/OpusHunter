@@ -6,7 +6,7 @@
 
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useAuthStore } from "../stores/authStore";
-import { C } from "../lib/theme";
+import { C } from "../constants/theme";
 
 export default function RootEntryScreen() {
   const isHydrated = useAuthStore((s) => s.isHydrated);
