@@ -1,12 +1,21 @@
 /**
  * components/ui/GlassCard.tsx
  * OpusHunter — Professional Glass-Morphism Card.
+ * Contains both GlassCard (Tailwind/cn driven) and Card (StyleSheet driven).
  * Variants: default, elevated, interactive.
  * Web hover: subtle lift + cyan glow. Native: press scale.
  */
 
-import React from "react";
-import { View, Pressable, StyleSheet, Platform, ViewProps } from "react-native";
+import React, { useState } from "react";
+import {
+  View,
+  Pressable,
+  StyleSheet,
+  Platform,
+  ViewProps,
+  StyleProp,
+  ViewStyle,
+} from "react-native";
 import { colors, shadows, radius } from "../../constants/theme";
 import { cn } from "../../lib/utils";
 
@@ -47,11 +56,11 @@ export const GlassCard: React.FC<GlassCardProps> = ({
   );
 };
 
-interface CardProps {
+export interface CardProps {
   children: React.ReactNode;
   variant?: "default" | "elevated" | "interactive";
   onPress?: () => void;
-  style?: any;
+  style?: StyleProp<ViewStyle>;
   padding?: "none" | "sm" | "md" | "lg";
 }
 
@@ -62,7 +71,7 @@ export function Card({
   style,
   padding = "md",
 }: CardProps) {
-  const [hovered, setHovered] = React.useState(false);
+  const [hovered, setHovered] = useState(false);
 
   const containerStyles = [
     styles.base,
@@ -78,11 +87,13 @@ export function Card({
     return (
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [
-          ...containerStyles,
-          pressed && styles.pressed,
-          Platform.OS === "web" && hovered && styles.hovered,
-        ]}
+        style={({ pressed }) =>
+          [
+            containerStyles,
+            pressed && styles.pressed,
+            Platform.OS === "web" && hovered && styles.hovered,
+          ] as any
+        }
         onHoverIn={() => setHovered(true)}
         onHoverOut={() => setHovered(false)}
       >
@@ -91,7 +102,9 @@ export function Card({
     );
   }
 
-  return <View style={containerStyles}>{children}</View>;
+  return (
+    <View style={containerStyles as StyleProp<ViewStyle>}>{children}</View>
+  );
 }
 
 const styles = StyleSheet.create({

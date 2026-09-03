@@ -8,6 +8,8 @@
  * derive directly from the verified database schema to guarantee zero type drift.
  */
 
+
+
 import type { Database, Tables, Enums } from "./database.types";
 
 // ─── RE-EXPORT CORE DATABASE TYPES ──────────────────────────────────────────
