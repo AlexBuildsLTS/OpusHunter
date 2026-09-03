@@ -1,8 +1,7 @@
 /**
  * supabase/functions/scrape-jobs/index.ts
  * OpusHunter — Multi-Source Job Scraper & Engine (Full Europe & Global Support).
- * Sources: JSearch, Adzuna, and LinkedIn (RapidAPI).
- * Priorities: Sweden (Stockholm, Gothenburg, Malmö) & Europe.
+ * Sources: JobTech (Sweden Priority), JSearch, Adzuna, and LinkedIn (RapidAPI).
  * Features:
  *  - Dynamic filter keywords & exact geo/location support (lat/lng, radiusKm, cities, countries).
  *  - Multi-tier key rotation & automatic fallback across system/env key pool on 429/401 errors.
@@ -18,6 +17,7 @@ import {
 } from "../_shared/keyResolver.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { rateLimit } from "../_shared/rateLimit.ts";
+import { scrapeJobTechSweden } from "./adapters/jobtech.ts";
 
 const supabase = getSupabaseAdmin();
 
@@ -28,12 +28,13 @@ interface ScrapeParams {
   latitude?: number;
   longitude?: number;
   radiusKm?: number;
-  datePosted?: string; // "24h" | "3d" | "7d" | "30d" | "all"
-  workTypes?: string[]; // ["remote", "hybrid", "onsite"]
+  datePosted?: string;
+  workTypes?: string[];
   enableSources?: {
     jsearch?: boolean;
     adzuna?: boolean;
     linkedin?: boolean;
+    jobtech?: boolean;
   };
   adzunaAppId?: string;
   batchSize?: number;
@@ -75,7 +76,6 @@ async function fetchJSearch(
     return [];
   }
 
-  // Clean up keyword queries: avoid AND-bombing by using OR or top keywords
   let queryTerms = "software developer OR engineer OR fullstack";
   if (params.keywords && params.keywords.length > 0) {
     const cleanKeywords = params.keywords.filter(
@@ -84,7 +84,6 @@ async function fetchJSearch(
     if (cleanKeywords.length === 1) {
       queryTerms = cleanKeywords[0];
     } else if (cleanKeywords.length > 1) {
-      // Use top 2-3 keywords joined with OR to broaden instead of impossible AND matching
       queryTerms = cleanKeywords.slice(0, 3).join(" OR ");
     }
   }
@@ -92,7 +91,6 @@ async function fetchJSearch(
   const primaryCountry = params.countries?.[0] || "Sweden";
   const primaryCity = params.cities?.[0] || "Stockholm";
 
-  // Map user date filter to JSearch allowed date_posted values: "all" | "today" | "3days" | "week" | "month"
   let jSearchDatePosted = "all";
   if (params.datePosted === "24h" || params.datePosted === "today")
     jSearchDatePosted = "today";
@@ -232,7 +230,6 @@ async function fetchAdzuna(
   if (candidateKeys.length === 0) return [];
 
   const rawCountry = (params.countries?.[0] || "se").toLowerCase();
-  // Adzuna only supports specific country endpoints
   const country = ADZUNA_SUPPORTED_COUNTRIES.has(rawCountry)
     ? rawCountry
     : rawCountry === "uk"
@@ -259,7 +256,6 @@ async function fetchAdzuna(
 
   for (const keyObj of candidateKeys) {
     try {
-      // Support combined app_id:app_key format
       let appId = params.adzunaAppId || defaultAppId;
       let appKey = keyObj.key;
       if (keyObj.key.includes(":")) {
@@ -377,7 +373,6 @@ async function fetchLinkedIn(
           .join(" ")
       : "software engineer";
 
-  // First priority: Check for dedicated linkedinscraperapi.com keys
   const linkedInKeys = await getCandidateKeys(supabase, userId, "linkedin");
   for (const keyObj of linkedInKeys) {
     try {
@@ -422,7 +417,7 @@ async function fetchLinkedIn(
         "linkedin",
         keyObj.source,
         true,
-        5, // 5 credits per successful LinkedIn scrape
+        5,
         "scrape-jobs/linkedinscraperapi",
       );
 
@@ -484,7 +479,6 @@ async function fetchLinkedIn(
     }
   }
 
-  // If no dedicated LinkedInScraperAPI key is available or no results returned, finish gracefully
   return [];
 }
 
@@ -527,10 +521,23 @@ Deno.serve(async (req: Request) => {
       jsearch: true,
       adzuna: true,
       linkedin: true,
+      jobtech: true,
     };
 
     // 2. Run scrapers in parallel
     const scrapePromises: Promise<NormalizedJob[]>[] = [];
+
+    const country = (searchParams.countries?.[0] || "").toUpperCase();
+    const city = searchParams.cities?.[0] || "";
+    const keywordQuery = searchParams.keywords?.join(" ") || "";
+
+    // Priority Injection: If Sweden, fire the native JobTech API
+    if (
+      (country === "SE" || country === "SWEDEN") &&
+      enabled.jobtech !== false
+    ) {
+      scrapePromises.push(scrapeJobTechSweden(keywordQuery, city));
+    }
 
     if (enabled.jsearch !== false)
       scrapePromises.push(fetchJSearch(searchParams, userId));
