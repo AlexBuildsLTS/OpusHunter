@@ -1,10 +1,10 @@
 /**
  * components/layout/AdaptiveLayout.tsx
- * OpusHunter — True Floating Shell
+ * OpusHunter — Universal Navigation Shell
  *
- * Fixes scroll-trapping by putting content at the absolute bottom layer.
- * The Header and Tab Bar float in absolute space OVER the content.
- * `pointerEvents="box-none"` guarantees that transparent areas never block touches.
+ * Enforces strict Top-Right ProfileDropdown placement across all device widths.
+ * Handles the Desktop Sidebar (≥1024px) and the Mobile Floating Tab Bar (<1024px).
+ * Safely pads scrollable content so it is never trapped behind floating elements.
  */
 
 import React from "react";
@@ -19,9 +19,8 @@ import {
 } from "react-native";
 import { useRouter, usePathname } from "expo-router";
 import { BlurView } from "expo-blur";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProfileDropdown } from "../shared/ProfileDropdown";
-import { colors, radius, shadows } from "../../constants/theme";
+import { C } from "../../constants/theme";
 import {
   SlidersHorizontal,
   Kanban,
@@ -33,25 +32,25 @@ import {
 const NAV_ITEMS = [
   {
     id: "discover",
-    path: "/(tabs)/(dashboard)",
+    path: "/(tabs)/index",
     title: "DISCOVER",
     Icon: AppWindowMac,
   },
   {
     id: "rules",
-    path: "/(tabs)/(dashboard)/rules",
+    path: "/(tabs)/rules",
     title: "ENGINE",
     Icon: Radar,
   },
   {
     id: "pipeline",
-    path: "/(tabs)/(dashboard)/pipeline",
+    path: "/(tabs)/pipeline",
     title: "PIPELINE",
     Icon: Kanban,
   },
   {
     id: "vault",
-    path: "/(tabs)/(dashboard)/settings/vault",
+    path: "/(tabs)/settings/vault",
     title: "VAULT",
     Icon: FolderKanban,
   },
@@ -59,33 +58,63 @@ const NAV_ITEMS = [
 
 export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
   const { width } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
 
-  // Desktop breakpoint
-  const isDesktop = width >= 1024;
+  const isDesktop = Platform.OS !== "web" ? width >= 1024 : width >= 768;
 
   const isItemActive = (item: (typeof NAV_ITEMS)[0]) => {
     if (item.id === "discover") {
       return (
         pathname === "/" ||
         pathname === "/(tabs)" ||
+        pathname === "/(tabs)/index" ||
         pathname === "/(tabs)/(dashboard)" ||
         pathname === "/(tabs)/(dashboard)/index"
       );
     }
-    return pathname.includes(item.id);
+    return pathname.includes(item.id) || pathname.startsWith(item.path);
   };
 
   return (
-    <View style={styles.root}>
-      {/* ── DESKTOP SIDEBAR ─────────────────────────────────────── */}
+    <View
+      style={[
+        styles.root,
+        Platform.OS === "web" && { height: "100dvh" as any },
+      ]}
+    >
+      {Platform.OS === "web" && (
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+          * { 
+            -ms-overflow-style: none !important; 
+            scrollbar-width: none !important; 
+            box-sizing: border-box !important;
+          }
+          *::-webkit-scrollbar { display: none !important; }
+          html, body, #root { 
+            overflow: hidden !important; 
+            height: 100vh !important; 
+            height: 100dvh !important; 
+            min-height: 100vh !important;
+            min-height: 100dvh !important;
+            width: 100% !important; 
+            margin: 0 !important; 
+            padding: 0 !important; 
+            background-color: transparent !important; 
+          }
+        `,
+          }}
+        />
+      )}
+
+      {/* ── DESKTOP & TABLET SIDEBAR (≥768px) ────────────────────── */}
       {isDesktop && (
         <View style={styles.sidebar}>
           <View style={styles.sidebarInner}>
             <TouchableOpacity
-              onPress={() => router.push("/(tabs)/(dashboard)" as any)}
+              onPress={() => router.push("/(tabs)/index" as any)}
               activeOpacity={0.8}
             >
               <View style={styles.brandLogo}>
@@ -107,14 +136,11 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
                     activeOpacity={0.7}
                     style={[styles.navItem, isActive && styles.navItemActive]}
                   >
-                    <item.Icon
-                      size={22}
-                      color={isActive ? colors.accent.cyan : colors.text.dim}
-                    />
+                    <item.Icon size={22} color={isActive ? C.cyan : C.sub} />
                     <Text
                       style={[
                         styles.navItemText,
-                        isActive && { color: colors.text.primary },
+                        isActive && { color: C.text },
                       ]}
                     >
                       {item.title}
@@ -127,70 +153,39 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
         </View>
       )}
 
-      {/* ── MAIN CONTENT AREA ───────────────────────────────────── */}
+      {/* ── MAIN CONTENT CONTAINER ──────────────────────────────── */}
       <View style={styles.mainContent}>
-        {/* 1. BOTTOM LAYER: The Scrollable Content */}
-        {/* It takes up the full screen height so it flows under the glass */}
-        <View style={styles.contentLayer}>{children}</View>
-
-        {/* 2. TOP LAYER: Absolute Floating Header */}
-        <View
-          style={[
-            styles.floatingHeaderContainer,
-            { paddingTop: Math.max(insets.top, 12) },
-          ]}
-          pointerEvents="box-none"
-        >
-          <View style={styles.headerLayout} pointerEvents="box-none">
-            {/* Mobile Logo Pill */}
-            {!isDesktop ? (
-              <BlurView
-                intensity={40}
-                tint="dark"
-                style={styles.mobileBrandGlass}
-                pointerEvents="auto"
-              >
-                <TouchableOpacity
-                  onPress={() => router.push("/(tabs)/(dashboard)" as any)}
-                  style={styles.mobileBrandContent}
-                  activeOpacity={0.8}
-                >
-                  <Image
-                    source={require("../../assets/icon.png")}
-                    style={styles.mobileBrandImage}
-                    resizeMode="contain"
-                  />
-                  <Text style={styles.mobileBrandText}>
-                    
-                    <Text style={{ color: colors.accent.cyan }}></Text>
-                  </Text>
-                </TouchableOpacity>
-              </BlurView>
-            ) : (
-              <View pointerEvents="none" />
-            )}
-
-            {/* Profile Dropdown Container */}
-            <View pointerEvents="auto">
-              <ProfileDropdown />
+        {/* ── UNIFIED HEADER (Profile ALWAYS Top-Right) ──────────── */}
+        <View style={styles.topHeader}>
+          {!isDesktop ? (
+            <View style={styles.mobileBrandBadge}>
+              <Image
+                source={require("../../assets/icon.png")}
+                style={styles.mobileBrandImage}
+                resizeMode="contain"
+              />
             </View>
-          </View>
+          ) : (
+            <View /> /* Empty spacer for desktop */
+          )}
+
+          <ProfileDropdown />
         </View>
 
-        {/* 3. TOP LAYER: Absolute Floating Mobile Tab Bar */}
+        {/* ── CHILDREN BODY ───────────────────────────────────────── */}
+        <View
+          style={[styles.contentBody, { paddingBottom: isDesktop ? 20 : 90 }]}
+        >
+          {children}
+        </View>
+
+        {/* ── MOBILE BOTTOM FLOATING TAB BAR (<768px) ─────────────── */}
         {!isDesktop && (
-          <View
-            style={[
-              styles.floatingTabBarContainer,
-              { paddingBottom: Math.max(insets.bottom, 24) },
-            ]}
-            pointerEvents="box-none"
-          >
+          <View style={styles.mobileTabBarContainer} pointerEvents="box-none">
             <BlurView
               intensity={Platform.OS === "web" ? 30 : 60}
               tint="dark"
-              style={styles.mobileTabBarGlass}
-              pointerEvents="auto"
+              style={styles.mobileTabBar}
             >
               {NAV_ITEMS.map((item) => {
                 const isActive = isItemActive(item);
@@ -201,10 +196,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
                     activeOpacity={0.7}
                     style={styles.mobileTabItem}
                   >
-                    <item.Icon
-                      size={24}
-                      color={isActive ? colors.accent.cyan : colors.text.dim}
-                    />
+                    <item.Icon size={22} color={isActive ? C.cyan : C.sub} />
                     {isActive && <View style={styles.mobileActiveDot} />}
                   </TouchableOpacity>
                 );
@@ -221,10 +213,10 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: colors.bg.deepest,
+    backgroundColor: "transparent",
+    height: "100%",
+    minHeight: 0,
   },
-
-  // ── DESKTOP SIDEBAR ──
   sidebar: {
     width: 96,
     height: "100%",
@@ -273,94 +265,70 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   navItemActive: {
-    backgroundColor: `${colors.accent.cyan}15`,
-    borderColor: `${colors.accent.cyan}30`,
+    backgroundColor: `${C.cyan}15`,
+    borderColor: `${C.cyan}30`,
   },
   navItemText: {
     marginTop: 6,
     fontSize: 9,
     fontWeight: "800",
-    color: colors.text.dim,
+    color: C.sub,
     letterSpacing: 0.5,
   },
-
-  // ── MAIN CONTENT AREA ──
   mainContent: {
     flex: 1,
     position: "relative",
-  },
-  contentLayer: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 1,
-  },
-
-  // ── FLOATING HEADER ──
-  floatingHeaderContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 50,
-    paddingHorizontal: 16,
-  },
-  headerLayout: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  mobileBrandGlass: {
-    borderRadius: 24,
+    zIndex: 10,
+    height: "100%",
+    minHeight: 0,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(5, 8, 17, 0.6)",
   },
-  mobileBrandContent: {
+  contentBody: {
+    flex: 1,
+    minHeight: 0,
+    height: "100%",
+  },
+  topHeader: {
+    height: 68,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    gap: 8,
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    backgroundColor: "transparent",
+    zIndex: 60,
+  },
+  mobileBrandBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: `${C.cyan}12`,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   mobileBrandImage: {
-    width: 22,
-    height: 22,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
   },
-  mobileBrandText: {
-    color: colors.text.primary,
-    fontSize: 15,
-    fontWeight: "900",
-    letterSpacing: 0.5,
-  },
-
-  // ── FLOATING TAB BAR ──
-  floatingTabBarContainer: {
+  mobileTabBarContainer: {
     position: "absolute",
-    bottom: 0,
-    left: 16,
-    right: 16,
+    bottom: 24,
+    left: 24,
+    right: 24,
+    height: 68,
     zIndex: 50,
   },
-  mobileTabBarGlass: {
+  mobileTabBar: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    height: 68,
-    borderRadius: 34,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     backgroundColor: "rgba(5, 8, 17, 0.8)",
     overflow: "hidden",
-    ...Platform.select({
-      web: { boxShadow: shadows.glassLg } as any,
-      default: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-        elevation: 10,
-      },
-    }),
   },
   mobileTabItem: {
     flex: 1,
@@ -375,7 +343,7 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.accent.cyan,
-    boxShadow: `0 0 6px ${colors.accent.cyan}`,
+    backgroundColor: C.cyan,
+    boxShadow: `0 0 6px ${C.cyan}`,
   },
 });
