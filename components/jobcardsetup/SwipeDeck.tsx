@@ -35,9 +35,7 @@ import {
   MapPin,
   DollarSign,
   Building2,
-  Sparkles,
   Info,
-  ExternalLink,
 } from "lucide-react-native";
 
 import { Typography } from "../ui/Typography";
@@ -51,11 +49,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SWIPE_THRESHOLD = Math.min(SCREEN_WIDTH * 0.28, swipeDeck.throwThreshold);
 
 interface SwipeDeckProps {
-  jobs: Job[] | any[];
-  onSwipeRight: (job: Job | any) => void;
-  onSwipeLeft: (job: Job | any) => void;
-  onSwipeUp: (job: Job | any) => void;
-  onSelectJob?: (job: Job | any) => void;
+  jobs: Job[];
+  onSwipeRight: (job: Job) => void;
+  onSwipeLeft: (job: Job) => void;
+  onSwipeUp: (job: Job) => void;
+  onSelectJob?: (job: Job) => void;
 }
 
 export const SwipeDeck: React.FC<SwipeDeckProps> = ({
@@ -168,7 +166,6 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
       }
     });
 
-  // Animated style for the top interactive card
   const topCardAnimatedStyle = useAnimatedStyle(() => {
     const rotate = interpolate(
       translateX.value,
@@ -186,7 +183,6 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
     };
   });
 
-  // Animated styles for stamp badges
   const rightStampStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
       translateX.value,
@@ -244,7 +240,6 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
     ],
   }));
 
-  // Animated style for the 2nd card preview underneath
   const secondCardAnimatedStyle = useAnimatedStyle(() => {
     const dragDistance = Math.max(
       Math.abs(translateX.value),
@@ -275,7 +270,6 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
     };
   });
 
-  // Animated style for the 3rd card preview underneath
   const thirdCardAnimatedStyle = useAnimatedStyle(() => {
     const dragDistance = Math.max(
       Math.abs(translateX.value),
@@ -397,8 +391,9 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
             style={[styles.cardAbsolute, topCardAnimatedStyle, { zIndex: 10 }]}
           >
             <Card style={styles.cardInner} variant="elevated">
-              {/* Swipe Action Overlay Stamps */}
+              {/* Swipe Action Overlay Stamps (pointerEvents none to pass touch) */}
               <Animated.View
+                pointerEvents="none"
                 style={[styles.stamp, styles.stampRight, rightStampStyle]}
               >
                 <Typography
@@ -411,6 +406,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
               </Animated.View>
 
               <Animated.View
+                pointerEvents="none"
                 style={[styles.stamp, styles.stampLeft, leftStampStyle]}
               >
                 <Typography
@@ -423,6 +419,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
               </Animated.View>
 
               <Animated.View
+                pointerEvents="none"
                 style={[styles.stamp, styles.stampUp, upStampStyle]}
               >
                 <Typography

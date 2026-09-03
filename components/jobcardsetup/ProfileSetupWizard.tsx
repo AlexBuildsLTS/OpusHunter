@@ -25,7 +25,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../stores/authStore";
 import { colors, radius } from "../../constants/theme";
-import { C } from "../../lib/theme";
+import { C } from "../../constants/theme";
 import {
   Check,
   ChevronLeft,
