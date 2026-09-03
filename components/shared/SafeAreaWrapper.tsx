@@ -6,14 +6,13 @@
  */
 
 import React from "react";
-import { View, StyleSheet, Platform } from "react-native";
+import { View, StyleSheet, StyleProp, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors } from "../../constants/theme";
 
 interface SafeAreaWrapperProps {
   children: React.ReactNode;
   edges?: ("top" | "bottom" | "left" | "right")[];
-  style?: any;
+  style?: StyleProp<ViewStyle>;
   backgroundColor?: string;
 }
 
@@ -52,6 +51,5 @@ export function SafeAreaWrapper({
 const styles = StyleSheet.create({
   base: {
     flex: 1,
-    // Ensure transparent background by default
   },
 });
