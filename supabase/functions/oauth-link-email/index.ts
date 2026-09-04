@@ -1,11 +1,11 @@
 /**
  * supabase/functions/oauth-link-email/index.ts
  * OpusHunter — Email Account OAuth Linking (Gmail & Outlook)
- * 
+ *
  * Exchanges OAuth auth codes for refresh tokens with email send permissions.
  * Stores encrypted tokens in connected_email_accounts table.
  * Enforces scope verification: gmail.send for Google, Mail.Send for Outlook.
- * 
+ *
  * POST /oauth-link-email
  * {
  *   "userId": "uuid",
@@ -13,7 +13,7 @@
  *   "authCode": "...",
  *   "redirectUri": "opushunter://oauth/callback"
  * }
- * 
+ *
  * Response:
  * {
  *   "success": true,
@@ -89,8 +89,8 @@ async function exchangeGoogleToken(
     // Step 2: Verify scopes include gmail.send
     const scopesStr = tokens.scope || "";
     const scopes = scopesStr.split(" ");
-    const hasGmailSend = scopes.some((s) =>
-      s.includes("gmail.send") || s.includes("gmail"),
+    const hasGmailSend = scopes.some(
+      (s) => s.includes("gmail.send") || s.includes("gmail"),
     );
 
     if (!hasGmailSend) {
@@ -101,14 +101,27 @@ async function exchangeGoogleToken(
       return null;
     }
 
-    // Step 3: Get user email using access token
-    const userResponse = await fetch("https://www.googleapis.com/oauth2/v1/userinfo", {
-      method: "GET",
-      headers: { Authorization: `Bearer ${tokens.access_token}` },
-    });
+    // Step 3: Get user email using access token.
+    // Uses the current v2 endpoint (v1 is deprecated by Google). This call
+    // requires the 'openid' + 'userinfo.email' scopes on the ORIGINAL auth
+    // request — gmail.send / gmail.readonly alone do NOT grant access here.
+    // If this 403s, the frontend Google.useAuthRequest() scopes array is
+    // missing those two entries; that is the actual root cause if linking
+    // silently fails with "oauth_exchange_failed" after scope check passes.
+    const userResponse = await fetch(
+      "https://www.googleapis.com/oauth2/v2/userinfo",
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      },
+    );
 
     if (!userResponse.ok) {
-      console.error("Failed to get Google user info");
+      const errBody = await userResponse.text().catch(() => "");
+      console.error(
+        `Failed to get Google user info (status ${userResponse.status}): ${errBody.slice(0, 300)}. ` +
+          `Likely cause: missing 'openid' or 'userinfo.email' scope on the frontend auth request.`,
+      );
       return null;
     }
 
@@ -181,7 +194,10 @@ async function exchangeOutlookToken(
     );
 
     if (!hasMailSend) {
-      console.warn("Outlook OAuth missing Mail.Send scope. Granted scopes:", scopes);
+      console.warn(
+        "Outlook OAuth missing Mail.Send scope. Granted scopes:",
+        scopes,
+      );
       return null;
     }
 
@@ -192,11 +208,18 @@ async function exchangeOutlookToken(
     });
 
     if (!userResponse.ok) {
-      console.error("Failed to get Outlook user info");
+      const errBody = await userResponse.text().catch(() => "");
+      console.error(
+        `Failed to get Outlook user info (status ${userResponse.status}): ${errBody.slice(0, 300)}. ` +
+          `Likely cause: missing 'User.Read', 'profile', or 'email' scope on the frontend auth request ` +
+          `— 'Mail.Send' alone does not grant access to /me.`,
+      );
       return null;
     }
 
-    const userInfo = (await userResponse.json()) as { userPrincipalName?: string };
+    const userInfo = (await userResponse.json()) as {
+      userPrincipalName?: string;
+    };
     if (!userInfo.userPrincipalName) {
       console.error("No email in Outlook user info");
       return null;
@@ -220,12 +243,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const {
-      userId,
-      provider,
-      authCode,
-      redirectUri,
-    } = await req.json();
+    const { userId, provider, authCode, redirectUri } = await req.json();
 
     // Validate inputs
     if (!userId || !provider || !authCode || !redirectUri) {
@@ -253,7 +271,8 @@ Deno.serve(async (req: Request) => {
     let clientSecret: string | undefined;
 
     if (provider === "google") {
-      clientId = Deno.env.get("GOOGLE_CLIENT_ID") ||
+      clientId =
+        Deno.env.get("GOOGLE_CLIENT_ID") ||
         Deno.env.get("EXPO_PUBLIC_GOOGLE_CLIENT_ID");
       clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
     } else {
@@ -264,8 +283,8 @@ Deno.serve(async (req: Request) => {
     if (!clientId || !clientSecret) {
       console.error(
         `Missing OAuth credentials for ${provider}. Available env keys:`,
-        Object.keys(Deno.env.toObject()).filter((k) =>
-          k.includes("GOOGLE") || k.includes("AZURE")
+        Object.keys(Deno.env.toObject()).filter(
+          (k) => k.includes("GOOGLE") || k.includes("AZURE"),
         ),
       );
       return Response.json(
