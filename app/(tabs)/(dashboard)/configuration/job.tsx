@@ -2,11 +2,19 @@
  * app/job/[id].tsx
  * OpusHunter — Job Detail Screen.
  * Fetches real job data, displays full description, and triggers AI Cover Letter generation.
- * One-tap Apply uses AI, CV, Certifications, and Linked Gmail.
+ * STRICT POLICY: Truthful rendering. Clean fallback if description is missing.
  */
 
 import React, { useEffect, useState } from "react";
-import { View, StyleSheet, ScrollView, Pressable, Linking } from "react-native";
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  Pressable,
+  Linking,
+  Text,
+  TouchableOpacity,
+} from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaWrapper } from "../../../../components/shared/SafeAreaWrapper";
 import { Typography } from "../../../../components/ui/Typography";
@@ -33,12 +41,11 @@ type JobListing = Database["public"]["Tables"]["job_vault"]["Row"];
 export default function JobDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { profile, user } = useAuthStore();
+  const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
 
-  // Fetch Job Details
   const { data: job, isLoading } = useQuery({
     queryKey: ["job", id],
     queryFn: async () => {
@@ -53,23 +60,6 @@ export default function JobDetailScreen() {
     },
   });
 
-  // Fetch Primary Resume for confirmation
-  const { data: primaryResume } = useQuery({
-    queryKey: ["primary-resume", user?.id],
-    enabled: !!user,
-    queryFn: async () => {
-      if (!user) return null;
-      const { data } = await supabase
-        .from("resume_documents")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("is_primary", true)
-        .single();
-      return data || null;
-    },
-  });
-
-  // Trigger AI Cover Letter Generation
   const handleGenerateCoverLetter = async () => {
     if (!user || !job) return;
     setGenerating(true);
@@ -85,12 +75,13 @@ export default function JobDetailScreen() {
 
       if (error) throw error;
 
-      // Invalidate cover letters cache and navigate to the new letter
       await queryClient.invalidateQueries({
         queryKey: ["cover-letters", user.id],
       });
       if (data?.cover_letter_id) {
-        router.push(`/configuration/cover-letter/${data.cover_letter_id}` as any);
+        router.push(
+          `/configuration/cover-letter/${data.cover_letter_id}` as any,
+        );
       }
     } catch (err: any) {
       setGenerationError(err.message || "Failed to generate cover letter");
@@ -101,9 +92,7 @@ export default function JobDetailScreen() {
 
   const handleApplyNow = async () => {
     if (!job?.url) return;
-    // Open the application URL in browser
     await Linking.openURL(job.url);
-    // Note: Auto-apply Edge Function would handle Gmail draft + CV attachment here
   };
 
   if (isLoading || !job) {
@@ -136,7 +125,6 @@ export default function JobDetailScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Job Header */}
         <Card style={styles.jobCard}>
           <View style={styles.companyRow}>
             <View style={styles.logoWrap}>
@@ -198,7 +186,6 @@ export default function JobDetailScreen() {
           </View>
         </Card>
 
-        {/* AI Generation Section */}
         <Card style={styles.aiCard}>
           <View style={styles.aiHeader}>
             <Sparkles size={20} color={colors.accent.cyan} />
@@ -234,7 +221,6 @@ export default function JobDetailScreen() {
           </Button>
         </Card>
 
-        {/* Job Description */}
         <Card style={styles.descCard}>
           <Typography
             variant="h4"
@@ -244,16 +230,50 @@ export default function JobDetailScreen() {
           >
             Description
           </Typography>
-          <Typography
-            variant="bodySm"
-            color="secondary"
-            style={{ lineHeight: 22 }}
-          >
-            {job.description || "No description available."}
-          </Typography>
+
+          {/* ─── TRUTH ENFORCEMENT ─── */}
+          {job.description && job.description.trim().length > 0 ? (
+            <Typography
+              variant="bodySm"
+              color="secondary"
+              style={{ lineHeight: 22 }}
+            >
+              {job.description}
+            </Typography>
+          ) : (
+            <View style={{ marginTop: 12, alignItems: "flex-start" }}>
+              <Text
+                style={{ color: "#94A3B8", fontSize: 13, marginBottom: 12 }}
+              >
+                Full description available natively on{" "}
+                {job.source === "linkedin" ? "LinkedIn" : job.source}.
+              </Text>
+              <TouchableOpacity
+                onPress={() =>
+                  Linking.openURL(
+                    job.url || job.source_url || "https://linkedin.com",
+                  )
+                }
+                style={{
+                  paddingVertical: 8,
+                  paddingHorizontal: 16,
+                  backgroundColor: "rgba(255,255,255,0.05)",
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.1)",
+                }}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={{ color: "#CBD5E1", fontSize: 13, fontWeight: "600" }}
+                >
+                  Read Full Post
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </Card>
 
-        {/* Apply Now */}
         <Button
           variant="primary"
           onPress={handleApplyNow}
