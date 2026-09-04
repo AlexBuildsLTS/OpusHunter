@@ -327,8 +327,6 @@ const styles = StyleSheet.create({
   mobileBrandBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: `${C.cyan}12`,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
