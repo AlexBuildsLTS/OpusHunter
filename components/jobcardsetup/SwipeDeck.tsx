@@ -4,6 +4,7 @@
  *
  * Implements physics-based multi-card depth stacking, velocity-aware throws,
  * directional action stamp badges, native haptics, and programmatic trigger buttons.
+ * STRICT POLICY: Truthful rendering. Degrades to a sleek native link if description is blocked.
  */
 
 import React, { useState, useCallback } from "react";
@@ -13,6 +14,9 @@ import {
   Dimensions,
   Platform,
   Pressable,
+  TouchableOpacity,
+  Linking,
+  Text,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -494,16 +498,60 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
                 </View>
               ) : null}
 
-              {currentJob.description ? (
-                <Typography
-                  variant="bodySm"
-                  color="secondary"
+              {/* ─── DESCRIPTION TRUTH ENFORCEMENT BLOCK ─── */}
+              {currentJob.description &&
+              currentJob.description.trim().length > 0 ? (
+                <Text
+                  style={{
+                    color: "#CBD5E1",
+                    fontSize: 13,
+                    lineHeight: 20,
+                    marginTop: 12,
+                  }}
                   numberOfLines={4}
-                  style={styles.descriptionText}
                 >
                   {currentJob.description}
-                </Typography>
-              ) : null}
+                </Text>
+              ) : (
+                <View style={{ marginTop: 12, alignItems: "flex-start" }}>
+                  <Text
+                    style={{ color: "#94A3B8", fontSize: 12, marginBottom: 8 }}
+                  >
+                    Description available natively on{" "}
+                    {currentJob.source === "linkedin"
+                      ? "LinkedIn"
+                      : currentJob.source}
+                    .
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() =>
+                      Linking.openURL(
+                        currentJob.url ||
+                          currentJob.source_url ||
+                          "https://linkedin.com",
+                      )
+                    }
+                    style={{
+                      paddingVertical: 6,
+                      paddingHorizontal: 12,
+                      backgroundColor: "rgba(255,255,255,0.05)",
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: "rgba(255,255,255,0.1)",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#CBD5E1",
+                        fontSize: 12,
+                        fontWeight: "600",
+                      }}
+                    >
+                      Read Full Post
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* View Full Specs Trigger */}
               {onSelectJob && (
