@@ -1,560 +1,737 @@
 /**
- * supabase/functions/auto-apply/index.ts
- * OpusHunter — Application Orchestration.
- *
- * Routes by job_vault.url (there is no separate apply_url column):
- *   greenhouse.io / lever.co domain -> direct API submission
- *   url starts with "mailto:"      -> send via linked Gmail/Outlook
- *   anything else                   -> prepare-and-handoff (no fake success)
- *
- * NOTE: candidate phone number is intentionally omitted below — no phone
- * field exists on profiles or user_context in the current schema. Add one
- * and wire it in here once that's decided; sending blank phone rather than
- * a fabricated value in the meantime.
+ * supabase/functions/scrape-jobs/index.ts
+ * OpusHunter — Multi-Source Job Scraper & Engine
+ * Sources: JobTech (Sweden), The Hub (Nordics), JSearch, Adzuna, and LinkedIn.
  */
 
 import { getSupabaseAdmin, verifyJwt } from "../_shared/supabaseAdmin.ts";
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { corsHeaders } from "../_shared/cors.ts";
 import {
-  refreshEmailToken,
-  getPrimaryEmailAccount,
-} from "../_shared/emailTokenManager.ts";
+  getCandidateKeys,
+  handle429,
+  markKeyUsed,
+  logUsage,
+} from "../_shared/keyResolver.ts";
+import { corsHeaders } from "../_shared/cors.ts";
+import { rateLimit } from "../_shared/rateLimit.ts";
+import { scrapeJobTechSweden } from "../scrape-jobs/adapters/jobtech.ts";
+import { scrapeTheHub } from "../scrape-jobs/adapters/thehub.ts";
 
 const supabase = getSupabaseAdmin();
 
-type SubmissionRoute = "greenhouse" | "lever" | "email" | "handoff";
-
-interface CandidateData {
-  fullName: string;
-  email: string;
-  coverLetterBody: string;
-  resumeBuffer: Uint8Array;
-  resumeFileName: string;
-}
-
-interface RouteResult {
-  success: boolean;
-  submissionMethod: string;
-  confirmationDetails: string;
-  handoffPayload?: Record<string, unknown>;
-}
-
-// ── Route detection ──────────────────────────────────────────────────────
-function detectRoute(url: string): SubmissionRoute {
-  if (url.startsWith("mailto:")) return "email";
-  try {
-    const host = new URL(url).hostname;
-    if (host.includes("greenhouse")) return "greenhouse";
-    if (host.includes("lever.co")) return "lever";
-  } catch {
-    // Not a valid absolute URL — falls through to handoff below.
-  }
-  return "handoff";
-}
-
-// ── Greenhouse ────────────────────────────────────────────────────────────
-async function submitToGreenhouse(
-  applyUrl: string,
-  candidate: CandidateData,
-): Promise<RouteResult> {
-  const match =
-    applyUrl.match(/\/embed\/job(?:_app)?\/(\d+)/) ||
-    applyUrl.match(/jobs\/(\d+)/);
-  const jobId = match?.[1];
-
-  if (!jobId) {
-    return {
-      success: false,
-      submissionMethod: "greenhouse_direct",
-      confirmationDetails:
-        "Could not extract Greenhouse job ID from URL — falling back to handoff",
-    };
-  }
-
-  const [firstName, ...rest] = candidate.fullName.trim().split(/\s+/);
-  const lastName = rest.join(" ") || firstName;
-
-  const formData = new FormData();
-  formData.append("first_name", firstName);
-  formData.append("last_name", lastName);
-  formData.append("email", candidate.email);
-  formData.append(
-    "resume",
-    new Blob([candidate.resumeBuffer as any]),
-    candidate.resumeFileName,
-  );
-  formData.append("cover_letter_text", candidate.coverLetterBody);
-
-  try {
-    const res = await fetch(
-      `https://boards-api.greenhouse.io/v1/boards/${jobId}/jobs/${jobId}/apply`,
-      { method: "POST", body: formData },
-    );
-
-    if (res.ok) {
-      const data = await res.json().catch(() => ({}));
-      return {
-        success: true,
-        submissionMethod: "greenhouse_direct",
-        confirmationDetails: `Submitted to Greenhouse (job ${jobId})${
-          data?.id ? `, application ID ${data.id}` : ""
-        }`,
-      };
-    }
-
-    const errBody = await res.text().catch(() => "");
-    return {
-      success: false,
-      submissionMethod: "greenhouse_direct",
-      confirmationDetails: `Greenhouse rejected submission (${res.status}): ${errBody.slice(0, 200)}`,
-    };
-  } catch (err) {
-    return {
-      success: false,
-      submissionMethod: "greenhouse_direct",
-      confirmationDetails: `Greenhouse submission error: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
-}
-
-// ── Lever ─────────────────────────────────────────────────────────────────
-async function submitToLever(
-  applyUrl: string,
-  candidate: CandidateData,
-): Promise<RouteResult> {
-  const match = applyUrl.match(/lever\.co\/([^/]+)\/([a-f0-9-]{36})/i);
-  const [, company, postingId] = match || [];
-
-  if (!company || !postingId) {
-    return {
-      success: false,
-      submissionMethod: "lever_direct",
-      confirmationDetails:
-        "Could not extract Lever company/posting ID from URL — falling back to handoff",
-    };
-  }
-
-  const formData = new FormData();
-  formData.append("name", candidate.fullName);
-  formData.append("email", candidate.email);
-  formData.append(
-    "resume",
-    new Blob([candidate.resumeBuffer as any]),
-    candidate.resumeFileName,
-  );
-  formData.append("comments", candidate.coverLetterBody);
-
-  try {
-    const res = await fetch(
-      `https://api.lever.co/v0/postings/${company}/${postingId}/apply`,
-      { method: "POST", body: formData },
-    );
-
-    if (res.ok) {
-      return {
-        success: true,
-        submissionMethod: "lever_direct",
-        confirmationDetails: `Submitted to Lever (${company}/${postingId})`,
-      };
-    }
-
-    const errBody = await res.text().catch(() => "");
-    return {
-      success: false,
-      submissionMethod: "lever_direct",
-      confirmationDetails: `Lever rejected submission (${res.status}): ${errBody.slice(0, 200)}`,
-    };
-  } catch (err) {
-    return {
-      success: false,
-      submissionMethod: "lever_direct",
-      confirmationDetails: `Lever submission error: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
-}
-
-// ── Email (Gmail / Outlook via existing emailTokenManager) ────────────────
-function extractMailtoAddress(url: string): string | null {
-  if (!url.startsWith("mailto:")) return null;
-  return url.slice(7).split("?")[0].trim() || null;
-}
-
-function buildRfc2822(
-  to: string,
-  from: string,
-  subject: string,
-  body: string,
-  attachment: { filename: string; data: Uint8Array },
-): string {
-  const boundary = `bnd_${crypto.randomUUID().replace(/-/g, "")}`;
-  const b64Attachment = btoa(String.fromCharCode(...attachment.data));
-  return [
-    `To: ${to}`,
-    `From: ${from}`,
-    `Subject: ${subject}`,
-    `MIME-Version: 1.0`,
-    `Content-Type: multipart/mixed; boundary="${boundary}"`,
-    ``,
-    `--${boundary}`,
-    `Content-Type: text/plain; charset="UTF-8"`,
-    ``,
-    body,
-    ``,
-    `--${boundary}`,
-    `Content-Type: application/pdf; name="${attachment.filename}"`,
-    `Content-Disposition: attachment; filename="${attachment.filename}"`,
-    `Content-Transfer-Encoding: base64`,
-    ``,
-    b64Attachment,
-    `--${boundary}--`,
-  ].join("\r\n");
-}
-
-async function sendViaGmail(
-  accessToken: string,
-  from: string,
-  to: string,
-  subject: string,
-  body: string,
-  attachment: { filename: string; data: Uint8Array },
-): Promise<RouteResult> {
-  const raw = buildRfc2822(to, from, subject, body, attachment);
-  const rawEncoded = btoa(raw)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-
-  const res = await fetch(
-    "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ raw: rawEncoded }),
-    },
-  );
-
-  if (res.ok) {
-    const data = await res.json();
-    return {
-      success: true,
-      submissionMethod: "gmail_api_send",
-      confirmationDetails: `Sent via Gmail (message ID ${data.id})`,
-    };
-  }
-
-  const errBody = await res.text().catch(() => "");
-  return {
-    success: false,
-    submissionMethod: "gmail_api_send",
-    confirmationDetails: `Gmail send failed: ${errBody.slice(0, 200)}`,
+interface ScrapeParams {
+  keywords?: string[];
+  cities?: string[];
+  countries?: string[];
+  latitude?: number;
+  longitude?: number;
+  radiusKm?: number;
+  datePosted?: string;
+  workTypes?: string[];
+  enableSources?: {
+    jsearch?: boolean;
+    adzuna?: boolean;
+    linkedin?: boolean;
+    jobtech?: boolean;
+    thehub?: boolean;
   };
+  adzunaAppId?: string;
+  batchSize?: number;
+  page?: number;
 }
 
-async function sendViaOutlook(
-  accessToken: string,
-  to: string,
-  subject: string,
-  body: string,
-  attachment: { filename: string; data: Uint8Array },
-): Promise<RouteResult> {
-  const res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      message: {
-        subject,
-        body: { contentType: "Text", content: body },
-        toRecipients: [{ emailAddress: { address: to } }],
-        attachments: [
-          {
-            "@odata.type": "#microsoft.graph.fileAttachment",
-            name: attachment.filename,
-            contentBytes: btoa(String.fromCharCode(...attachment.data)),
-          },
-        ],
-      },
-    }),
+interface NormalizedJob {
+  title: string;
+  company: string;
+  company_logo_url?: string;
+  location: string;
+  country_code: string;
+  description: string;
+  url: string;
+  posted_at?: string;
+  work_type?: string;
+  is_remote?: boolean;
+  salary?: string;
+  salary_min?: number;
+  salary_max?: number;
+  currency?: string;
+  source: string;
+  external_job_id?: string;
+  source_url?: string;
+  latitude?: number;
+  longitude?: number;
+  tech_stack?: string[];
+  match_score?: number;
+}
+
+// ── 1. JSearch Adapter ────────────────────────────────────────────────────────
+async function fetchJSearch(
+  params: ScrapeParams,
+  userId: string,
+): Promise<NormalizedJob[]> {
+  const candidateKeys = await getCandidateKeys(supabase, userId, "rapidapi");
+  if (candidateKeys.length === 0) {
+    console.log("[JSearch] No RapidAPI keys found for user/system");
+    return [];
+  }
+
+  let queryTerms = "software developer OR engineer OR fullstack";
+  if (params.keywords && params.keywords.length > 0) {
+    const cleanKeywords = params.keywords.filter(
+      (k) => k && k.trim().length > 0,
+    );
+    if (cleanKeywords.length === 1) {
+      queryTerms = cleanKeywords[0];
+    } else if (cleanKeywords.length > 1) {
+      queryTerms = cleanKeywords.slice(0, 3).join(" OR ");
+    }
+  }
+
+  const primaryCountry = params.countries?.[0] || "Sweden";
+  const primaryCity = params.cities?.[0] || "Stockholm";
+
+  let jSearchDatePosted = "all";
+  if (params.datePosted === "24h" || params.datePosted === "today")
+    jSearchDatePosted = "today";
+  else if (params.datePosted === "3d" || params.datePosted === "3days")
+    jSearchDatePosted = "3days";
+  else if (params.datePosted === "7d" || params.datePosted === "week")
+    jSearchDatePosted = "week";
+  else if (params.datePosted === "30d" || params.datePosted === "month")
+    jSearchDatePosted = "month";
+
+  const queryParams = new URLSearchParams({
+    query: `${queryTerms} in ${primaryCity}, ${primaryCountry}`,
+    page: (params.page || 1).toString(),
+    num_pages: "1",
+    date_posted: jSearchDatePosted,
   });
 
-  if (res.ok || res.status === 202) {
-    return {
-      success: true,
-      submissionMethod: "outlook_graph_send",
-      confirmationDetails: "Sent via Outlook",
-    };
+  if (params.latitude && params.longitude) {
+    queryParams.set("geo", `${params.latitude},${params.longitude}`);
+    if (params.radiusKm) queryParams.set("radius", params.radiusKm.toString());
   }
 
-  const errBody = await res.json().catch(() => ({}));
-  return {
-    success: false,
-    submissionMethod: "outlook_graph_send",
-    confirmationDetails: `Outlook send failed: ${errBody?.error?.message || "unknown error"}`,
-  };
+  for (const keyObj of candidateKeys) {
+    try {
+      console.log(
+        `[JSearch] Querying JSearch via RapidAPI (key source: ${keyObj.source})`,
+      );
+      const response = await fetch(
+        `https://jsearch.p.rapidapi.com/search?${queryParams}`,
+        {
+          headers: {
+            "X-RapidAPI-Key": keyObj.key,
+            "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
+          },
+        },
+      );
+
+      if (response.status === 429) {
+        console.warn("[JSearch] 429 Rate limited, rotating key");
+        await handle429(supabase, keyObj.keyId);
+        continue;
+      }
+
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => "");
+        console.warn(
+          `[JSearch] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
+        );
+        continue;
+      }
+
+      const data = await response.json();
+      await markKeyUsed(supabase, keyObj);
+      await logUsage(
+        supabase,
+        userId,
+        "rapidapi",
+        keyObj.source,
+        true,
+        0,
+        "scrape-jobs/jsearch",
+      );
+
+      const rawItems = (data.data || []) as Array<Record<string, unknown>>;
+      console.log(`[JSearch] Successfully fetched ${rawItems.length} jobs`);
+
+      return rawItems.map((raw) => {
+        const jobUrl = String(raw.job_apply_link || raw.job_google_link || "");
+        return {
+          title: String(raw.job_title || "Untitled Role"),
+          company: String(raw.employer_name || "Unknown Company"),
+          company_logo_url: raw.employer_logo
+            ? String(raw.employer_logo)
+            : undefined,
+          location:
+            [raw.job_city, raw.job_state, raw.job_country]
+              .filter(Boolean)
+              .map(String)
+              .join(", ") || primaryCity,
+          country_code: String(raw.job_country || primaryCountry),
+          description: String(raw.job_description || ""),
+          url: jobUrl,
+          posted_at: String(
+            raw.job_posted_at_datetime_utc || new Date().toISOString(),
+          ),
+          work_type: raw.job_is_remote ? "remote" : "onsite",
+          is_remote: !!raw.job_is_remote,
+          salary_min:
+            typeof raw.job_min_salary === "number"
+              ? raw.job_min_salary
+              : undefined,
+          salary_max:
+            typeof raw.job_max_salary === "number"
+              ? raw.job_max_salary
+              : undefined,
+          currency: String(raw.job_salary_currency || "SEK"),
+          source: "jsearch",
+          external_job_id: raw.job_id ? String(raw.job_id) : undefined,
+          source_url: String(raw.job_apply_link || jobUrl),
+        };
+      });
+    } catch (err) {
+      console.warn("[JSearch] Fetch error with key:", err);
+    }
+  }
+
+  return [];
 }
 
-async function submitViaEmail(
-  applyUrl: string,
-  description: string,
-  candidate: CandidateData,
-  jobTitle: string,
-  company: string,
+// ── 2. Adzuna Adapter ─────────────────────────────────────────────────────────
+const ADZUNA_SUPPORTED_COUNTRIES = new Set([
+  "gb",
+  "us",
+  "at",
+  "au",
+  "be",
+  "br",
+  "ca",
+  "de",
+  "es",
+  "fr",
+  "in",
+  "it",
+  "mx",
+  "nl",
+  "nz",
+  "pl",
+  "ru",
+  "sg",
+  "za",
+]);
+
+async function fetchAdzuna(
+  params: ScrapeParams,
   userId: string,
-): Promise<RouteResult> {
-  const recipient =
-    extractMailtoAddress(applyUrl) ||
-    description.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0];
+): Promise<NormalizedJob[]> {
+  const candidateKeys = await getCandidateKeys(supabase, userId, "adzuna");
+  if (candidateKeys.length === 0) return [];
 
-  if (!recipient) {
-    return {
-      success: false,
-      submissionMethod: "email_handoff",
-      confirmationDetails: "No recipient email address found for this listing",
-    };
-  }
+  const rawCountry = (params.countries?.[0] || "se").toLowerCase();
+  const country = ADZUNA_SUPPORTED_COUNTRIES.has(rawCountry)
+    ? rawCountry
+    : rawCountry === "uk"
+      ? "gb"
+      : null;
 
-  const account = await getPrimaryEmailAccount(supabase as any, userId);
-  if (!account) {
-    return {
-      success: false,
-      submissionMethod: "email_handoff",
-      confirmationDetails:
-        "No linked email account — link Gmail or Outlook in Settings first",
-    };
-  }
-
-  const refreshed = await refreshEmailToken(supabase as any, account.id);
-  if (!refreshed) {
-    return {
-      success: false,
-      submissionMethod: "email_handoff",
-      confirmationDetails: "Linked email account needs re-authorization",
-    };
-  }
-
-  const subject = `Application for ${jobTitle} at ${company}`;
-
-  if (account.provider === "google") {
-    return sendViaGmail(
-      refreshed.accessToken,
-      account.email,
-      recipient,
-      subject,
-      candidate.coverLetterBody,
-      { filename: candidate.resumeFileName, data: candidate.resumeBuffer },
+  if (!country) {
+    console.log(
+      `[Adzuna] Country '${rawCountry}' not supported by Adzuna, skipping adapter.`,
     );
+    return [];
   }
-  return sendViaOutlook(
-    refreshed.accessToken,
-    recipient,
-    subject,
-    candidate.coverLetterBody,
-    { filename: candidate.resumeFileName, data: candidate.resumeBuffer },
-  );
+
+  const locationName = params.cities?.[0] || "Stockholm";
+  const whatQuery =
+    params.keywords && params.keywords.length > 0
+      ? params.keywords
+          .filter((k) => k && k.trim().length > 0)
+          .slice(0, 2)
+          .join(" ")
+      : "software developer";
+
+  const defaultAppId = Deno.env.get("ADZUNA_APP_ID") || "opushunter";
+
+  for (const keyObj of candidateKeys) {
+    try {
+      let appId = params.adzunaAppId || defaultAppId;
+      let appKey = keyObj.key;
+      if (keyObj.key.includes(":")) {
+        const parts = keyObj.key.split(":");
+        appId = parts[0];
+        appKey = parts[1];
+      }
+
+      const endpoint = `https://api.adzuna.com/v1/api/jobs/${country}/search/1`;
+      const queryParams = new URLSearchParams({
+        app_id: appId,
+        app_key: appKey,
+        results_per_page: "25",
+        what: whatQuery,
+        where: locationName,
+      });
+
+      if (params.radiusKm) {
+        queryParams.set("distance", params.radiusKm.toString());
+      }
+
+      console.log(
+        `[Adzuna] Querying Adzuna for country: ${country}, location: ${locationName}`,
+      );
+      const response = await fetch(`${endpoint}?${queryParams}`);
+      if (response.status === 429) {
+        console.warn("[Adzuna] 429 Rate limited");
+        await handle429(supabase, keyObj.keyId);
+        continue;
+      }
+
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => "");
+        console.warn(
+          `[Adzuna] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
+        );
+        continue;
+      }
+
+      const data = (await response.json()) as {
+        results?: Array<Record<string, unknown>>;
+      };
+      await markKeyUsed(supabase, keyObj);
+      await logUsage(
+        supabase,
+        userId,
+        "adzuna",
+        keyObj.source,
+        true,
+        0,
+        "scrape-jobs/adzuna",
+      );
+
+      const results = data.results || [];
+      console.log(`[Adzuna] Successfully fetched ${results.length} jobs`);
+
+      return results.map((raw) => {
+        const companyObj = raw.company as { display_name?: string } | undefined;
+        const locObj = raw.location as { display_name?: string } | undefined;
+        const titleStr =
+          typeof raw.title === "string"
+            ? raw.title.replace(/<\/?[^>]+(>|$)/g, "")
+            : "Untitled Role";
+        const descStr =
+          typeof raw.description === "string"
+            ? raw.description.replace(/<\/?[^>]+(>|$)/g, "")
+            : "";
+        const jobUrl = String(raw.redirect_url || "");
+
+        return {
+          title: titleStr,
+          company: companyObj?.display_name || "Unknown Company",
+          company_logo_url: undefined,
+          location: locObj?.display_name || locationName,
+          country_code: country.toUpperCase(),
+          description: descStr,
+          url: jobUrl,
+          posted_at: String(raw.created || new Date().toISOString()),
+          work_type: "onsite",
+          is_remote: false,
+          salary_min:
+            typeof raw.salary_min === "number" ? raw.salary_min : undefined,
+          salary_max:
+            typeof raw.salary_max === "number" ? raw.salary_max : undefined,
+          currency: raw.salary_is_predicted
+            ? "EUR"
+            : raw.salary_min
+              ? "EUR"
+              : "EUR",
+          source: "adzuna",
+          external_job_id: raw.id ? String(raw.id) : undefined,
+          source_url: jobUrl,
+        };
+      });
+    } catch (err) {
+      console.warn("[Adzuna] Fetch error with key:", err);
+    }
+  }
+
+  return [];
 }
 
-// ── Handoff (always succeeds — this is a truthful "not automatable" state) ─
-function prepareHandoff(
-  applyUrl: string,
-  candidate: CandidateData,
-): RouteResult {
-  return {
-    success: true,
-    submissionMethod: "generic_prepare_handoff",
-    confirmationDetails: "Prepared for manual submission — not auto-submitted",
-    handoffPayload: {
-      openApplyPageUrl: applyUrl,
-      prefilledName: candidate.fullName,
-      prefilledEmail: candidate.email,
-      readyToPaste: candidate.coverLetterBody,
-      resumeFileName: candidate.resumeFileName,
-    },
-  };
+// ── 3. LinkedIn Adapter (RapidAPI Wrapper) ──────────────────────
+async function fetchLinkedIn(
+  params: ScrapeParams,
+  userId: string,
+): Promise<NormalizedJob[]> {
+  const locationStr = params.cities?.[0]
+    ? `${params.cities[0]}, ${params.countries?.[0] || "Sweden"}`
+    : "Stockholm, Sweden";
+  const queryStr =
+    params.keywords && params.keywords.length > 0
+      ? params.keywords
+          .filter((k) => k && k.trim().length > 0)
+          .slice(0, 2)
+          .join(" ")
+      : "software engineer";
+
+  const linkedInKeys = await getCandidateKeys(supabase, userId, "linkedin");
+  if (linkedInKeys.length === 0) return [];
+
+  for (const keyObj of linkedInKeys) {
+    try {
+      console.log(
+        `[LinkedIn] Querying linkedinscraperapi.com with key source: ${keyObj.source}`,
+      );
+      const searchUrl = new URL(
+        "https://api.linkedinscraperapi.com/api/v1/linkedin/search",
+      );
+
+      searchUrl.searchParams.set("keywords", queryStr);
+      searchUrl.searchParams.set("location", locationStr);
+      searchUrl.searchParams.set("api_key", keyObj.key);
+
+      if (params.page)
+        searchUrl.searchParams.set("page", params.page.toString());
+      if (params.datePosted && params.datePosted !== "all")
+        searchUrl.searchParams.set("time_range", params.datePosted);
+
+      const response = await fetch(searchUrl.toString());
+
+      if (response.status === 429) {
+        console.warn("[LinkedIn] 429 Rate limited");
+        await handle429(supabase, keyObj.keyId);
+        continue;
+      }
+
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => "");
+        console.warn(
+          `[LinkedIn] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
+        );
+        continue;
+      }
+
+      const data = (await response.json()) as
+        Record<string, unknown> | Array<Record<string, unknown>>;
+      await markKeyUsed(supabase, keyObj);
+      await logUsage(
+        supabase,
+        userId,
+        "linkedin",
+        keyObj.source,
+        true,
+        5,
+        "scrape-jobs/linkedinscraperapi",
+      );
+
+      const items: Array<Record<string, unknown>> = Array.isArray(data)
+        ? data
+        : ((data.jobs || data.data || data.results || []) as Array<
+            Record<string, unknown>
+          >);
+
+      if (items.length > 0) {
+        console.log(`[LinkedIn] Successfully fetched ${items.length} jobs`);
+
+        return items.map((raw) => {
+          const rawUrl = String(raw.job_url || raw.apply_url || raw.url || "");
+          const extId = raw.job_id
+            ? String(raw.job_id)
+            : raw.id
+              ? String(raw.id)
+              : undefined;
+          const fallbackUrl = extId
+            ? `https://www.linkedin.com/jobs/view/${extId}`
+            : "https://www.linkedin.com";
+          const finalJobUrl = rawUrl || fallbackUrl;
+          const workTypeStr = String(raw.work_type || "onsite");
+
+          return {
+            title: String(raw.job_title || raw.title || "Untitled Role"),
+            company: String(
+              raw.company_name || raw.company || "Unknown Company",
+            ),
+            company_logo_url: raw.company_logo
+              ? String(raw.company_logo)
+              : undefined,
+            location: String(raw.location || locationStr),
+            country_code: params.countries?.[0] || "SE",
+            description: String(
+              raw.job_description ||
+                raw.description ||
+                "LinkedIn live opportunity.",
+            ),
+            url: finalJobUrl,
+            posted_at: String(
+              raw.posted_date || raw.posted_at || new Date().toISOString(),
+            ),
+            work_type: workTypeStr,
+            is_remote: workTypeStr.toLowerCase().includes("remote"),
+            salary_min: undefined,
+            salary_max: undefined,
+            currency: "SEK",
+            source: "linkedin",
+            external_job_id: extId,
+            source_url: finalJobUrl,
+          };
+        });
+      }
+    } catch (err) {
+      console.warn("[LinkedIn] Fetch error with key:", err);
+    }
+  }
+
+  return [];
 }
 
-// ── Main handler ────────────────────────────────────────────────────────
+// ── Main Handler ───────────────────────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS")
+  if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
 
   try {
     const jwtUser = await verifyJwt(req);
     const body = await req.json().catch(() => ({}));
-    const userId = body.userId || jwtUser?.userId;
-    const jobId = body.jobId;
-    const coverLetterId = body.coverLetterId;
+    const userId = body.userId || body.user_id || jwtUser?.userId;
+    const searchParams: ScrapeParams = body.searchParams || body.filters || {};
 
-    if (!userId || !jobId) {
-      return Response.json(
-        { error: "missing_fields", message: "userId and jobId are required" },
-        { status: 400, headers: corsHeaders },
-      );
-    }
-
-    const [jobResult, profileResult, resumeResult, letterResult] =
-      await Promise.all([
-        supabase
-          .from("job_vault")
-          .select("*")
-          .eq("id", jobId)
-          .eq("user_id", userId)
-          .single(),
-        supabase.from("profiles").select("*").eq("id", userId).single(),
-        supabase
-          .from("resume_documents")
-          .select("*")
-          .eq("user_id", userId)
-          .eq("is_primary", true)
-          .maybeSingle(),
-        coverLetterId
-          ? supabase
-              .from("cover_letters")
-              .select("*")
-              .eq("id", coverLetterId)
-              .single()
-          : Promise.resolve({ data: null, error: null }),
-      ]);
-
-    if (jobResult.error || !jobResult.data) {
+    if (!userId) {
       return Response.json(
         {
-          error: "job_not_found",
-          message: "Job not found or not owned by user",
-        },
-        { status: 404, headers: corsHeaders },
-      );
-    }
-    if (profileResult.error || !profileResult.data) {
-      return Response.json(
-        { error: "profile_not_found" },
-        { status: 404, headers: corsHeaders },
-      );
-    }
-    if (resumeResult.error || !resumeResult.data) {
-      return Response.json(
-        {
-          error: "no_primary_resume",
-          message: "Upload and set a primary resume first",
+          error: "missing_user",
+          message:
+            "Could not determine user session. Please ensure you are logged in.",
         },
         { status: 400, headers: corsHeaders },
       );
     }
 
-    const job = jobResult.data;
-    const profile = profileResult.data;
-    const resume = resumeResult.data;
-    const letter = letterResult.data;
-
-    if (!letter) {
+    // 1. Rate Limit Check
+    const rateLimitResult = await rateLimit.check(userId);
+    if (!rateLimitResult.allowed) {
       return Response.json(
         {
-          error: "no_cover_letter",
-          message: "Generate a cover letter for this job first",
+          error: "rate_limited",
+          nextAvailableAt: rateLimitResult.nextAvailableAt,
         },
-        { status: 400, headers: corsHeaders },
+        { status: 429, headers: corsHeaders },
       );
     }
 
-    // Download resume from storage
-    const { data: resumeFile, error: downloadError } = await supabase.storage
-      .from("cv_vault")
-      .download(resume.storage_path);
-    if (downloadError || !resumeFile) {
-      return Response.json(
-        { error: "resume_download_failed", message: downloadError?.message },
-        { status: 500, headers: corsHeaders },
-      );
-    }
-    const resumeBuffer = new Uint8Array(await resumeFile.arrayBuffer());
-
-    const fullName =
-      `${profile.first_name || ""} ${profile.last_name || ""}`.trim() ||
-      "Applicant";
-    const candidate: CandidateData = {
-      fullName,
-      email: profile.email,
-      coverLetterBody: letter.body,
-      resumeBuffer,
-      resumeFileName: resume.file_name,
+    // Explicitly check for UI toggles, defaulting to true if absent.
+    const enabled = searchParams.enableSources || {
+      jsearch: true,
+      adzuna: true,
+      linkedin: true,
+      jobtech: true,
+      thehub: true,
     };
 
-    const route = detectRoute(job.url);
-    let result: RouteResult;
+    // 2. Run scrapers in parallel
+    const scrapePromises: Promise<NormalizedJob[]>[] = [];
 
-    try {
-      switch (route) {
-        case "greenhouse":
-          result = await submitToGreenhouse(job.url, candidate);
-          break;
-        case "lever":
-          result = await submitToLever(job.url, candidate);
-          break;
-        case "email":
-          result = await submitViaEmail(
-            job.url,
-            job.description || "",
-            candidate,
-            job.title,
-            job.company,
-            userId,
-          );
-          break;
-        default:
-          result = prepareHandoff(job.url, candidate);
-      }
+    const country = (searchParams.countries?.[0] || "").toUpperCase();
+    const city = searchParams.cities?.[0] || "";
+    const keywordQuery = searchParams.keywords?.join(" ") || "";
 
-      // Direct-submit routes that failed to parse/submit degrade to handoff,
-      // never silently reported as success.
-      if (!result.success && route !== "handoff" && route !== "email") {
-        result = prepareHandoff(job.url, candidate);
-      }
-    } catch (err) {
-      console.error("[auto-apply] Route execution error:", err);
-      result = prepareHandoff(job.url, candidate);
+    // Toggle: JobTech (Strictly Sweden)
+    if (
+      (country === "SE" || country === "SWEDEN") &&
+      enabled.jobtech !== false
+    ) {
+      scrapePromises.push(scrapeJobTechSweden(keywordQuery, city));
     }
 
-    const { error: upsertError } = await supabase
-      .from("job_applications")
-      .upsert(
-        {
-          user_id: userId,
-          job_id: jobId,
-          status: result.success ? "applied" : "saved",
-          cover_letter_used: letter.id,
-          resume_document_id: resume.id,
-          submission_method: result.submissionMethod,
-          sender_email: candidate.email,
-          sender_full_name: candidate.fullName,
-          submission_confirmation: result.success
-            ? result.confirmationDetails
-            : null,
-          submission_error: result.success ? null : result.confirmationDetails,
-          applied_at:
-            result.success &&
-            result.submissionMethod !== "generic_prepare_handoff"
-              ? new Date().toISOString()
-              : null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,job_id" },
+    // Toggle: The Hub (Nordic Startups)
+    if (
+      [
+        "SE",
+        "SWEDEN",
+        "DK",
+        "DENMARK",
+        "NO",
+        "NORWAY",
+        "FI",
+        "FINLAND",
+      ].includes(country) &&
+      enabled.thehub !== false
+    ) {
+      scrapePromises.push(scrapeTheHub(keywordQuery, city, country));
+    }
+
+    // Toggle: JSearch
+    if (enabled.jsearch !== false) {
+      scrapePromises.push(fetchJSearch(searchParams, userId));
+    }
+
+    // Toggle: Adzuna
+    if (enabled.adzuna !== false) {
+      scrapePromises.push(fetchAdzuna(searchParams, userId));
+    }
+
+    // Toggle: LinkedIn
+    if (enabled.linkedin !== false) {
+      scrapePromises.push(fetchLinkedIn(searchParams, userId));
+    }
+
+    const results = await Promise.allSettled(scrapePromises);
+
+    const allListings: NormalizedJob[] = [];
+    results.forEach((res) => {
+      if (res.status === "fulfilled" && Array.isArray(res.value)) {
+        allListings.push(...res.value);
+      }
+    });
+
+    // 3. Deduplication via SHA-256
+    const seen = new Set<string>();
+    const deduped: Array<NormalizedJob & { dedup_hash: string }> = [];
+
+    for (const listing of allListings) {
+      const hashInput = `${(listing.company || "").toLowerCase()}${(listing.title || "").toLowerCase()}${(listing.location || "").toLowerCase()}`;
+      const hash = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(hashInput),
       );
+      const hashString = Array.from(new Uint8Array(hash))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
 
-    if (upsertError) {
-      console.error("[auto-apply] job_applications upsert error:", upsertError);
+      if (!seen.has(hashString)) {
+        seen.add(hashString);
+        deduped.push({
+          ...listing,
+          dedup_hash: hashString,
+        });
+      }
     }
 
-    return Response.json(result, { headers: corsHeaders });
-  } catch (error: unknown) {
-    console.error("[auto-apply] Fatal error:", error);
+    // 4. Determine batch capacity by tier & upsert into job_vault
+    const { data: userProfile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const userRole = userProfile?.role || "member";
+    const defaultCap =
+      userRole === "admin" ? 60 : userRole === "premium" ? 50 : 25;
+
+    // Enforce Admin cap logic scaling safely between 30 and 60
+    const batchCap =
+      typeof searchParams.batchSize === "number" && searchParams.batchSize > 0
+        ? Math.min(searchParams.batchSize, defaultCap)
+        : defaultCap;
+
+    const finalListings = deduped.slice(0, batchCap);
+
+    if (finalListings.length > 0) {
+      const rowsToUpsert = finalListings.map((listing) => {
+        const validSources = [
+          "jsearch",
+          "adzuna",
+          "linkedin",
+          "jobtech",
+          "thehub",
+          "indeed",
+          "custom",
+        ];
+        const source = validSources.includes(listing.source)
+          ? listing.source
+          : "custom";
+
+        let workType: "remote" | "hybrid" | "onsite" | "flexible" | null = null;
+        if (listing.work_type) {
+          const wt = listing.work_type.toLowerCase();
+          if (wt.includes("remote")) workType = "remote";
+          else if (wt.includes("hybrid")) workType = "hybrid";
+          else if (wt.includes("onsite") || wt.includes("on-site"))
+            workType = "onsite";
+          else if (wt.includes("flexible")) workType = "flexible";
+        }
+
+        const isRemote = workType === "remote" || listing.is_remote === true;
+        const jobUrl =
+          listing.url ||
+          listing.source_url ||
+          (listing.external_job_id
+            ? `https://www.linkedin.com/jobs/view/${listing.external_job_id}`
+            : "https://opushunter.com");
+
+        return {
+          user_id: userId,
+          source,
+          external_job_id:
+            listing.external_job_id ||
+            listing.dedup_hash ||
+            crypto.randomUUID(),
+          title: listing.title || "Untitled Role",
+          company: listing.company || "Unknown Company",
+          company_logo_url: listing.company_logo_url || null,
+          location: listing.location || null,
+          country_code: listing.country_code || null,
+          latitude:
+            typeof listing.latitude === "number" ? listing.latitude : null,
+          longitude:
+            typeof listing.longitude === "number" ? listing.longitude : null,
+          is_remote: isRemote,
+          work_type: workType,
+          salary: listing.salary || null,
+          salary_min:
+            typeof listing.salary_min === "number"
+              ? Math.round(listing.salary_min)
+              : null,
+          salary_max:
+            typeof listing.salary_max === "number"
+              ? Math.round(listing.salary_max)
+              : null,
+          currency: listing.currency || "SEK",
+          description: listing.description || null,
+          tech_stack: Array.isArray(listing.tech_stack)
+            ? listing.tech_stack
+            : [],
+          match_score:
+            typeof listing.match_score === "number"
+              ? listing.match_score
+              : null,
+          url: jobUrl,
+          source_url: listing.source_url || jobUrl,
+          dedup_hash: listing.dedup_hash,
+          posted_at: listing.posted_at || null,
+          scraped_at: new Date().toISOString(),
+        };
+      });
+
+      const { error: upsertError } = await supabase
+        .from("job_vault")
+        .upsert(rowsToUpsert, { onConflict: "user_id,dedup_hash" });
+
+      if (upsertError) {
+        console.error(
+          "[Scrape-Jobs] Upsert error into job_vault:",
+          upsertError,
+        );
+        throw upsertError;
+      }
+    }
+
+    // 5. Update rate limit
+    await rateLimit.update(userId);
+
     return Response.json(
       {
-        error: "auto_apply_failed",
+        success: true,
+        count: finalListings.length,
+        totalScraped: allListings.length,
+        listings: finalListings,
+      },
+      { headers: corsHeaders },
+    );
+  } catch (error: unknown) {
+    console.error("Scrape error:", error);
+    return Response.json(
+      {
+        error: "scrape_failed",
         message: error instanceof Error ? error.message : String(error),
       },
       { status: 500, headers: corsHeaders },
