@@ -1,306 +1,416 @@
 /**
  * supabase/functions/auto-apply/index.ts
- * OpusHunter — Autonomous Application Router & Dispatcher
+ * OpusHunter — Application Orchestration.
  *
- * Routes job applications to appropriate channels:
- * 1. Greenhouse/Lever → Direct form submission (API)
- * 2. mailto: links → Email submission via Gmail/Outlook OAuth
- * 3. Generic forms → Prepare-and-handoff (user completes form)
+ * Routes by job_vault.url (there is no separate apply_url column):
+ *   greenhouse.io / lever.co domain -> direct API submission
+ *   url starts with "mailto:"      -> send via linked Gmail/Outlook
+ *   anything else                   -> prepare-and-handoff (no fake success)
  *
- * Strictly guarantees that status is NEVER marked 'applied' unless verified
- * real transmission to the recipient succeeds.
+ * NOTE: candidate phone number is intentionally omitted below — no phone
+ * field exists on profiles or user_context in the current schema. Add one
+ * and wire it in here once that's decided; sending blank phone rather than
+ * a fabricated value in the meantime.
  */
 
-import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { getSupabaseAdmin, verifyJwt } from "../_shared/supabaseAdmin.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { corsHeaders } from "../_shared/cors.ts";
-import { refreshEmailToken } from "../_shared/emailTokenManager.ts";
+import {
+  refreshEmailToken,
+  getPrimaryEmailAccount,
+} from "../_shared/emailTokenManager.ts";
 
 const supabase = getSupabaseAdmin();
 
-/**
- * Detect submission route by analyzing apply_url
- */
-function detectSubmissionRoute(
-  applyUrl: string,
-): "greenhouse" | "lever" | "mailto" | "generic" {
-  if (!applyUrl) return "generic";
+type SubmissionRoute = "greenhouse" | "lever" | "email" | "handoff";
 
-  const url = applyUrl.toLowerCase();
-  if (url.includes("greenhouse.io")) return "greenhouse";
-  if (url.includes("lever.co")) return "lever";
-  if (url.startsWith("mailto:")) return "mailto";
-
-  return "generic";
+interface CandidateData {
+  fullName: string;
+  email: string;
+  coverLetterBody: string;
+  resumeBuffer: Uint8Array;
+  resumeFileName: string;
 }
 
-/**
- * Base64url encoder for RFC 2822 email payload (Gmail API)
- */
-function base64UrlEncode(str: string): string {
-  const bytes = new TextEncoder().encode(str);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+interface RouteResult {
+  success: boolean;
+  submissionMethod: string;
+  confirmationDetails: string;
+  handoffPayload?: Record<string, unknown>;
+}
+
+// ── Route detection ──────────────────────────────────────────────────────
+function detectRoute(url: string): SubmissionRoute {
+  if (url.startsWith("mailto:")) return "email";
+  try {
+    const host = new URL(url).hostname;
+    if (host.includes("greenhouse")) return "greenhouse";
+    if (host.includes("lever.co")) return "lever";
+  } catch {
+    // Not a valid absolute URL — falls through to handoff below.
   }
-  return btoa(binary)
+  return "handoff";
+}
+
+// ── Greenhouse ────────────────────────────────────────────────────────────
+async function submitToGreenhouse(
+  applyUrl: string,
+  candidate: CandidateData,
+): Promise<RouteResult> {
+  const match =
+    applyUrl.match(/\/embed\/job(?:_app)?\/(\d+)/) ||
+    applyUrl.match(/jobs\/(\d+)/);
+  const jobId = match?.[1];
+
+  if (!jobId) {
+    return {
+      success: false,
+      submissionMethod: "greenhouse_direct",
+      confirmationDetails:
+        "Could not extract Greenhouse job ID from URL — falling back to handoff",
+    };
+  }
+
+  const [firstName, ...rest] = candidate.fullName.trim().split(/\s+/);
+  const lastName = rest.join(" ") || firstName;
+
+  const formData = new FormData();
+  formData.append("first_name", firstName);
+  formData.append("last_name", lastName);
+  formData.append("email", candidate.email);
+  formData.append(
+    "resume",
+    new Blob([candidate.resumeBuffer as any]),
+    candidate.resumeFileName,
+  );
+  formData.append("cover_letter_text", candidate.coverLetterBody);
+
+  try {
+    const res = await fetch(
+      `https://boards-api.greenhouse.io/v1/boards/${jobId}/jobs/${jobId}/apply`,
+      { method: "POST", body: formData },
+    );
+
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return {
+        success: true,
+        submissionMethod: "greenhouse_direct",
+        confirmationDetails: `Submitted to Greenhouse (job ${jobId})${
+          data?.id ? `, application ID ${data.id}` : ""
+        }`,
+      };
+    }
+
+    const errBody = await res.text().catch(() => "");
+    return {
+      success: false,
+      submissionMethod: "greenhouse_direct",
+      confirmationDetails: `Greenhouse rejected submission (${res.status}): ${errBody.slice(0, 200)}`,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      submissionMethod: "greenhouse_direct",
+      confirmationDetails: `Greenhouse submission error: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+// ── Lever ─────────────────────────────────────────────────────────────────
+async function submitToLever(
+  applyUrl: string,
+  candidate: CandidateData,
+): Promise<RouteResult> {
+  const match = applyUrl.match(/lever\.co\/([^/]+)\/([a-f0-9-]{36})/i);
+  const [, company, postingId] = match || [];
+
+  if (!company || !postingId) {
+    return {
+      success: false,
+      submissionMethod: "lever_direct",
+      confirmationDetails:
+        "Could not extract Lever company/posting ID from URL — falling back to handoff",
+    };
+  }
+
+  const formData = new FormData();
+  formData.append("name", candidate.fullName);
+  formData.append("email", candidate.email);
+  formData.append(
+    "resume",
+    new Blob([candidate.resumeBuffer as any]),
+    candidate.resumeFileName,
+  );
+  formData.append("comments", candidate.coverLetterBody);
+
+  try {
+    const res = await fetch(
+      `https://api.lever.co/v0/postings/${company}/${postingId}/apply`,
+      { method: "POST", body: formData },
+    );
+
+    if (res.ok) {
+      return {
+        success: true,
+        submissionMethod: "lever_direct",
+        confirmationDetails: `Submitted to Lever (${company}/${postingId})`,
+      };
+    }
+
+    const errBody = await res.text().catch(() => "");
+    return {
+      success: false,
+      submissionMethod: "lever_direct",
+      confirmationDetails: `Lever rejected submission (${res.status}): ${errBody.slice(0, 200)}`,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      submissionMethod: "lever_direct",
+      confirmationDetails: `Lever submission error: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
+// ── Email (Gmail / Outlook via existing emailTokenManager) ────────────────
+function extractMailtoAddress(url: string): string | null {
+  if (!url.startsWith("mailto:")) return null;
+  return url.slice(7).split("?")[0].trim() || null;
+}
+
+function buildRfc2822(
+  to: string,
+  from: string,
+  subject: string,
+  body: string,
+  attachment: { filename: string; data: Uint8Array },
+): string {
+  const boundary = `bnd_${crypto.randomUUID().replace(/-/g, "")}`;
+  const b64Attachment = btoa(String.fromCharCode(...attachment.data));
+  return [
+    `To: ${to}`,
+    `From: ${from}`,
+    `Subject: ${subject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    ``,
+    body,
+    ``,
+    `--${boundary}`,
+    `Content-Type: application/pdf; name="${attachment.filename}"`,
+    `Content-Disposition: attachment; filename="${attachment.filename}"`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    b64Attachment,
+    `--${boundary}--`,
+  ].join("\r\n");
+}
+
+async function sendViaGmail(
+  accessToken: string,
+  from: string,
+  to: string,
+  subject: string,
+  body: string,
+  attachment: { filename: string; data: Uint8Array },
+): Promise<RouteResult> {
+  const raw = buildRfc2822(to, from, subject, body, attachment);
+  const rawEncoded = btoa(raw)
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
-}
 
-/**
- * Submit application via Gmail API
- */
-async function submitViaGmail(
-  accessToken: string,
-  senderEmail: string,
-  senderFullName: string,
-  recipientEmail: string,
-  subject: string,
-  emailBody: string,
-  resumeBuffer?: Uint8Array,
-  resumeFileName?: string,
-): Promise<{
-  success: boolean;
-  method: "gmail_send" | "gmail_draft";
-  messageId?: string;
-  confirmation: string;
-}> {
-  try {
-    // Build RFC 2822 email
-    const boundaryStr = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-
-    let rfcEmail = [
-      `From: "${senderFullName}" <${senderEmail}>`,
-      `To: <${recipientEmail}>`,
-      `Subject: ${subject}`,
-      `MIME-Version: 1.0`,
-      `Content-Type: multipart/mixed; boundary="${boundaryStr}"`,
-      ``,
-      `--${boundaryStr}`,
-      `Content-Type: text/plain; charset="UTF-8"`,
-      `Content-Transfer-Encoding: 7bit`,
-      ``,
-      emailBody,
-    ];
-
-    // Add resume as attachment if provided
-    if (resumeBuffer && resumeFileName) {
-      const resumeBase64 = btoa(String.fromCharCode(...resumeBuffer));
-      rfcEmail.push(
-        ``,
-        `--${boundaryStr}`,
-        `Content-Type: application/pdf; name="${resumeFileName}"`,
-        `Content-Disposition: attachment; filename="${resumeFileName}"`,
-        `Content-Transfer-Encoding: base64`,
-        ``,
-        resumeBase64.match(/.{1,76}/g)?.join("\n") || "",
-      );
-    }
-
-    rfcEmail.push(``, `--${boundaryStr}--`);
-
-    const rfcEmailStr = rfcEmail.join("\r\n");
-    const rawEncoded = base64UrlEncode(rfcEmailStr);
-
-    // Send via Gmail API
-    const sendRes = await fetch(
-      "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ raw: rawEncoded }),
+  const res = await fetch(
+    "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({ raw: rawEncoded }),
+    },
+  );
 
-    if (sendRes.ok) {
-      const data = await sendRes.json();
-      return {
-        success: true,
-        method: "gmail_send",
-        messageId: data.id,
-        confirmation: `Sent via Gmail (Message ID: ${data.id})`,
-      };
-    } else {
-      const errText = await sendRes.text();
-      console.warn("Gmail API send failed:", errText);
-      return {
-        success: false,
-        method: "gmail_draft",
-        confirmation: `Failed to send: ${errText.slice(0, 100)}`,
-      };
-    }
-  } catch (err) {
-    console.error("Gmail submission error:", err);
+  if (res.ok) {
+    const data = await res.json();
     return {
-      success: false,
-      method: "gmail_draft",
-      confirmation: `Email submission error: ${err instanceof Error ? err.message : String(err)}`,
+      success: true,
+      submissionMethod: "gmail_api_send",
+      confirmationDetails: `Sent via Gmail (message ID ${data.id})`,
     };
   }
+
+  const errBody = await res.text().catch(() => "");
+  return {
+    success: false,
+    submissionMethod: "gmail_api_send",
+    confirmationDetails: `Gmail send failed: ${errBody.slice(0, 200)}`,
+  };
 }
 
-/**
- * Submit application via Outlook Graph API (Mail.Send)
- */
-async function submitViaOutlook(
+async function sendViaOutlook(
   accessToken: string,
-  senderEmail: string,
-  senderFullName: string,
-  recipientEmail: string,
+  to: string,
   subject: string,
-  emailBody: string,
-  resumeBuffer?: Uint8Array,
-  resumeFileName?: string,
-): Promise<{
-  success: boolean;
-  method: "outlook_send";
-  confirmation: string;
-}> {
-  try {
-    const attachments: any[] = [];
-
-    if (resumeBuffer && resumeFileName) {
-      const resumeBase64 = btoa(String.fromCharCode(...resumeBuffer));
-      attachments.push({
-        "@odata.type": "#microsoft.graph.fileAttachment",
-        name: resumeFileName,
-        contentBytes: resumeBase64,
-      });
-    }
-
-    const payload = {
+  body: string,
+  attachment: { filename: string; data: Uint8Array },
+): Promise<RouteResult> {
+  const res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
       message: {
         subject,
-        body: {
-          contentType: "HTML",
-          content: emailBody.replace(/\n/g, "<br/>"),
-        },
-        toRecipients: [
+        body: { contentType: "Text", content: body },
+        toRecipients: [{ emailAddress: { address: to } }],
+        attachments: [
           {
-            emailAddress: {
-              address: recipientEmail,
-            },
+            "@odata.type": "#microsoft.graph.fileAttachment",
+            name: attachment.filename,
+            contentBytes: btoa(String.fromCharCode(...attachment.data)),
           },
         ],
-        attachments,
       },
-      saveToSentItems: true,
-    };
+    }),
+  });
 
-    const sendRes = await fetch(
-      "https://graph.microsoft.com/v1.0/me/sendMail",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      },
-    );
-
-    if (sendRes.ok || sendRes.status === 202) {
-      return {
-        success: true,
-        method: "outlook_send",
-        confirmation: "Sent via Outlook",
-      };
-    } else {
-      const errText = await sendRes.text();
-      console.warn("Outlook API send failed:", errText);
-      return {
-        success: false,
-        method: "outlook_send",
-        confirmation: `Failed to send: ${errText.slice(0, 100)}`,
-      };
-    }
-  } catch (err) {
-    console.error("Outlook submission error:", err);
+  if (res.ok || res.status === 202) {
     return {
-      success: false,
-      method: "outlook_send",
-      confirmation: `Email submission error: ${err instanceof Error ? err.message : String(err)}`,
+      success: true,
+      submissionMethod: "outlook_graph_send",
+      confirmationDetails: "Sent via Outlook",
     };
   }
+
+  const errBody = await res.json().catch(() => ({}));
+  return {
+    success: false,
+    submissionMethod: "outlook_graph_send",
+    confirmationDetails: `Outlook send failed: ${errBody?.error?.message || "unknown error"}`,
+  };
 }
 
-/**
- * Prepare generic form handoff payload
- */
-function prepareGenericHandoff(
-  job: any,
-  profile: any,
-  coverLetter: any,
-  primaryResume: any,
-  subject: string,
-): {
-  success: boolean;
-  method: "generic_prepare_handoff";
-  payload: any;
-} {
+async function submitViaEmail(
+  applyUrl: string,
+  description: string,
+  candidate: CandidateData,
+  jobTitle: string,
+  company: string,
+  userId: string,
+): Promise<RouteResult> {
+  const recipient =
+    extractMailtoAddress(applyUrl) ||
+    description.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0];
+
+  if (!recipient) {
+    return {
+      success: false,
+      submissionMethod: "email_handoff",
+      confirmationDetails: "No recipient email address found for this listing",
+    };
+  }
+
+  const account = await getPrimaryEmailAccount(supabase as any, userId);
+  if (!account) {
+    return {
+      success: false,
+      submissionMethod: "email_handoff",
+      confirmationDetails:
+        "No linked email account — link Gmail or Outlook in Settings first",
+    };
+  }
+
+  const refreshed = await refreshEmailToken(supabase as any, account.id);
+  if (!refreshed) {
+    return {
+      success: false,
+      submissionMethod: "email_handoff",
+      confirmationDetails: "Linked email account needs re-authorization",
+    };
+  }
+
+  const subject = `Application for ${jobTitle} at ${company}`;
+
+  if (account.provider === "google") {
+    return sendViaGmail(
+      refreshed.accessToken,
+      account.email,
+      recipient,
+      subject,
+      candidate.coverLetterBody,
+      { filename: candidate.resumeFileName, data: candidate.resumeBuffer },
+    );
+  }
+  return sendViaOutlook(
+    refreshed.accessToken,
+    recipient,
+    subject,
+    candidate.coverLetterBody,
+    { filename: candidate.resumeFileName, data: candidate.resumeBuffer },
+  );
+}
+
+// ── Handoff (always succeeds — this is a truthful "not automatable" state) ─
+function prepareHandoff(
+  applyUrl: string,
+  candidate: CandidateData,
+): RouteResult {
   return {
     success: true,
-    method: "generic_prepare_handoff",
-    payload: {
-      openUrl: job.url || job.apply_url,
-      prefilledData: {
-        firstName: profile.first_name || "",
-        lastName: profile.last_name || "",
-        email: profile.email,
-        phone: profile.phone_number || "",
-      },
-      readyToPaste: coverLetter?.body || `Application for ${job.title}`,
-      resumeReady: primaryResume
-        ? {
-            fileName: primaryResume.file_name || "resume.pdf",
-            sizeKb: Math.round((primaryResume.file_size || 0) / 1024),
-            note: "Download and upload this file",
-          }
-        : {
-            fileName: "No resume uploaded",
-            sizeKb: 0,
-            note: "Upload your resume",
-          },
-      steps: [
-        "1. Tap 'Open Apply Page' below",
-        "2. Fill in your information (pre-filled above)",
-        "3. Copy the cover letter and paste into the form",
-        "4. Upload your resume",
-        "5. Submit the application",
-      ],
+    submissionMethod: "generic_prepare_handoff",
+    confirmationDetails: "Prepared for manual submission — not auto-submitted",
+    handoffPayload: {
+      openApplyPageUrl: applyUrl,
+      prefilledName: candidate.fullName,
+      prefilledEmail: candidate.email,
+      readyToPaste: candidate.coverLetterBody,
+      resumeFileName: candidate.resumeFileName,
     },
   };
 }
 
+// ── Main handler ────────────────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS")
     return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { userId, jobId, coverLetterId, forceDraft } = await req.json();
-    if (!userId || !jobId)
-      throw new Error("Missing required fields: userId, jobId");
+    const jwtUser = await verifyJwt(req);
+    const body = await req.json().catch(() => ({}));
+    const userId = body.userId || jwtUser?.userId;
+    const jobId = body.jobId;
+    const coverLetterId = body.coverLetterId;
 
-    // 1. Fetch all required data in parallel
-    const [profileResult, jobResult, resumeResult, emailResult, letterResult] =
+    if (!userId || !jobId) {
+      return Response.json(
+        { error: "missing_fields", message: "userId and jobId are required" },
+        { status: 400, headers: corsHeaders },
+      );
+    }
+
+    const [jobResult, profileResult, resumeResult, letterResult] =
       await Promise.all([
+        supabase
+          .from("job_vault")
+          .select("*")
+          .eq("id", jobId)
+          .eq("user_id", userId)
+          .single(),
         supabase.from("profiles").select("*").eq("id", userId).single(),
-        supabase.from("job_vault").select("*").eq("id", jobId).single(),
         supabase
           .from("resume_documents")
           .select("*")
           .eq("user_id", userId)
           .eq("is_primary", true)
-          .maybeSingle(),
-        supabase
-          .from("connected_email_accounts")
-          .select("*")
-          .eq("user_id", userId)
-          .eq("is_primary_sender", true)
           .maybeSingle(),
         coverLetterId
           ? supabase
@@ -311,213 +421,140 @@ Deno.serve(async (req: Request) => {
           : Promise.resolve({ data: null, error: null }),
       ]);
 
-    if (profileResult.error || !profileResult.data)
-      throw new Error("Profile not found");
-    if (jobResult.error || !jobResult.data) throw new Error("Job not found");
-
-    const profile = profileResult.data;
-    const job = jobResult.data;
-    const primaryResume = resumeResult.data;
-    const connectedAccount = emailResult.data;
-    const senderEmail =
-      connectedAccount?.email || profile.gmail_linked_email || profile.email;
-
-    // 2. Fetch or generate cover letter if needed
-    let coverLetter = letterResult.data;
-    if (!coverLetter) {
-      const genResponse = await fetch(
-        new URL("/functions/v1/generate-cover-letter", req.url).toString(),
+    if (jobResult.error || !jobResult.data) {
+      return Response.json(
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: req.headers.get("Authorization") || "",
-          },
-          body: JSON.stringify({ userId, jobListingId: jobId }),
+          error: "job_not_found",
+          message: "Job not found or not owned by user",
         },
+        { status: 404, headers: corsHeaders },
       );
-      if (genResponse.ok) {
-        const genData = await genResponse.json();
-        if (genData.cover_letter_id) {
-          const { data } = await supabase
-            .from("cover_letters")
-            .select("*")
-            .eq("id", genData.cover_letter_id)
-            .single();
-          coverLetter = data;
-        } else if (genData.primary?.body) {
-          coverLetter = { id: null, body: genData.primary.body };
-        }
-      }
     }
+    if (profileResult.error || !profileResult.data) {
+      return Response.json(
+        { error: "profile_not_found" },
+        { status: 404, headers: corsHeaders },
+      );
+    }
+    if (resumeResult.error || !resumeResult.data) {
+      return Response.json(
+        {
+          error: "no_primary_resume",
+          message: "Upload and set a primary resume first",
+        },
+        { status: 400, headers: corsHeaders },
+      );
+    }
+
+    const job = jobResult.data;
+    const profile = profileResult.data;
+    const resume = resumeResult.data;
+    const letter = letterResult.data;
+
+    if (!letter) {
+      return Response.json(
+        {
+          error: "no_cover_letter",
+          message: "Generate a cover letter for this job first",
+        },
+        { status: 400, headers: corsHeaders },
+      );
+    }
+
+    // Download resume from storage
+    const { data: resumeFile, error: downloadError } = await supabase.storage
+      .from("cv_vault")
+      .download(resume.storage_path);
+    if (downloadError || !resumeFile) {
+      return Response.json(
+        { error: "resume_download_failed", message: downloadError?.message },
+        { status: 500, headers: corsHeaders },
+      );
+    }
+    const resumeBuffer = new Uint8Array(await resumeFile.arrayBuffer());
 
     const fullName =
       `${profile.first_name || ""} ${profile.last_name || ""}`.trim() ||
       "Applicant";
-    const subject = `Application for ${job.title} at ${job.company}`;
-    const emailBody =
-      coverLetter?.body ||
-      `Dear Hiring Team,\n\nPlease find my application for the ${job.title} position attached.\n\nBest regards,\n${fullName}`;
+    const candidate: CandidateData = {
+      fullName,
+      email: profile.email,
+      coverLetterBody: letter.body,
+      resumeBuffer,
+      resumeFileName: resume.file_name,
+    };
 
-    // 3. Detect submission route
-    const submissionRoute = detectSubmissionRoute(
-      job.apply_url || job.url || "",
-    );
+    const route = detectRoute(job.url);
+    let result: RouteResult;
 
-    let submissionMethod = "manual_dispatch";
-    let submissionConfirmation =
-      "Application prepared for candidate submission";
-    let applicationStatus: "applied" | "saved" = "saved";
-    let resultPayload: any = {};
-
-    // 4. Route to appropriate submission handler
-    switch (submissionRoute) {
-      case "greenhouse":
-      case "lever":
-        // TODO: Implement direct form submission for Greenhouse/Lever
-        submissionMethod = "greenhouse_lever_direct_pending";
-        submissionConfirmation =
-          "Direct submission endpoint not yet implemented";
-        resultPayload = prepareGenericHandoff(
-          job,
-          profile,
-          coverLetter,
-          primaryResume,
-          subject,
-        );
-        break;
-
-      case "mailto":
-        // Extract recipient email from mailto: link
-        const mailtoMatch = (job.apply_url || "").match(/mailto:([^?&]+)/);
-        const recipientEmail = mailtoMatch ? mailtoMatch[1] : job.contact_email;
-
-        if (!recipientEmail || !connectedAccount) {
-          // No email account linked or no recipient found - fallback to handoff
-          resultPayload = prepareGenericHandoff(
-            job,
-            profile,
-            coverLetter,
-            primaryResume,
-            subject,
-          );
-          submissionMethod = "email_handoff_no_account";
+    try {
+      switch (route) {
+        case "greenhouse":
+          result = await submitToGreenhouse(job.url, candidate);
           break;
-        }
-
-        // Try to refresh access token
-        const tokenResult = await refreshEmailToken(
-          supabase as any,
-          connectedAccount.id,
-        );
-
-        if (!tokenResult) {
-          // Token refresh failed - fallback to handoff
-          resultPayload = prepareGenericHandoff(
-            job,
-            profile,
-            coverLetter,
-            primaryResume,
-            subject,
-          );
-          submissionMethod = "email_handoff_token_expired";
-          submissionConfirmation =
-            "Email account token expired. Please re-link.";
+        case "lever":
+          result = await submitToLever(job.url, candidate);
           break;
-        }
-
-        // Send via appropriate provider
-        let emailResult: any;
-        if (connectedAccount.provider === "google") {
-          emailResult = await submitViaGmail(
-            tokenResult.accessToken,
-            senderEmail,
-            fullName,
-            recipientEmail,
-            subject,
-            emailBody,
-            primaryResume?.file_buffer,
-            primaryResume?.file_name,
+        case "email":
+          result = await submitViaEmail(
+            job.url,
+            job.description || "",
+            candidate,
+            job.title,
+            job.company,
+            userId,
           );
-        } else if (connectedAccount.provider === "outlook") {
-          emailResult = await submitViaOutlook(
-            tokenResult.accessToken,
-            senderEmail,
-            fullName,
-            recipientEmail,
-            subject,
-            emailBody,
-            primaryResume?.file_buffer,
-            primaryResume?.file_name,
-          );
-        } else {
-          throw new Error(
-            `Unknown email provider: ${connectedAccount.provider}`,
-          );
-        }
+          break;
+        default:
+          result = prepareHandoff(job.url, candidate);
+      }
 
-        submissionMethod = emailResult.method;
-        submissionConfirmation = emailResult.confirmation;
-        applicationStatus = emailResult.success ? "applied" : "saved";
-        resultPayload = {
-          success: emailResult.success,
-          method: emailResult.method,
-          confirmation: emailResult.confirmation,
-        };
-        break;
-
-      case "generic":
-      default:
-        // Generic form handoff
-        resultPayload = prepareGenericHandoff(
-          job,
-          profile,
-          coverLetter,
-          primaryResume,
-          subject,
-        );
-        submissionMethod = "generic_prepare_handoff";
-        break;
+      // Direct-submit routes that failed to parse/submit degrade to handoff,
+      // never silently reported as success.
+      if (!result.success && route !== "handoff" && route !== "email") {
+        result = prepareHandoff(job.url, candidate);
+      }
+    } catch (err) {
+      console.error("[auto-apply] Route execution error:", err);
+      result = prepareHandoff(job.url, candidate);
     }
 
-    // 5. Upsert job application with submission metadata
-    const { error: appError } = await supabase.from("job_applications").upsert(
-      {
-        user_id: userId,
-        job_id: jobId,
-        status: applicationStatus,
-        applied_at:
-          applicationStatus === "applied" ? new Date().toISOString() : null,
-        cover_letter_used: coverLetter?.id || null,
-        resume_document_id: primaryResume?.id || null,
-        sender_email: senderEmail,
-        sender_full_name: fullName,
-        submission_method: submissionMethod,
-        submission_confirmation: submissionConfirmation,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,job_id" },
-    );
+    const { error: upsertError } = await supabase
+      .from("job_applications")
+      .upsert(
+        {
+          user_id: userId,
+          job_id: jobId,
+          status: result.success ? "applied" : "saved",
+          cover_letter_used: letter.id,
+          resume_document_id: resume.id,
+          submission_method: result.submissionMethod,
+          sender_email: candidate.email,
+          sender_full_name: candidate.fullName,
+          submission_confirmation: result.success
+            ? result.confirmationDetails
+            : null,
+          submission_error: result.success ? null : result.confirmationDetails,
+          applied_at:
+            result.success &&
+            result.submissionMethod !== "generic_prepare_handoff"
+              ? new Date().toISOString()
+              : null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,job_id" },
+      );
 
-    if (appError) throw appError;
+    if (upsertError) {
+      console.error("[auto-apply] job_applications upsert error:", upsertError);
+    }
 
-    return Response.json(
-      {
-        success: true,
-        status: applicationStatus,
-        submission_method: submissionMethod,
-        submission_confirmation: submissionConfirmation,
-        submission_route: submissionRoute,
-        ...resultPayload,
-      },
-      { headers: corsHeaders },
-    );
+    return Response.json(result, { headers: corsHeaders });
   } catch (error: unknown) {
-    console.error("Auto-apply error:", error);
+    console.error("[auto-apply] Fatal error:", error);
     return Response.json(
       {
-        success: false,
-        error: "apply_failed",
+        error: "auto_apply_failed",
         message: error instanceof Error ? error.message : String(error),
       },
       { status: 500, headers: corsHeaders },
