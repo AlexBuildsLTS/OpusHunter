@@ -49,6 +49,14 @@ interface ActiveTargetCardProps {
   isAdmin?: boolean;
 }
 
+const SCRAPE_SOURCES = [
+  { key: "jobtech", label: "JobTech" },
+  { key: "thehub", label: "The Hub" },
+  { key: "jsearch", label: "RapidAPI / JSearch" },
+  { key: "adzuna", label: "Adzuna" },
+  { key: "linkedin", label: "LinkedIn" },
+] as const;
+
 export function ActiveTargetCard({
   onEditRules,
   onViewPipeline,
@@ -61,6 +69,15 @@ export function ActiveTargetCard({
   const { triggerScrape, isScraping, rateLimitStatus, checkRateLimit } =
     useJobs();
 
+  const [batchSize, setBatchSize] = useState(isAdmin ? 100 : 25);
+  const [enabledSources, setEnabledSources] = useState<
+    Record<(typeof SCRAPE_SOURCES)[number]["key"], boolean>
+  >(
+    () =>
+      Object.fromEntries(
+        SCRAPE_SOURCES.map(({ key }) => [key, true]),
+      ) as Record<(typeof SCRAPE_SOURCES)[number]["key"], boolean>,
+  );
   const [scrapeSuccessMsg, setScrapeSuccessMsg] = useState<string | null>(null);
   const [scrapeError, setScrapeError] = useState<string | null>(null);
 
@@ -87,17 +104,18 @@ export function ActiveTargetCard({
 
     try {
       const res = await triggerScrape(undefined, {
-        limit: 25,
+        batchSize,
+        enableSources: enabledSources,
         forceFresh: true,
       });
 
       const harvestedCount =
         res?.count ?? res?.scraped ?? res?.listings?.length ?? 0;
-      const uniqueCount = res?.deduplicated ?? res?.count ?? harvestedCount;
+      const uniqueCount = res?.totalNew ?? harvestedCount;
 
       if (res && harvestedCount > 0) {
         setScrapeSuccessMsg(
-          `Successfully harvested ${harvestedCount} targeted jobs (${uniqueCount} unique). Auto-classified into Vault.`,
+          `Added ${uniqueCount} new jobs to your Vault. The live systems returned ${res.totalScraped ?? harvestedCount} listings and ${res.totalUniqueFetched ?? uniqueCount} unique listings before existing jobs were removed.`,
         );
         if (Platform.OS !== "web") {
           Haptics.notificationAsync(
@@ -110,12 +128,22 @@ export function ActiveTargetCard({
         );
       } else {
         setScrapeSuccessMsg(
-          "Scan complete. Radar checked all live endpoints; pipeline is up to date.",
+          res?.totalScraped > 0
+            ? `Scan complete. Live systems returned ${res.totalScraped} listings, but they are already in your Vault. Change the target, page, or enabled systems for different results.`
+            : "Scan complete. The enabled live systems returned no listings for this target. Check the selected countries, source credentials, and system toggles.",
         );
       }
     } catch (err: any) {
       setScrapeError(err.message || "Failed to trigger automated scrape.");
     }
+  };
+
+  const toggleSource = (source: (typeof SCRAPE_SOURCES)[number]["key"]) => {
+    setEnabledSources((current) => {
+      const enabledCount = Object.values(current).filter(Boolean).length;
+      if (current[source] && enabledCount === 1) return current;
+      return { ...current, [source]: !current[source] };
+    });
   };
 
   return (
@@ -152,12 +180,12 @@ export function ActiveTargetCard({
                 {isAdmin ? (
                   <View style={styles.adminTierBadge}>
                     <Crown size={11} color="#FBBF24" />
-                    <Text style={styles.adminTierText}>ADMIN • UNLIMITED</Text>
+                    <Text style={styles.adminTierText}>ADMIN</Text>
                   </View>
                 ) : (
                   <View style={styles.memberTierBadge}>
                     <ShieldCheck size={11} color={colors.accent.cyan} />
-                    <Text style={styles.memberTierText}>MEMBER • 1 ACTIVE</Text>
+                    <Text style={styles.memberTierText}>MEMBER</Text>
                   </View>
                 )}
               </View>
@@ -175,8 +203,8 @@ export function ActiveTargetCard({
               accessibilityRole="button"
               accessibilityLabel="Edit targeting rules"
             >
-              <Settings size={14} color="#94A3B8" />
-              <Text style={styles.tuneButtonText}>Tune Rules</Text>
+              <Settings size={15} color="#94A3B8" />
+              <Text style={styles.tuneButtonText}>API's</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -254,6 +282,69 @@ export function ActiveTargetCard({
                   ? `${maxDaily} max applications/day`
                   : "Daily limit not configured"}
               </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.scrapeOptions}>
+          <View style={styles.optionGroup}>
+            <Text style={styles.optionLabel}>RESULTS PER SWEEP</Text>
+            <View style={styles.optionRow}>
+              {[25, 50, 100, 200]
+                .filter(
+                  (size) =>
+                    isAdmin || size <= (profile?.role === "premium" ? 50 : 25),
+                )
+                .map((size) => (
+                  <TouchableOpacity
+                    key={size}
+                    onPress={() => setBatchSize(size)}
+                    style={[
+                      styles.optionChip,
+                      batchSize === size && styles.optionChipActive,
+                    ]}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: batchSize === size }}
+                    accessibilityLabel={`Request ${size} new jobs per sweep`}
+                  >
+                    <Text
+                      style={[
+                        styles.optionChipText,
+                        batchSize === size && styles.optionChipTextActive,
+                      ]}
+                    >
+                      {size}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+            </View>
+          </View>
+
+          <View style={styles.optionGroup}>
+            <Text style={styles.optionLabel}>LIVE SYSTEMS</Text>
+            <View style={styles.sourceRow}>
+              {SCRAPE_SOURCES.map(({ key, label }) => (
+                <TouchableOpacity
+                  key={key}
+                  onPress={() => toggleSource(key)}
+                  style={[
+                    styles.sourceChip,
+                    enabledSources[key] && styles.sourceChipActive,
+                  ]}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: enabledSources[key] }}
+                  accessibilityLabel={`${enabledSources[key] ? "Disable" : "Enable"} ${label}`}
+                >
+                  <Text
+                    style={[
+                      styles.sourceChipText,
+                      enabledSources[key] && styles.sourceChipTextActive,
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         </View>
@@ -515,6 +606,75 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#F1F5F9",
+  },
+  scrapeOptions: {
+    gap: 14,
+    marginBottom: 16,
+    paddingTop: 2,
+  },
+  optionGroup: {
+    gap: 7,
+  },
+  optionLabel: {
+    color: "#64748B",
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  optionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  optionChip: {
+    minHeight: 38,
+    minWidth: 52,
+    paddingHorizontal: 14,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.24)",
+    backgroundColor: "rgba(15, 23, 42, 0.72)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  optionChipActive: {
+    borderColor: colors.accent.cyan,
+    backgroundColor: "rgba(0, 242, 254, 0.14)",
+  },
+  optionChipText: {
+    color: "#94A3B8",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  optionChipTextActive: {
+    color: colors.accent.cyan,
+  },
+  sourceRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+  },
+  sourceChip: {
+    minHeight: 36,
+    paddingHorizontal: 11,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.2)",
+    backgroundColor: "rgba(15, 23, 42, 0.66)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sourceChipActive: {
+    borderColor: "rgba(0, 242, 254, 0.62)",
+    backgroundColor: "rgba(0, 242, 254, 0.1)",
+  },
+  sourceChipText: {
+    color: "#94A3B8",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  sourceChipTextActive: {
+    color: colors.accent.cyan,
   },
   successBox: {
     flexDirection: "row",
