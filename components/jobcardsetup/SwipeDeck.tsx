@@ -17,6 +17,7 @@ import {
   TouchableOpacity,
   Linking,
   Text,
+  useWindowDimensions,
 } from "react-native";
 import Animated, {
   useSharedValue,
@@ -49,8 +50,21 @@ import { colors, radius, shadows } from "../../constants/theme";
 import { springs, swipeDeck } from "../../constants/animations";
 import { Job } from "../../types/app.types";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const SWIPE_THRESHOLD = Math.min(SCREEN_WIDTH * 0.28, swipeDeck.throwThreshold);
+const { width: INITIAL_SCREEN_WIDTH } = Dimensions.get("window");
+
+function formatSource(source: string | null | undefined) {
+  if (!source) return "Source unavailable";
+  const labels: Record<string, string> = {
+    adzuna: "Adzuna",
+    indeed: "Indeed",
+    jobtech: "JobTech",
+    linkedin: "LinkedIn",
+    custom: "Custom source",
+    jsearch: "RapidAPI · JSearch",
+    thehub: "The Hub",
+  };
+  return labels[source.toLowerCase()] || source;
+}
 
 interface SwipeDeckProps {
   jobs: Job[];
@@ -68,14 +82,22 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
   onSelectJob,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const { width } = useWindowDimensions();
+  const screenWidth = width || INITIAL_SCREEN_WIDTH;
+  const swipeThreshold = Math.min(
+    screenWidth * 0.28,
+    swipeDeck.throwThreshold,
+  );
 
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const isInteracting = useSharedValue(false);
 
   const currentJob = jobs[currentIndex];
-  const nextJob = jobs[(currentIndex + 1) % jobs.length];
-  const thirdJob = jobs[(currentIndex + 2) % jobs.length];
+  const nextJob =
+    jobs.length > 1 ? jobs[(currentIndex + 1) % jobs.length] : undefined;
+  const thirdJob =
+    jobs.length > 2 ? jobs[(currentIndex + 2) % jobs.length] : undefined;
 
   const triggerHaptic = useCallback((type: "light" | "medium" | "success") => {
     if (Platform.OS === "web") return;
@@ -93,6 +115,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
   }, []);
 
   const advanceCard = useCallback(() => {
+    if (jobs.length === 0) return;
     translateX.value = 0;
     translateY.value = 0;
     isInteracting.value = false;
@@ -106,14 +129,14 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
       if (direction === "right") {
         triggerHaptic("success");
         onSwipeRight(currentJob);
-        translateX.value = withSpring(SCREEN_WIDTH * 1.3, springs.swipe, () => {
+        translateX.value = withSpring(screenWidth * 1.3, springs.swipe, () => {
           runOnJS(advanceCard)();
         });
       } else if (direction === "left") {
         triggerHaptic("medium");
         onSwipeLeft(currentJob);
         translateX.value = withSpring(
-          -SCREEN_WIDTH * 1.3,
+          -screenWidth * 1.3,
           springs.swipe,
           () => {
             runOnJS(advanceCard)();
@@ -123,7 +146,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
         triggerHaptic("success");
         onSwipeUp(currentJob);
         translateY.value = withSpring(
-          -SCREEN_WIDTH * 1.4,
+          -screenWidth * 1.4,
           springs.swipe,
           () => {
             runOnJS(advanceCard)();
@@ -140,6 +163,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
       advanceCard,
       translateX,
       translateY,
+      screenWidth,
     ],
   );
 
@@ -152,8 +176,8 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
       translateY.value = event.translationY;
     })
     .onEnd((event) => {
-      const horizontalThrow = Math.abs(event.translationX) > SWIPE_THRESHOLD;
-      const verticalThrow = event.translationY < -SWIPE_THRESHOLD;
+      const horizontalThrow = Math.abs(event.translationX) > swipeThreshold;
+      const verticalThrow = event.translationY < -swipeThreshold;
 
       if (horizontalThrow) {
         if (event.translationX > 0) {
@@ -173,7 +197,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
   const topCardAnimatedStyle = useAnimatedStyle(() => {
     const rotate = interpolate(
       translateX.value,
-      [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
+      [-screenWidth / 2, 0, screenWidth / 2],
       [-swipeDeck.maxRotation, 0, swipeDeck.maxRotation],
       Extrapolation.CLAMP,
     );
@@ -190,7 +214,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
   const rightStampStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
       translateX.value,
-      [20, SWIPE_THRESHOLD],
+      [20, swipeThreshold],
       [0, 1],
       Extrapolation.CLAMP,
     ),
@@ -198,7 +222,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
       {
         scale: interpolate(
           translateX.value,
-          [20, SWIPE_THRESHOLD],
+          [20, swipeThreshold],
           [0.8, 1],
           Extrapolation.CLAMP,
         ),
@@ -209,7 +233,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
   const leftStampStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
       translateX.value,
-      [-SWIPE_THRESHOLD, -20],
+      [-swipeThreshold, -20],
       [1, 0],
       Extrapolation.CLAMP,
     ),
@@ -217,7 +241,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
       {
         scale: interpolate(
           translateX.value,
-          [-SWIPE_THRESHOLD, -20],
+          [-swipeThreshold, -20],
           [1, 0.8],
           Extrapolation.CLAMP,
         ),
@@ -228,7 +252,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
   const upStampStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
       translateY.value,
-      [-SWIPE_THRESHOLD, -20],
+      [-swipeThreshold, -20],
       [1, 0],
       Extrapolation.CLAMP,
     ),
@@ -236,7 +260,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
       {
         scale: interpolate(
           translateY.value,
-          [-SWIPE_THRESHOLD, -20],
+          [-swipeThreshold, -20],
           [1, 0.8],
           Extrapolation.CLAMP,
         ),
@@ -251,19 +275,19 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
     );
     const scale = interpolate(
       dragDistance,
-      [0, SWIPE_THRESHOLD],
+      [0, swipeThreshold],
       [0.94, 1],
       Extrapolation.CLAMP,
     );
     const translateYOffset = interpolate(
       dragDistance,
-      [0, SWIPE_THRESHOLD],
+      [0, swipeThreshold],
       [16, 0],
       Extrapolation.CLAMP,
     );
     const opacity = interpolate(
       dragDistance,
-      [0, SWIPE_THRESHOLD],
+      [0, swipeThreshold],
       [0.75, 1],
       Extrapolation.CLAMP,
     );
@@ -281,19 +305,19 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
     );
     const scale = interpolate(
       dragDistance,
-      [0, SWIPE_THRESHOLD],
+      [0, swipeThreshold],
       [0.88, 0.94],
       Extrapolation.CLAMP,
     );
     const translateYOffset = interpolate(
       dragDistance,
-      [0, SWIPE_THRESHOLD],
+      [0, swipeThreshold],
       [32, 16],
       Extrapolation.CLAMP,
     );
     const opacity = interpolate(
       dragDistance,
-      [0, SWIPE_THRESHOLD],
+      [0, swipeThreshold],
       [0.4, 0.75],
       Extrapolation.CLAMP,
     );
@@ -361,6 +385,13 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
                     />
                   )}
                 </View>
+
+                <Badge
+                  variant="default"
+                  size="sm"
+                  label={formatSource(currentJob.source)}
+                  dot={false}
+                />
                 <View style={styles.metaRow}>
                   <Building2 size={14} color={colors.text.secondary} />
                   <Typography variant="body" color="secondary">
@@ -517,39 +548,22 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
                   <Text
                     style={{ color: "#94A3B8", fontSize: 12, marginBottom: 8 }}
                   >
-                    Description available natively on{" "}
-                    {currentJob.source === "linkedin"
-                      ? "LinkedIn"
-                      : currentJob.source}
-                    .
+                    The full description is available on the original posting.
                   </Text>
-                  <TouchableOpacity
-                    onPress={() =>
-                      Linking.openURL(
-                        currentJob.url ||
-                          currentJob.source_url ||
-                          "https://linkedin.com",
-                      )
-                    }
-                    style={{
-                      paddingVertical: 6,
-                      paddingHorizontal: 12,
-                      backgroundColor: "rgba(255,255,255,0.05)",
-                      borderRadius: 6,
-                      borderWidth: 1,
-                      borderColor: "rgba(255,255,255,0.1)",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "#CBD5E1",
-                        fontSize: 12,
-                        fontWeight: "600",
-                      }}
+                  {(currentJob.url || currentJob.source_url) && (
+                    <TouchableOpacity
+                      onPress={() =>
+                        Linking.openURL(
+                          currentJob.url || currentJob.source_url || "",
+                        ).catch(() => {})
+                      }
+                      style={styles.readPostButton}
+                      accessibilityRole="link"
+                      accessibilityLabel={`Open ${formatSource(currentJob.source)} posting`}
                     >
-                      Read Full Post
-                    </Text>
-                  </TouchableOpacity>
+                      <Text style={styles.readPostText}>Read Full Post</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
 
@@ -642,7 +656,7 @@ const styles = StyleSheet.create({
   detailsLink: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    columnGap: 6,
     marginTop: 8,
     paddingVertical: 6,
   },
@@ -675,13 +689,13 @@ const styles = StyleSheet.create({
     borderColor: colors.surface.border,
   },
   cardHeader: {
-    gap: 8,
+    rowGap: 8,
   },
   titleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    gap: 12,
+    columnGap: 12,
   },
   flex1: {
     flex: 1,
@@ -689,18 +703,19 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    columnGap: 6,
   },
   badgeRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    columnGap: 8,
+    rowGap: 8,
     marginVertical: 8,
   },
   badge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    columnGap: 4,
     backgroundColor: `${colors.accent.cyan}1A`,
     borderWidth: 1,
     borderColor: `${colors.accent.cyan}33`,
@@ -711,8 +726,24 @@ const styles = StyleSheet.create({
   stackRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    columnGap: 6,
+    rowGap: 6,
     marginTop: 4,
+  },
+  readPostButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  readPostText: {
+    color: "#CBD5E1",
+    fontSize: 12,
+    fontWeight: "600",
   },
   techChip: {
     backgroundColor: colors.surface.frost,
