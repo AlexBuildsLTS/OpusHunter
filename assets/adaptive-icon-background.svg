@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" width="1080" height="1080">
+  <defs>
+    <!-- Complex dark void background gradient covering full canvas area -->
+    <linearGradient id="deepVoidBackground" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#020205" />
+      <stop offset="60%" stop-color="#050C1F" />
+      <stop offset="90%" stop-color="#0A0C1A" />
+      <stop offset="100%" stop-color="#011936" />
+    </linearGradient>
+  </defs>
+  
+  <!-- A solid, bleeding edge rectangle covering the full 108dp canvas area -->
+  <rect width="1080" height="1080" fill="url(#deepVoidBackground)" />
+</svg>
