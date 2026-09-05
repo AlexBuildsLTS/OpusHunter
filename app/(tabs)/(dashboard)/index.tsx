@@ -252,7 +252,7 @@ export default function DashboardScreen() {
                 value={metrics?.discovered ?? 0}
                 color={colors.accent.blue}
                 icon={Target}
-                delay={100}
+                delay={150}
               />
               <MetricCard
                 label="Saved"
@@ -266,7 +266,7 @@ export default function DashboardScreen() {
                 value={metrics?.applied ?? 0}
                 color={colors.accent.green}
                 icon={CheckCircle2}
-                delay={200}
+                delay={150}
               />
             </>
           )}

@@ -18,6 +18,7 @@ import {
   Linking,
   ActivityIndicator,
   useWindowDimensions,
+  Alert,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
@@ -39,6 +40,7 @@ import {
   AlertCircle,
   Copy,
   Flame,
+  Trash2,
 } from "lucide-react-native";
 
 import { SafeAreaWrapper } from "@/components/shared/SafeAreaWrapper";
@@ -74,6 +76,7 @@ export default function PipelineScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Application | null>(null);
 
   // Cover Letter Modal State
   const [coverLetterApp, setCoverLetterApp] = useState<Application | null>(
@@ -90,6 +93,55 @@ export default function PipelineScreen() {
     strategy?: string;
   } | null>(null);
   const [copiedNotification, setCopiedNotification] = useState(false);
+
+  const deleteApplicationMutation = useMutation({
+    mutationFn: async (app: Application) => {
+      if (!user) throw new Error("You must be signed in to remove a job.");
+      const { error: applicationError } = await supabase
+        .from("job_applications")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("job_id", app.job_id);
+      if (applicationError) throw applicationError;
+
+      const { error: jobError } = await supabase
+        .from("job_vault")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("id", app.job_id);
+      if (jobError) throw jobError;
+    },
+    onSuccess: (_, app) => {
+      queryClient.setQueryData<Application[]>(
+        ["applications", user?.id],
+        (old) => (old || []).filter((item) => item.job_id !== app.job_id),
+      );
+      if (selectedApp?.job_id === app.job_id) setSelectedApp(null);
+    },
+    onError: (error) => {
+      console.error("Pipeline removal failed:", error);
+      Alert.alert(
+        "Could not remove job",
+        error instanceof Error
+          ? error.message
+          : "The job was not removed. Please try again.",
+      );
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["applications", user?.id] });
+    },
+  });
+
+  const handleDeleteApplication = (app: Application) => {
+    setPendingDelete(app);
+  };
+
+  const confirmDeleteApplication = () => {
+    if (!pendingDelete) return;
+    const app = pendingDelete;
+    setPendingDelete(null);
+    deleteApplicationMutation.mutate(app);
+  };
 
   // ── 1. Fetch Live Pipeline Applications ──────────────────────────────────
   const {
@@ -172,13 +224,19 @@ export default function PipelineScreen() {
       const isSynthetic = app.id.startsWith("synth-");
       if (isSynthetic) {
         // Upsert into job_applications table
-        const { error } = await supabase.from("job_applications").upsert({
-          user_id: user.id,
-          job_id: app.job_id,
-          status: newStatus,
-          applied_at: newStatus === "applied" ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
-        });
+        const { error } = await supabase
+          .from("job_applications")
+          .upsert(
+            {
+              user_id: user.id,
+              job_id: app.job_id,
+              status: newStatus,
+              applied_at:
+                newStatus === "applied" ? new Date().toISOString() : null,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id,job_id" },
+          );
         if (error) throw error;
       } else {
         const { error } = await supabase
@@ -293,18 +351,11 @@ export default function PipelineScreen() {
       }
     } catch (err) {
       console.error("Cover letter synthesis error:", err);
-      // Fallback preview template if Edge function needs context setup
-      setGeneratedLetter({
-        body:
-          "Dear Hiring Team,\n\nI am writing to express my enthusiastic interest in the " +
-          (app.job_vault?.title || "role") +
-          " position at " +
-          (app.job_vault?.company || "your team") +
-          ".\n\nWith extensive expertise in building high-performance, mission-critical systems and scalable architectures (Java/Spring Boot, PostgreSQL RLS, React Native, Linux sysadmin), my technical background aligns directly with your stack and engineering vision.\n\nThank you for your consideration, and I look forward to connecting.\n\nBest regards,\n" +
-          (user?.email?.split("@")[0] || "Alex Fredrik Youssef"),
-        ats_score: 95,
-        strategy: strat,
-      });
+      setCoverLetterApp(null);
+      Alert.alert(
+        "Cover letter unavailable",
+        "The listing-specific cover letter could not be generated. No placeholder content was created.",
+      );
     } finally {
       setIsGeneratingLetter(false);
     }
@@ -786,6 +837,7 @@ export default function PipelineScreen() {
               applications={filteredApplications}
               isLoading={false}
               onSelectApplication={(app) => setSelectedApp(app)}
+              onDeleteApplication={handleDeleteApplication}
             />
           ) : filteredApplications.length === 0 ? (
             <Card style={styles.emptyStateCard}>
@@ -822,11 +874,53 @@ export default function PipelineScreen() {
               onSelectApplication={(app) => setSelectedApp(app)}
               onUpdateStatus={handleUpdateStatus}
               onGenerateCoverLetter={handleGenerateCoverLetter}
+              onDeleteApplication={handleDeleteApplication}
             />
           )}
         </View>
 
         {/* ── Job Details Modal ── */}
+        <Modal
+          visible={!!pendingDelete}
+          onClose={() => {
+            if (!deleteApplicationMutation.isPending) setPendingDelete(null);
+          }}
+          title="Remove from pipeline"
+          maxWidth={440}
+        >
+          <View style={styles.confirmDeleteContent}>
+            <View style={styles.confirmDeleteIcon}>
+              <Trash2 size={24} color={colors.accent.red} />
+            </View>
+            <Typography variant="h4" weight="bold" color="primary">
+              Remove this job?
+            </Typography>
+            <Typography variant="bodySm" color="secondary">
+              {pendingDelete?.job_vault?.title || "This job"} will be removed
+              from your pipeline and cannot be restored.
+            </Typography>
+            <View style={styles.confirmDeleteActions}>
+              <Button
+                variant="ghost"
+                onPress={() => setPendingDelete(null)}
+                disabled={deleteApplicationMutation.isPending}
+                style={styles.confirmDeleteButton}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onPress={confirmDeleteApplication}
+                loading={deleteApplicationMutation.isPending}
+                accessibilityLabel="Confirm remove job"
+                style={styles.confirmDeleteButton}
+              >
+                Remove job
+              </Button>
+            </View>
+          </View>
+        </Modal>
+
         <Modal
           visible={!!selectedApp}
           onClose={() => setSelectedApp(null)}
@@ -1184,11 +1278,13 @@ function MatrixListView({
   onSelectApplication,
   onUpdateStatus,
   onGenerateCoverLetter,
+  onDeleteApplication,
 }: {
   applications: Application[];
   onSelectApplication: (app: Application) => void;
   onUpdateStatus: (app: Application, status: Status) => void;
   onGenerateCoverLetter: (app: Application) => void;
+  onDeleteApplication: (app: Application) => void;
 }) {
   return (
     <ScrollView
@@ -1337,6 +1433,28 @@ function MatrixListView({
 
                   {/* Action Buttons */}
                   <View style={styles.matrixColActions}>
+                    {(app.status === "saved" || app.status === "rejected") && (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          onDeleteApplication(app);
+                        }}
+                        style={({ pressed }) => [
+                          styles.actionIconButton,
+                          styles.deleteActionButton,
+                          pressed && styles.actionPressed,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          app.status === "rejected"
+                            ? "Delete passed job"
+                            : "Remove saved job"
+                        }
+                        hitSlop={4}
+                      >
+                        <Trash2 size={15} color={colors.accent.red} />
+                      </Pressable>
+                    )}
                     <TouchableOpacity
                       onPress={(e) => {
                         e.stopPropagation();
@@ -1812,16 +1930,52 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionIconButton: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     borderRadius: radius.sm,
     backgroundColor: "rgba(255, 255, 255, 0.04)",
     borderWidth: 1,
     borderColor: colors.surface.border,
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 10,
+  },
+  deleteActionButton: {
+    width: 32,
+    height: 32,
+    padding: 0,
+    backgroundColor: `${colors.accent.red}12`,
+    borderColor: `${colors.accent.red}45`,
+  },
+  actionPressed: {
+    opacity: 0.65,
+    transform: [{ scale: 0.94 }],
+  },
+  confirmDeleteContent: {
+    alignItems: "center",
+    rowGap: 12,
+  },
+  confirmDeleteIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${colors.accent.red}18`,
+    borderWidth: 1,
+    borderColor: `${colors.accent.red}50`,
+  },
+  confirmDeleteActions: {
+    width: "100%",
+    flexDirection: "row",
+    columnGap: 10,
+    marginTop: 8,
+  },
+  confirmDeleteButton: {
+    flex: 1,
   },
   advanceMatrixBtn: {
+    minHeight: 44,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: radius.sm,
