@@ -32,11 +32,12 @@ import {
 import { useAuthStore } from "../../../stores/authStore";
 import { ActiveTargetCard } from "../../../components/jobcardsetup/ActiveTargetCard";
 import { ProfileSetupWizard } from "../../../components/jobcardsetup/ProfileSetupWizard";
+import { useAdaptiveLayout } from "../../../hooks/useAdaptiveLayout";
+import { Badge } from "../../../components/ui/Badge";
 
 export default function HunterRulesScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= 1024;
+  const { isDesktop, isMobile } = useAdaptiveLayout();
   const { user, profile } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState<"card" | "wizard">("card");
@@ -54,11 +55,13 @@ export default function HunterRulesScreen() {
               <Radar size={22} color={colors.accent.cyan} />
             </View>
             <View>
-              <Text style={styles.title}>Hunter Targeting & Rules</Text>
-              <Text style={styles.subtitle}>
+              <View style={styles.headerCopy}>
+                <Text style={styles.title}>Hunter Targeting & Rules</Text>
+                <Text style={styles.subtitle} numberOfLines={isMobile ? 2 : 1}>
                 Define your radar parameters to generate your active job search
                 card box.
-              </Text>
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -71,6 +74,9 @@ export default function HunterRulesScreen() {
               ]}
               onPress={() => setActiveTab("card")}
               activeOpacity={0.8}
+              accessibilityRole="tab"
+              accessibilityLabel="Show active target card"
+              accessibilityState={{ selected: activeTab === "card" }}
             >
               <Layers
                 size={14}
@@ -82,7 +88,7 @@ export default function HunterRulesScreen() {
                   activeTab === "card" && { color: C.cyan, fontWeight: "800" },
                 ]}
               >
-                Active Target Card
+                {isMobile ? "Active target" : "Active Target Card"}
               </Text>
             </TouchableOpacity>
 
@@ -93,6 +99,9 @@ export default function HunterRulesScreen() {
               ]}
               onPress={() => setActiveTab("wizard")}
               activeOpacity={0.8}
+              accessibilityRole="tab"
+              accessibilityLabel="Open targeting setup wizard"
+              accessibilityState={{ selected: activeTab === "wizard" }}
             >
               <Sliders
                 size={14}
@@ -107,7 +116,7 @@ export default function HunterRulesScreen() {
                   },
                 ]}
               >
-                Targeting Setup Wizard
+                {isMobile ? "Setup" : "Targeting Setup Wizard"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -144,10 +153,13 @@ export default function HunterRulesScreen() {
                   ) : (
                     <ShieldCheck size={18} color={colors.accent.cyan} />
                   )}
+                  <Badge
+                    variant={isAdmin ? "roleAdmin" : "roleMember"}
+                    label={isAdmin ? "Admin" : "Member"}
+                    size="sm"
+                  />
                   <Text style={styles.infoCardTitle}>
-                    {isAdmin
-                      ? "Admin Tier: Unlimited Multi-Target Radars"
-                      : "Member Tier: 1 Active Target Pipeline"}
+                    {isAdmin ? "Multi-target radar access" : "Focused radar access"}
                   </Text>
                 </View>
                 <Text style={styles.infoCardDesc}>
@@ -197,8 +209,12 @@ const styles = StyleSheet.create({
   headerTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
     marginBottom: 14,
+  },
+  headerCopy: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 12,
   },
   radarIconBox: {
     width: 42,
@@ -212,6 +228,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
+    lineHeight: 25,
     fontWeight: "800",
     color: "#FFFFFF",
     letterSpacing: -0.3,
@@ -220,24 +237,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#94A3B8",
     marginTop: 2,
+    lineHeight: 18,
   },
   tabSelector: {
     flexDirection: "row",
     backgroundColor: "rgba(15, 23, 42, 0.7)",
     borderRadius: radius.md,
     padding: 4,
-    gap: 4,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.08)",
   },
   tabButton: {
     flex: 1,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 8,
     borderRadius: radius.sm,
-    gap: 8,
+    paddingHorizontal: 6,
   },
   tabButtonActive: {
     backgroundColor: "rgba(0, 242, 254, 0.12)",
@@ -246,6 +264,7 @@ const styles = StyleSheet.create({
   },
   tabButtonText: {
     fontSize: 13,
+    lineHeight: 17,
     fontWeight: "600",
     color: "#94A3B8",
   },
