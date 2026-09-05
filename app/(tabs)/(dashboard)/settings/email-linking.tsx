@@ -65,12 +65,20 @@ export default function EmailLinkingScreen() {
   const [accountToRemove, setAccountToRemove] = useState<{ id: string; email: string } | null>(null);
   const { showToast } = useToast();
 
+  const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const googleAndroidClientId =
+    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+  const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+  const googleClientId =
+    googleWebClientId || process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
+
   // Google OAuth setup
   const [googleRequest, googleResponse, googlePromptAsync] =
     Google.useAuthRequest({
-      clientId:
-        process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ||
-        "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+      clientId: googleClientId,
+      webClientId: googleWebClientId || googleClientId,
+      androidClientId: googleAndroidClientId,
+      iosClientId: googleIosClientId,
       redirectUri: makeRedirectUri({
         scheme: "opushunter",
         path: "oauth/callback",
@@ -112,6 +120,13 @@ export default function EmailLinkingScreen() {
   };
 
   const handleGoogleLink = useCallback(async () => {
+    if (!googleClientId) {
+      const message =
+        "Gmail linking is not configured: add the Google web OAuth client ID.";
+      setError(message);
+      showToast(message, "error");
+      return;
+    }
     if (!googleRequest) return;
 
     setLinking(true);
