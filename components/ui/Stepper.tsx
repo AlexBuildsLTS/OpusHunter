@@ -140,7 +140,16 @@ export function Stepper({
       </View>
 
       {showDots && (
-        <View style={styles.pagination}>
+        <View
+          style={styles.pagination}
+          accessibilityRole="adjustable"
+          accessibilityLabel={`Step ${currentStep + 1} of ${stepCount}`}
+          accessibilityValue={{
+            min: 1,
+            max: stepCount,
+            now: currentStep + 1,
+          }}
+        >
           {Array.from({ length: stepCount }).map((_, i) => (
             <View
               key={i}

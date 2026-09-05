@@ -106,8 +106,10 @@ export function Modal({
               </Typography>
               <Pressable
                 onPress={onClose}
-                hitSlop={8}
+                hitSlop={4}
                 style={styles.closeBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close dialog"
               >
                 <X size={20} color={colors.text.secondary} />
               </Pressable>
