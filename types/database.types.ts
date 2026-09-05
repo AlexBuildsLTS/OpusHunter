@@ -526,6 +526,7 @@ export type Database = {
           max_daily_applications: number
           outlook_linked_email: string | null
           professional_title: string | null
+          preferred_ai_language: string
           profile_complete: boolean
           role: Database["public"]["Enums"]["user_role"]
           salary_currency: string
@@ -559,6 +560,7 @@ export type Database = {
           max_daily_applications?: number
           outlook_linked_email?: string | null
           professional_title?: string | null
+          preferred_ai_language?: string
           profile_complete?: boolean
           role?: Database["public"]["Enums"]["user_role"]
           salary_currency?: string
@@ -592,6 +594,7 @@ export type Database = {
           max_daily_applications?: number
           outlook_linked_email?: string | null
           professional_title?: string | null
+          preferred_ai_language?: string
           profile_complete?: boolean
           role?: Database["public"]["Enums"]["user_role"]
           salary_currency?: string

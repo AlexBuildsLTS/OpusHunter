@@ -1,7 +1,7 @@
 /**
  * OpusHunter — Evidence-grounded resume refinement.
  *
- * Creates a separate plain-text resume artifact. The uploaded source document
+ * Creates a separate reviewable resume artifact. The uploaded source document
  * is never overwritten and the generated artifact is never made primary
  * automatically.
  */
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
       throw new Error(downloadError?.message || "Resume file could not be read.");
     }
 
-    const [profileRes, contextRes] = await Promise.all([
+    const [profileRes, contextRes, certificationsRes] = await Promise.all([
       supabase
         .from("profiles")
         .select("first_name,last_name,professional_title,bio,target_roles")
@@ -66,12 +66,18 @@ Deno.serve(async (req) => {
         )
         .eq("user_id", jwtUser.userId)
         .maybeSingle(),
+      supabase
+        .from("certifications")
+        .select("cert_name,cert_issuer,file_name")
+        .eq("user_id", jwtUser.userId),
     ]);
     if (profileRes.error) throw profileRes.error;
     if (contextRes.error) throw contextRes.error;
+    if (certificationsRes.error) throw certificationsRes.error;
 
     const context = contextRes.data;
     const profile = profileRes.data;
+    const uploadedCertifications = certificationsRes.data || [];
     const hasEvidence =
       Boolean(profile?.bio) ||
       Boolean(context?.career_summary) ||
@@ -97,6 +103,7 @@ Deno.serve(async (req) => {
     const evidence = JSON.stringify({
       profile,
       extracted_context: context,
+      uploaded_certifications: uploadedCertifications,
     });
     const prompt = `You are a senior resume editor optimizing a real resume for truthful ATS parsing and human review.
 
@@ -158,40 +165,11 @@ ${evidence}`;
 
     if (!refined) throw new Error("Gemini could not produce a valid refined resume.");
 
-    const refinedPath = `${jwtUser.userId}/refined-${crypto.randomUUID()}.txt`;
-    const { error: uploadError } = await supabase.storage
-      .from("resumes")
-      .upload(refinedPath, new Blob([refined], { type: "text/plain" }), {
-        contentType: "text/plain",
-        upsert: false,
-      });
-    if (uploadError) throw uploadError;
-
-    const { data: refinedDoc, error: insertError } = await supabase
-      .from("resume_documents")
-      .insert({
-        user_id: jwtUser.userId,
-        storage_path: refinedPath,
-        file_name: `${sourceDoc.file_name.replace(/\.[^.]+$/, "")} — refined.txt`,
-        file_type: "text/plain",
-        file_size_kb: Math.max(1, Math.round(new TextEncoder().encode(refined).length / 1024)),
-        is_primary: false,
-        extraction_status: "complete",
-        label: `Refined from ${sourceDoc.file_name}`,
-      })
-      .select("*")
-      .single();
-    if (insertError) {
-      await supabase.storage.from("resumes").remove([refinedPath]);
-      throw insertError;
-    }
-
     return Response.json(
       {
         success: true,
         modelUsed,
         sourceDocumentId: sourceDoc.id,
-        refinedDocument: refinedDoc,
         refinedText: refined,
       },
       { headers: corsHeaders },
