@@ -30,17 +30,19 @@ Deno.serve(async (req) => {
   try {
     const jwtUser = await verifyJwt(req);
     const body = await req.json().catch(() => ({}));
-    const userId = body.userId || body.user_id || jwtUser?.userId;
+    const userId = jwtUser?.userId;
     const jobListingId = body.jobListingId || body.job_id || body.jobId;
     const strategy = body.strategy;
 
     if (!userId || !jobListingId) {
       return Response.json(
         {
-          error: "missing_fields",
-          message: "Missing required fields: userId and jobListingId",
+          error: userId ? "missing_fields" : "unauthorized",
+          message: userId
+            ? "Missing required field: jobListingId"
+            : "A valid authenticated session is required.",
         },
-        { status: 400, headers: corsHeaders },
+        { status: userId ? 400 : 401, headers: corsHeaders },
       );
     }
 
@@ -48,7 +50,12 @@ Deno.serve(async (req) => {
 
     // 1. Fetch Job + User Context + Profile in parallel
     const [jobResult, contextResult, profileResult] = await Promise.all([
-      supabase.from("job_vault").select("*").eq("id", jobListingId).single(),
+      supabase
+        .from("job_vault")
+        .select("*")
+        .eq("id", jobListingId)
+        .eq("user_id", userId)
+        .single(),
       supabase
         .from("user_context")
         .select("*")
@@ -97,20 +104,28 @@ Deno.serve(async (req) => {
     const rawExperience = Array.isArray(context.extracted_experience)
       ? context.extracted_experience
       : [];
-    const formattedExperience =
-      rawExperience.length > 0
-        ? rawExperience
-            .map(
-              (exp: any) =>
-                `- ${exp.role || "Role"} at ${exp.company || "Company"} (${exp.duration || ""}): ${Array.isArray(exp.achievements) ? exp.achievements.join("; ") : ""}`,
-            )
-            .join("\n")
-        : "Full-Stack Software Engineer with expertise in Java Spring Boot, React Native, TypeScript, PostgreSQL, and Linux systems.";
+    if (
+      rawExperience.length === 0 &&
+      (!Array.isArray(context.extracted_skills) ||
+        context.extracted_skills.length === 0) &&
+      (!context.career_summary || context.career_summary.trim().length === 0)
+    ) {
+      throw new Error(
+        "incomplete_context: Upload and extract a CV before generating a cover letter.",
+      );
+    }
 
-    const selectedProjectsPrompt =
-      Array.isArray(body.selected_projects) && body.selected_projects.length > 0
-        ? `\nPreferred Candidate Projects to Feature: ${body.selected_projects.join(", ")}`
-        : "";
+    const formattedExperience = rawExperience
+      .map(
+        (exp: {
+          role?: string;
+          company?: string;
+          duration?: string;
+          achievements?: string[];
+        }) =>
+          `- ${exp.role || "Unspecified role"} at ${exp.company || "Unspecified company"} (${exp.duration || "Unspecified duration"}): ${Array.isArray(exp.achievements) ? exp.achievements.join("; ") : "No achievement details extracted."}`,
+      )
+      .join("\n");
 
     // 3. Construct Strict Prompt with Zero-Hallucination & Concrete Project Selection
     const prompt = `
@@ -123,19 +138,19 @@ ${job.description || "No description provided."}
 
 CANDIDATE GROUND TRUTH (STRICT SOURCE OF FACT — NEVER FABRICATE OUTSIDE THIS):
 Candidate Name: ${profile.first_name || ""} ${profile.last_name || ""}
-Professional Title: ${profile.professional_title || "Full-Stack / Systems Engineer"}
-Bio: ${profile.bio || "Systems-minded Full-Stack Engineer combining deep Linux administration with robust Java and TypeScript ecosystems."}
-Career Summary: ${context.career_summary || "Full-Stack / Systems Engineer"}
-Verified Skills: ${context.extracted_skills?.join(", ") || "Java, Spring Boot, React Native, TypeScript, PostgreSQL, Deno, Linux, Supabase, Git, Docker"}
-Key Achievements: ${context.key_achievements?.join("; ") || "Architected production-grade microservices and reactive cross-platform applications."}
+Professional Title: ${profile.professional_title || "Not provided"}
+Bio: ${profile.bio || "Not provided"}
+Career Summary: ${context.career_summary || "Not provided"}
+Verified Skills: ${context.extracted_skills?.join(", ") || "None extracted"}
+Key Achievements: ${context.key_achievements?.join("; ") || "None extracted"}
 Experience & Real Projects:
-${formattedExperience}${selectedProjectsPrompt}
-Certifications: ${context.extracted_certifications?.map((c: { name?: string }) => c.name).join(", ") || "N/A"}
+${formattedExperience || "No experience details extracted."}
+Certifications: ${context.extracted_certifications?.map((c: { name?: string }) => c.name).filter(Boolean).join(", ") || "None extracted"}
 
 CRITICAL ANTI-HALLUCINATION & APPLICATION INTEGRITY RULES:
 1. STRICT FACTUAL ACCURACY (ZERO HALLUCINATION): You must ONLY reference technologies, tools, frameworks, and projects explicitly present in the candidate's verified background above. NEVER invent unverified cloud platforms (e.g. NEVER mention AWS or GCP unless explicitly listed in verified skills), fake employers, or invented metrics.
 2. SELECT THE BEST REAL PROJECT EXAMPLE: From the candidate's real experience and projects, identify the single most relevant concrete proof point that matches this job. Cite actual architectural decisions or technical implementations from that project (e.g., Spring Boot microservices, Deno Edge nodes, React Native cross-platform state, PostgreSQL RLS) to prove capability.
-3. ATS KEYWORD TARGETING: Carefully analyze the job requirements and mirror the matching technical keywords from the candidate's genuine skill set so ATS automated parsers score this application in the top 1%.
+3. ATS KEYWORD TARGETING: Carefully analyze the job requirements and use only matching technical keywords from the candidate's genuine skill set. Never claim a guaranteed ATS score or interview outcome.
 4. BYPASS AI DETECTION / WRITE WITH AUTHENTIC HUMAN INTELLECT:
    - Do NOT use typical AI clichés: "I am writing to express my enthusiasm", "thrilled to apply", "testament to", "delve into", "pivotal role", "beacon of", "in today's fast-paced world", "dynamic landscape".
    - Write with authentic human authority, varying sentence structure and cadence.
@@ -155,6 +170,7 @@ Return ONLY the raw cover letter text with no conversational intro, markdown wra
     let content = "";
     let successfulModel = "";
     let totalTokensUsed = 0;
+    let successfulKeySource: "user" | "system" | "env" = "system";
 
     keyLoop: for (const keyObj of candidateKeys) {
       for (const model of modelsToTry) {
@@ -206,6 +222,7 @@ Return ONLY the raw cover letter text with no conversational intro, markdown wra
           if (generatedText) {
             content = generatedText;
             successfulModel = model;
+            successfulKeySource = keyObj.source;
             totalTokensUsed = geminiData.usageMetadata?.totalTokenCount || 0;
             await markKeyUsed(supabase, keyObj);
             await logUsage(
@@ -328,7 +345,7 @@ Return ONLY the raw cover letter text with no conversational intro, markdown wra
     await supabase.from("api_key_usage_logs").insert({
       user_id: userId,
       provider: "gemini",
-      key_source: "system",
+      key_source: successfulKeySource === "user" ? "user" : "system",
       tokens_used: totalTokensUsed,
       function_name: "generate-cover-letter",
       strategy_used: strategy || "mirror_matching",
