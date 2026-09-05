@@ -1,82 +1,94 @@
 /**
  * supabase/functions/_shared/supabaseAdmin.ts
- * OpusHunter — Service-Role Supabase Client (Refined & Bulletproof).
- * Used exclusively inside Edge Functions for server-side operations.
- * NEVER import this into client code. RLS is bypassed intentionally.
- * Cached singleton to avoid re-instantiation across invocations.
+ * OpusHunter — service-role Supabase client for trusted Edge Functions.
+ *
+ * This module must never be imported by client code. The service-role key
+ * bypasses RLS, so a public anon key is deliberately not an acceptable
+ * fallback when the service-role secret is misconfigured.
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-// Validate environment variables at invocation time with fallback to EXPO_PUBLIC_*
-function getEnvCredentials() {
-// @ts-ignore: Deno global
-  const supabaseUrl =
+interface SupabaseAdminCredentials {
+  supabaseUrl: string;
+  serviceRoleKey: string;
+}
+
+function readRequiredEnv(name: string): string {
+  const value = Deno.env.get(name)?.trim();
+  if (!value) {
+    throw new Error(`Missing required Edge Function secret: ${name}`);
+  }
+  return value;
+}
+
+function getEnvCredentials(): SupabaseAdminCredentials {
+  const supabaseUrl = (
     Deno.env.get("SUPABASE_URL") ||
     Deno.env.get("EXPO_PUBLIC_SUPABASE_URL") ||
-    "";
-  // @ts-ignore: Deno global
-  const supabaseServiceRoleKey =
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ||
-    Deno.env.get("EXPO_PUBLIC_SUPABASE_ANON_KEY") ||
-    "";
+    ""
+  ).trim();
 
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
+  if (!supabaseUrl) {
     throw new Error(
-      "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment variables."
+      "Missing required Edge Function environment variable: SUPABASE_URL",
     );
   }
 
-  return { supabaseUrl, supabaseServiceRoleKey };
+  return {
+    supabaseUrl,
+    serviceRoleKey: readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+  };
 }
 
 let client: SupabaseClient | null = null;
 
 /**
- * Returns a cached Service-Role Supabase client.
- * Bypasses RLS — use ONLY in trusted Edge Function code.
+ * Returns a cached service-role client.
+ * This client intentionally bypasses RLS and is only safe inside trusted
+ * server-side Edge Function code.
  */
 export function getSupabaseAdmin(): SupabaseClient {
   if (!client) {
-    const { supabaseUrl, supabaseServiceRoleKey } = getEnvCredentials();
-    client = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    const { supabaseUrl, serviceRoleKey } = getEnvCredentials();
+    client = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
         detectSessionInUrl: false,
       },
       global: {
-        headers: { "x-application-name": "opushunter" },
+        headers: { "x-application-name": "opushunter-edge" },
       },
     });
   }
+
   return client;
 }
 
 /**
- * Verifies the JWT from the Authorization header and returns the user ID.
- * Used in all Edge Functions that require user authentication.
- * @param req - The incoming Request object.
- * @returns { userId: string } or null if authentication fails.
+ * Validates a bearer token through Supabase Auth and returns its user ID.
+ * The token is never logged or persisted.
  */
 export async function verifyJwt(
-  req: Request
+  req: Request,
 ): Promise<{ userId: string } | null> {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
+  const authorization = req.headers.get("Authorization");
+  if (!authorization) return null;
 
-  const token = authHeader.replace("Bearer ", "");
-  const supabase = getSupabaseAdmin();
+  const match = /^Bearer\s+(\S+)$/i.exec(authorization.trim());
+  if (!match) return null;
 
   try {
     const {
       data: { user },
       error,
-    } = await supabase.auth.getUser(token);
+    } = await getSupabaseAdmin().auth.getUser(match[1]);
+
     if (error || !user) return null;
     return { userId: user.id };
-  } catch (err) {
-    console.error("JWT verification error:", err);
+  } catch (error) {
+    console.error("JWT verification failed:", error);
     return null;
   }
 }
