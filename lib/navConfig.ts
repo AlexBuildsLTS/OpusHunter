@@ -9,11 +9,7 @@ import {
   Search,
   SlidersHorizontal,
   Kanban,
-  FolderOpen,
-  User,
-  Settings,
-  ShieldCheck,
-  LayoutDashboard,
+  FolderKanban,
 } from "lucide-react-native";
 
 /** Navigation item keys */
@@ -21,7 +17,7 @@ export type NavItemKey =
   | "discover"
   | "rules"
   | "pipeline"
-  | "vault"
+  | "documents"
   | "profile"
   | "settings"
   | "admin";
@@ -51,23 +47,23 @@ export const NAV_ITEMS: NavItem[] = [
     route: "/(tabs)/pipeline",
   },
   {
-    key: "vault",
-    label: "Vault",
-    icon: FolderOpen,
-    route: "/(tabs)/settings/vault",
+    key: "documents",
+    label: "Documents",
+    icon: FolderKanban,
+    route: "/(tabs)/settings/documents",
   },
 ];
 
 /** Responsive breakpoints (Web) — matches theme.ts */
 export const BREAKPOINTS = {
-  mobile: 767, // < 768px — Floating tab bar
-  tablet: 1023, // 768–1023px — Collapsible sidebar
-  desktop: 1024, // ≥ 1024px — Fixed sidebar
+  mobile: 767,
+  tablet: 1023,
+  desktop: 1024,
 } as const;
 
 /** Layout constants for adaptive navigation */
 export const TAB_BAR_HEIGHT = 80;
-export const SIDEBAR_WIDTH = 240;
+export const SIDEBAR_WIDTH = 96;
 export const SIDEBAR_COLLAPSED_WIDTH = 64;
 export const TAB_BAR_BLUR_RADIUS = 20;
 export const SIDEBAR_CONTENT_OFFSET = 120; // 24 + 72 + 24
@@ -84,7 +80,7 @@ export const APP_ROUTES = {
   discover: "/(tabs)",
   rules: "/(tabs)/rules",
   pipeline: "/(tabs)/pipeline",
-  vault: "/(tabs)/settings/vault",
+  documents: "/(tabs)/settings/documents",
   profile: "/(tabs)/settings/profile",
   settings: "/(tabs)/settings",
   jobDetail: "/job/[id]",

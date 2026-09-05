@@ -13,7 +13,7 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet, Platform, Pressable } from "react-native";
 import Animated, { FadeInDown, FadeOutUp } from "react-native-reanimated";
 import {
   CheckCircle2,
@@ -103,7 +103,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={{ showToast, hideToast }}>
       {children}
       {/* Toast Overlay */}
-      <View style={styles.container} pointerEvents="box-none">
+      <View
+        style={styles.container}
+        pointerEvents="box-none"
+        accessibilityLiveRegion="polite"
+      >
         {toasts.map((toast) => {
           const style = TOAST_STYLES[toast.type];
           const Icon = style.icon as any;
@@ -117,18 +121,22 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 { backgroundColor: style.bg, borderColor: style.border },
               ]}
             >
-              <Icon size={18} color={style.color} />
+              <Icon size={18} color={style.color} accessible={false} />
               <Text
                 style={[styles.message, { color: style.color }]}
                 numberOfLines={2}
               >
                 {toast.message}
               </Text>
-              <X
-                size={16}
-                color={style.color}
+              <Pressable
                 onPress={() => hideToast(toast.id)}
-              />
+                style={styles.dismiss}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss notification"
+              >
+                <X size={16} color={style.color} accessible={false} />
+              </Pressable>
             </Animated.View>
           );
         })}
@@ -140,29 +148,36 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   container: {
     position: "absolute",
-    top: 60,
+    top: Platform.OS === "web" ? 16 : 56,
     left: 16,
     right: 16,
     alignItems: "center",
     zIndex: 9999,
     pointerEvents: "box-none",
-    gap: 8,
   },
   toast: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: radius.lg,
     borderWidth: 1,
     maxWidth: 400,
     width: "100%",
+    marginBottom: 8,
     backgroundColor: "rgba(0,0,0,0.8)",
   },
   message: {
     flex: 1,
     fontSize: 13,
     fontWeight: "600",
+    marginLeft: 12,
+    marginRight: 8,
+  },
+  dismiss: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
