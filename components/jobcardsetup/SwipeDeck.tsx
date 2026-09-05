@@ -339,19 +339,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
             style={[styles.cardAbsolute, thirdCardAnimatedStyle, { zIndex: 1 }]}
           >
             <Card style={styles.cardInner} variant="default">
-              <View style={styles.cardHeader}>
-                <Typography
-                  variant="h3"
-                  weight="bold"
-                  color="secondary"
-                  numberOfLines={1}
-                >
-                  {thirdJob.title}
-                </Typography>
-                <Typography variant="bodySm" color="dim">
-                  {thirdJob.company}
-                </Typography>
-              </View>
+              <View style={styles.stackPreview} />
             </Card>
           </Animated.View>
         )}
@@ -366,56 +354,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
             ]}
           >
             <Card style={styles.cardInner} variant="default">
-              <View style={styles.cardHeader}>
-                <View style={styles.titleRow}>
-                  <Typography
-                    variant="h3"
-                    weight="bold"
-                    color="primary"
-                    numberOfLines={2}
-                    style={styles.flex1}
-                  >
-                    {nextJob.title}
-                  </Typography>
-                  {nextJob.match_score && (
-                    <Badge
-                      variant={nextJob.match_score >= 80 ? "green" : "cyan"}
-                      size="sm"
-                      label={`${nextJob.match_score}% Match`}
-                    />
-                  )}
-                </View>
-
-                <Badge
-                  variant="default"
-                  size="sm"
-                  label={formatSource(currentJob.source)}
-                  dot={false}
-                />
-                <View style={styles.metaRow}>
-                  <Building2 size={14} color={colors.text.secondary} />
-                  <Typography variant="body" color="secondary">
-                    {nextJob.company}
-                  </Typography>
-                </View>
-              </View>
-
-              <View style={styles.badgeRow}>
-                <View style={styles.badge}>
-                  <MapPin size={12} color={colors.accent.cyan} />
-                  <Typography variant="caption" color="accent">
-                    {nextJob.location || "Remote"}
-                  </Typography>
-                </View>
-                {nextJob.salary && (
-                  <View style={styles.badge}>
-                    <DollarSign size={12} color={colors.accent.cyan} />
-                    <Typography variant="caption" color="accent">
-                      {nextJob.salary}
-                    </Typography>
-                  </View>
-                )}
-              </View>
+              <View style={styles.stackPreview} />
             </Card>
           </Animated.View>
         )}
@@ -697,6 +636,13 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     rowGap: 8,
+  },
+  stackPreview: {
+    flex: 1,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.06)",
+    backgroundColor: "rgba(15, 23, 42, 0.4)",
   },
   titleRow: {
     flexDirection: "row",
