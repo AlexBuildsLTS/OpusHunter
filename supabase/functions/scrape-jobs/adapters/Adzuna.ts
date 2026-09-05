@@ -35,11 +35,11 @@ export interface AdzunaNormalizedJob {
 
 const PAGES_PER_SCRAPE = 3;
 const SUPPORTED_COUNTRIES = new Set([
-  "se", "gb", "us", "at", "au", "be", "br", "ca", "de", "es", "fr",
+  "gb", "us", "at", "au", "be", "br", "ca", "de", "es", "fr",
   "in", "it", "mx", "nl", "nz", "pl", "ru", "sg", "za",
 ]);
 const COUNTRY_ALIASES: Record<string, string> = {
-  sweden: "se", unitedkingdom: "gb", uk: "gb", england: "gb",
+  unitedkingdom: "gb", uk: "gb", england: "gb",
   austria: "at", belgium: "be", brazil: "br", canada: "ca",
   germany: "de", spain: "es", france: "fr", india: "in", italy: "it",
   mexico: "mx", netherlands: "nl", newzealand: "nz", poland: "pl",
@@ -54,13 +54,14 @@ export async function scrapeAdzuna(
   const candidateKeys = await getCandidateKeys(supabase, userId, "adzuna");
   if (candidateKeys.length === 0) return [];
 
-  const rawCountry = (params.countries?.[0] || "se")
-    .toLowerCase()
-    .replace(/[^a-z]/g, "");
-  const country = COUNTRY_ALIASES[rawCountry] ||
-    (SUPPORTED_COUNTRIES.has(rawCountry) ? rawCountry : undefined);
+  const country = (params.countries || [])
+    .map((value) => value.toLowerCase().replace(/[^a-z]/g, ""))
+    .map((value) => COUNTRY_ALIASES[value] || value)
+    .find((value) => SUPPORTED_COUNTRIES.has(value));
   if (!country) {
-    console.log(`[Adzuna] Country '${rawCountry}' is not supported.`);
+    console.log(
+      `[Adzuna] None of the selected countries are supported by Adzuna. Skipping.`,
+    );
     return [];
   }
 
