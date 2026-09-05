@@ -38,7 +38,19 @@ interface BadgeProps {
 
 /** Derives translucent bg/border tints from a solid hex accent color. */
 function tint(hex: string): { bg: string; border: string } {
-  return { bg: `${hex}26`, border: `${hex}4D` };
+  const normalized = hex.trim();
+  const isHex = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalized);
+  const color = isHex
+    ? normalized.length === 4
+      ? `#${normalized
+          .slice(1)
+          .split("")
+          .map((value) => `${value}${value}`)
+          .join("")}`
+      : normalized
+    : "#94A3B8";
+
+  return { bg: `${color}26`, border: `${color}4D` };
 }
 
 // Map every variant to a solid accent color; bg/border are derived from it.
