@@ -79,6 +79,12 @@ export function DocumentUploader({
 
       for (let i = 0; i < totalFiles; i++) {
         const asset = result.assets[i];
+        const maxBytes = type === "cv" ? 10 * 1024 * 1024 : 20 * 1024 * 1024;
+        if (asset.size && asset.size > maxBytes) {
+          throw new Error(
+            `${asset.name} is larger than the ${type === "cv" ? "10 MB CV" : "20 MB certification"} limit.`,
+          );
+        }
         setStatusMessage(`Uploading ${i + 1} of ${totalFiles}: ${asset.name}`);
 
         const sanitizedName = asset.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -126,14 +132,20 @@ export function DocumentUploader({
       // 4. Trigger AI Context Extraction if it's a CV
       if (type === "cv" && lastUploadedCVPath) {
         setStatusMessage("Extracting skills & achievements with AI...");
-        await supabase.functions.invoke("extract-context", {
+        const { error: extractionError } = await supabase.functions.invoke(
+          "extract-context",
+          {
           body: { userId: user.id, documentPath: lastUploadedCVPath, bucket },
-        });
+          },
+        );
+        if (extractionError) throw extractionError;
       }
 
       // 5. Invalidate queries (refresh list)
-      const queryKey = type === "cv" ? "resumes" : "certs";
-      await queryClient.invalidateQueries({ queryKey: [queryKey, user.id] });
+      const queryKey = type === "cv" ? "resume-documents" : "certifications";
+      await queryClient.invalidateQueries({
+        queryKey: [queryKey, user.id],
+      });
 
       onClose();
     } catch (err: any) {
