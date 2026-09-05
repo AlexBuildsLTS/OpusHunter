@@ -105,6 +105,8 @@ export default function ProfileScreen() {
     salary_max: profile?.salary_max != null ? String(profile.salary_max) : "",
     salary_currency: profile?.salary_currency || "",
     languages: profile?.languages || [],
+    preferred_ai_language:
+      profile?.preferred_ai_language === "swedish" ? "swedish" : "english",
   });
 
   // Keep form in sync when profile updates
@@ -134,6 +136,8 @@ export default function ProfileScreen() {
           profile.salary_max != null ? String(profile.salary_max) : "",
         salary_currency: profile.salary_currency || "",
         languages: profile.languages || [],
+        preferred_ai_language:
+          profile.preferred_ai_language === "swedish" ? "swedish" : "english",
       });
     }
   }, [profile]);
@@ -304,6 +308,7 @@ export default function ProfileScreen() {
           salary_max: form.salary_max ? parseInt(form.salary_max) : null,
           salary_currency: form.salary_currency,
           languages: form.languages,
+          preferred_ai_language: form.preferred_ai_language,
           updated_at: new Date().toISOString(),
         })
         .eq("id", profile.id);
@@ -865,6 +870,42 @@ export default function ProfileScreen() {
               }
               placeholder="English, Swedish..."
             />
+
+            <Typography variant="caption" color="dim" style={styles.subHeading}>
+              AI GENERATION LANGUAGE
+            </Typography>
+            <Typography variant="caption" color="secondary">
+              Used for AI-generated cover letters and other written career
+              materials. English is the default.
+            </Typography>
+            <View style={styles.toneRow}>
+              {(["english", "swedish"] as const).map((language) => {
+                const active = form.preferred_ai_language === language;
+                return (
+                  <Pressable
+                    key={language}
+                    onPress={() =>
+                      setForm({ ...form, preferred_ai_language: language })
+                    }
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    style={[styles.toneBtn, active && styles.toneBtnActive]}
+                  >
+                    <Typography
+                      variant="caption"
+                      weight={active ? "bold" : "medium"}
+                      style={{
+                        color: active
+                          ? colors.accent.cyan
+                          : colors.text.secondary,
+                      }}
+                    >
+                      {language === "english" ? "English" : "Swedish"}
+                    </Typography>
+                  </Pressable>
+                );
+              })}
+            </View>
           </Card>
 
           {/* 8. AI Extracted Context (Read-Only CV Ingestion) */}
