@@ -11,7 +11,6 @@ import React from "react";
 import {
   View,
   Text,
-  useWindowDimensions,
   TouchableOpacity,
   Platform,
   StyleSheet,
@@ -23,50 +22,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProfileDropdown } from "../shared/ProfileDropdown";
 import { C } from "../../constants/theme";
 import {
-  SlidersHorizontal,
-  Kanban,
-  FolderKanban,
-  AppWindowMac,
-  Radar,
-} from "lucide-react-native";
-
-const NAV_ITEMS = [
-  {
-    id: "discover",
-    path: "/(tabs)/index",
-    title: "DISCOVER",
-    Icon: AppWindowMac,
-  },
-  {
-    id: "rules",
-    path: "/(tabs)/rules",
-    title: "ENGINE",
-    Icon: Radar,
-  },
-  {
-    id: "pipeline",
-    path: "/(tabs)/pipeline",
-    title: "PIPELINE",
-    Icon: Kanban,
-  },
-  {
-    id: "vault",
-    path: "/(tabs)/settings/vault",
-    title: "VAULT",
-    Icon: FolderKanban,
-  },
-];
+  NAV_ITEMS,
+  SIDEBAR_WIDTH,
+  TAB_BAR_HEIGHT,
+} from "../../lib/navConfig";
+import { useAdaptiveLayout } from "../../hooks/useAdaptiveLayout";
 
 export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
-  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
+  const { isDesktop } = useAdaptiveLayout();
 
-  const isDesktop = Platform.OS !== "web" ? width >= 1024 : width >= 768;
-
-  const isItemActive = (item: (typeof NAV_ITEMS)[0]) => {
-    if (item.id === "discover") {
+  const isItemActive = (item: (typeof NAV_ITEMS)[number]) => {
+    if (item.key === "discover") {
       return (
         pathname === "/" ||
         pathname === "/(tabs)" ||
@@ -75,7 +44,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
         pathname === "/(tabs)/(dashboard)/index"
       );
     }
-    return pathname.includes(item.id) || pathname.startsWith(item.path);
+    return pathname.includes(item.key) || pathname.startsWith(item.route);
   };
 
   return (
@@ -118,6 +87,8 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
             <TouchableOpacity
               onPress={() => router.push("/(tabs)/index" as any)}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Open Discover"
             >
               <View style={styles.brandLogo}>
                 <Image
@@ -133,19 +104,22 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
                 const isActive = isItemActive(item);
                 return (
                   <TouchableOpacity
-                    key={item.id}
-                    onPress={() => router.push(item.path as any)}
+                    key={item.key}
+                    onPress={() => router.push(item.route as any)}
                     activeOpacity={0.7}
                     style={[styles.navItem, isActive && styles.navItemActive]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${item.label}`}
+                    accessibilityState={{ selected: isActive }}
                   >
-                    <item.Icon size={22} color={isActive ? C.cyan : C.sub} />
+                    <item.icon size={22} color={isActive ? C.cyan : C.sub} />
                     <Text
                       style={[
                         styles.navItemText,
                         isActive && { color: C.text },
                       ]}
                     >
-                      {item.title}
+                      {item.label}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -161,7 +135,12 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
         <View
           style={[
             styles.mainContent,
-            { paddingTop: Math.max(insets.top, 8) + 68 },
+            {
+              paddingTop: Math.max(insets.top, 8) + 68,
+              paddingBottom: isDesktop
+                ? 16
+                : TAB_BAR_HEIGHT + Math.max(insets.bottom, 24) + 32,
+            },
           ]}
         >
           {children}
@@ -213,12 +192,15 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
                 const isActive = isItemActive(item);
                 return (
                   <TouchableOpacity
-                    key={item.id}
-                    onPress={() => router.push(item.path as any)}
+                    key={item.key}
+                    onPress={() => router.push(item.route as any)}
                     activeOpacity={0.7}
                     style={styles.mobileTabItem}
+                    accessibilityRole="tab"
+                    accessibilityLabel={`Open ${item.label}`}
+                    accessibilityState={{ selected: isActive }}
                   >
-                    <item.Icon size={22} color={isActive ? C.cyan : C.sub} />
+                    <item.icon size={22} color={isActive ? C.cyan : C.sub} />
                     {isActive && <View style={styles.mobileActiveDot} />}
                   </TouchableOpacity>
                 );
@@ -240,7 +222,7 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   sidebar: {
-    width: 96,
+    width: SIDEBAR_WIDTH,
     height: "100%",
     backgroundColor: "rgba(6, 9, 19, 0.85)",
     borderRightWidth: 1,
@@ -347,7 +329,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
-    height: 68,
+    height: TAB_BAR_HEIGHT,
     borderRadius: 24,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
@@ -359,6 +341,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     height: "100%",
+    minWidth: 44,
+    minHeight: 44,
     position: "relative",
   },
   mobileActiveDot: {
