@@ -188,9 +188,4 @@ module.exports = {
     },
   },
   plugins: [],
-
-  // ─── THE WEAPON: DISABLE BROKEN ASPECT RATIO PARSER ───
-  corePlugins: {
-    aspectRatio: false,
-  },
 };
