@@ -19,6 +19,7 @@ interface ChipProps {
   size?: "sm" | "md";
   disabled?: boolean;
   style?: any;
+  accessibilityLabel?: string;
 }
 
 export function Chip({
@@ -29,6 +30,7 @@ export function Chip({
   size = "md",
   disabled = false,
   style,
+  accessibilityLabel,
 }: ChipProps) {
   const handlePress = () => {
     if (disabled) return;
@@ -72,6 +74,10 @@ export function Chip({
     <Pressable
       onPress={handlePress}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ selected, disabled }}
+      hitSlop={4}
       style={({ pressed }) => [
         styles.base,
         size === "sm" ? styles.sm : styles.md,
@@ -101,8 +107,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  sm: { paddingHorizontal: 10, paddingVertical: 4 },
-  md: { paddingHorizontal: 14, paddingVertical: 7 },
+  sm: { minHeight: 44, paddingHorizontal: 10, paddingVertical: 4 },
+  md: { minHeight: 44, paddingHorizontal: 14, paddingVertical: 7 },
   text: { fontWeight: "700", letterSpacing: 0.4, textTransform: "capitalize" },
   smText: { fontSize: 11 },
   mdText: { fontSize: 13 },
