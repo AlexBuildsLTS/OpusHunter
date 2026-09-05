@@ -86,17 +86,14 @@ if (
 }
 
 // ─── TYPES ───
-type SystemApiKey = Database["public"]["Tables"]["system_api_keys"]["Row"];
 type ApiKeyUsageLog = Database["public"]["Tables"]["api_key_usage_logs"]["Row"];
+type SystemApiKey = Database["public"]["Functions"]["admin_list_api_keys"]["Returns"][number];
 
 type ApiProvider =
   | "gemini"
   | "linkedin"
   | "rapidapi"
   | "adzuna"
-  | "openai"
-  | "anthropic"
-  | "groq"
   | "geodb";
 
 const PROVIDER_CONFIG: Record<
@@ -107,24 +104,6 @@ const PROVIDER_CONFIG: Record<
     label: "Google Gemini",
     color: "#00F0FF",
     modelName: "gemini-3.7-flash",
-    defaultTier: "system_tier_1",
-  },
-  openai: {
-    label: "OpenAI",
-    color: "#32FF00",
-    modelName: "gpt-4o-mini",
-    defaultTier: "system_tier_2",
-  },
-  anthropic: {
-    label: "Anthropic Claude",
-    color: "#8A2BE2",
-    modelName: "claude-3-5-sonnet",
-    defaultTier: "system_tier_3",
-  },
-  groq: {
-    label: "Groq Cloud Llama",
-    color: "#F59E0B",
-    modelName: "llama-3.3-70b-versatile",
     defaultTier: "system_tier_1",
   },
   rapidapi: {
@@ -407,8 +386,8 @@ SvgDonutChart.displayName = "SvgDonutChart";
 interface HourlyPoint {
   hour: string;
   gemini: number;
-  openai: number;
-  claude: number;
+  rapidapi: number;
+  adzuna: number;
 }
 
 const SvgMultiLineChart = memo(
@@ -428,7 +407,7 @@ const SvgMultiLineChart = memo(
     const chartHeight = height - padding.top - padding.bottom;
 
     const maxVal = Math.max(
-      ...data.flatMap((d) => [d.gemini, d.openai, d.claude]),
+      ...data.flatMap((d) => [d.gemini, d.rapidapi, d.adzuna]),
       10,
     );
 
@@ -437,7 +416,7 @@ const SvgMultiLineChart = memo(
     const getY = (val: number) =>
       padding.top + chartHeight - (val / maxVal) * chartHeight;
 
-    const createPath = (key: "gemini" | "openai" | "claude") => {
+    const createPath = (key: "gemini" | "rapidapi" | "adzuna") => {
       return data.reduce((acc, curr, idx) => {
         const x = getX(idx);
         const y = getY(curr[key]);
@@ -480,14 +459,14 @@ const SvgMultiLineChart = memo(
           fill="none"
         />
         <Path
-          d={createPath("openai")}
+          d={createPath("rapidapi")}
           stroke={THEME.success}
           strokeWidth={2}
           fill="none"
           strokeDasharray="5 3"
         />
         <Path
-          d={createPath("claude")}
+          d={createPath("adzuna")}
           stroke={THEME.purple}
           strokeWidth={2}
           fill="none"
@@ -548,10 +527,7 @@ export default function AdminApiKeysScreen() {
         { data: keysData, error: keysErr },
         { data: logsData, error: logsErr },
       ] = await Promise.all([
-        supabase
-          .from("system_api_keys")
-          .select("*")
-          .order("priority_order", { ascending: true }),
+        supabase.rpc("admin_list_api_keys"),
         supabase
           .from("api_key_usage_logs")
           .select("*")
@@ -577,11 +553,6 @@ export default function AdminApiKeysScreen() {
 
     const channel = supabase
       .channel(`admin_api_vault_${Date.now()}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "system_api_keys" },
-        fetchVaultTelemetry,
-      )
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "api_key_usage_logs" },
@@ -682,15 +653,19 @@ export default function AdminApiKeysScreen() {
       color: PROVIDER_CONFIG[p]?.color || THEME.cyan,
     }));
 
-    // Generate mock 24h hourly distribution for SVG line chart
-    const hourlyData: HourlyPoint[] = Array.from({ length: 12 }).map((_, i) => {
-      const hour = `${(i * 2).toString().padStart(2, "0")}:00`;
-      const base = 10 + i * 3;
+    const now = Date.now();
+    const hourlyData: HourlyPoint[] = Array.from({ length: 12 }, (_, i) => {
+      const bucketStart = new Date(now - (11 - i) * 2 * 60 * 60 * 1000);
+      const bucketEnd = new Date(bucketStart.getTime() + 2 * 60 * 60 * 1000);
+      const bucketLogs = usageLogs.filter((log) => {
+        const timestamp = Date.parse(log.created_at);
+        return timestamp >= bucketStart.getTime() && timestamp < bucketEnd.getTime();
+      });
       return {
-        hour,
-        gemini: Math.round(base * 1.8 + Math.sin(i) * 5),
-        openai: Math.round(base * 0.9 + Math.cos(i) * 3),
-        claude: Math.round(base * 0.4 + (i % 2) * 2),
+        hour: `${bucketStart.getHours().toString().padStart(2, "0")}:00`,
+        gemini: bucketLogs.filter((log) => log.provider === "gemini").length,
+        rapidapi: bucketLogs.filter((log) => log.provider === "rapidapi").length,
+        adzuna: bucketLogs.filter((log) => log.provider === "adzuna").length,
       };
     });
 
@@ -848,13 +823,13 @@ export default function AdminApiKeysScreen() {
                       <View className="flex-row items-center gap-1.5">
                         <View className="h-2 w-2 rounded-full bg-[#32FF00]" />
                         <Text className="font-mono text-[9px] text-white/50">
-                          OpenAI
+                          RapidAPI
                         </Text>
                       </View>
                       <View className="flex-row items-center gap-1.5">
                         <View className="h-2 w-2 rounded-full bg-[#8A2BE2]" />
                         <Text className="font-mono text-[9px] text-white/50">
-                          Claude
+                          Adzuna
                         </Text>
                       </View>
                     </View>
@@ -1014,12 +989,12 @@ export default function AdminApiKeysScreen() {
 
                           <Text className="mt-1 font-mono text-xs text-white/40">
                             Provider: {conf.label} • Priority Level:{" "}
-                            {key.priority_order || 1}
+                            Managed fallback
                           </Text>
 
                           <View className="mt-2 flex-row flex-wrap items-center gap-3">
                             <Text className="font-mono text-[10px] text-white/30">
-                              Encrypted Key ID: {key.id.slice(0, 12)}...
+                              Key: {key.key_preview || "••••"}
                             </Text>
                             {key.last_used_at && (
                               <Text className="font-mono text-[10px] text-white/30">
