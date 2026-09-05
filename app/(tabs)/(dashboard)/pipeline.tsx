@@ -875,6 +875,7 @@ export default function PipelineScreen() {
               onUpdateStatus={handleUpdateStatus}
               onGenerateCoverLetter={handleGenerateCoverLetter}
               onDeleteApplication={handleDeleteApplication}
+              isCompact={isCompact}
             />
           )}
         </View>
@@ -1279,12 +1280,14 @@ function MatrixListView({
   onUpdateStatus,
   onGenerateCoverLetter,
   onDeleteApplication,
+  isCompact,
 }: {
   applications: Application[];
   onSelectApplication: (app: Application) => void;
   onUpdateStatus: (app: Application, status: Status) => void;
   onGenerateCoverLetter: (app: Application) => void;
   onDeleteApplication: (app: Application) => void;
+  isCompact: boolean;
 }) {
   return (
     <ScrollView
@@ -1292,7 +1295,7 @@ function MatrixListView({
       contentContainerStyle={styles.matrixContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.matrixListHeader}>
+      {!isCompact && <View style={styles.matrixListHeader}>
         <Typography
           variant="caption"
           weight="bold"
@@ -1325,7 +1328,7 @@ function MatrixListView({
         >
           ACTIONS
         </Typography>
-      </View>
+      </View>}
 
       {applications.map((app, index) => {
         const job = app.job_vault;
@@ -1337,10 +1340,26 @@ function MatrixListView({
             entering={FadeInDown.delay(index * 20).springify()}
           >
             <Pressable onPress={() => onSelectApplication(app)}>
-              <Card variant="interactive" style={styles.matrixRowCard}>
-                <View style={styles.matrixRowGrid}>
+              <Card
+                variant="interactive"
+                style={[
+                  styles.matrixRowCard,
+                  isCompact && styles.matrixRowCardCompact,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.matrixRowGrid,
+                    isCompact && styles.matrixRowGridCompact,
+                  ]}
+                >
                   {/* Title & Company */}
-                  <View style={styles.matrixColTitle}>
+                  <View
+                    style={[
+                      styles.matrixColTitle,
+                      isCompact && styles.matrixColTitleCompact,
+                    ]}
+                  >
                     <Typography
                       variant="bodySm"
                       weight="bold"
@@ -1368,7 +1387,12 @@ function MatrixListView({
                   </View>
 
                   {/* Location & Salary */}
-                  <View style={styles.matrixColMeta}>
+                  <View
+                    style={[
+                      styles.matrixColMeta,
+                      isCompact && styles.matrixColMetaCompact,
+                    ]}
+                  >
                     <View style={styles.metaRowInline}>
                       <MapPin size={11} color={colors.text.dim} />
                       <Typography
@@ -1399,7 +1423,12 @@ function MatrixListView({
                   </View>
 
                   {/* Current Status Pill */}
-                  <View style={styles.matrixColStatus}>
+                  <View
+                    style={[
+                      styles.matrixColStatus,
+                      isCompact && styles.matrixColStatusCompact,
+                    ]}
+                  >
                     <View
                       style={[
                         styles.statusPillBadge,
@@ -1432,7 +1461,12 @@ function MatrixListView({
                   </View>
 
                   {/* Action Buttons */}
-                  <View style={styles.matrixColActions}>
+                  <View
+                    style={[
+                      styles.matrixColActions,
+                      isCompact && styles.matrixColActionsCompact,
+                    ]}
+                  >
                     {(app.status === "saved" || app.status === "rejected") && (
                       <Pressable
                         onPress={(e) => {
@@ -1882,9 +1916,22 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
+  matrixRowCardCompact: {
+    padding: 12,
+  },
+  matrixRowGridCompact: {
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+    rowGap: 8,
+  },
   matrixColTitle: {
     flex: 3,
     gap: 4,
+  },
+  matrixColTitleCompact: {
+    flexBasis: "100%",
+    flexGrow: 0,
+    flexShrink: 0,
   },
   matrixCompanySubRow: {
     flexDirection: "row",
@@ -1894,6 +1941,11 @@ const styles = StyleSheet.create({
   matrixColMeta: {
     flex: 2,
     gap: 2,
+    minWidth: 0,
+  },
+  matrixColMetaCompact: {
+    flex: 1,
+    minWidth: 0,
   },
   metaRowInline: {
     flexDirection: "row",
@@ -1903,6 +1955,11 @@ const styles = StyleSheet.create({
   matrixColStatus: {
     flex: 2,
     alignItems: "flex-start",
+  },
+  matrixColStatusCompact: {
+    flex: 0,
+    width: 92,
+    alignItems: "flex-end",
   },
   statusPillBadge: {
     flexDirection: "row",
@@ -1928,6 +1985,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     gap: 8,
+  },
+  matrixColActionsCompact: {
+    flexBasis: "100%",
+    flexGrow: 0,
+    flexShrink: 0,
+    justifyContent: "flex-end",
+    borderTopWidth: 1,
+    borderTopColor: colors.surface.border,
+    paddingTop: 8,
   },
   actionIconButton: {
     width: 44,
