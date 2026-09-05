@@ -313,7 +313,10 @@ function DraggableCard({
   const isDragging = useSharedValue(false);
 
   const pan = Gesture.Pan()
-    .enabled(!isCompact)
+    // A normal phone swipe must scroll the pipeline. Dragging is an
+    // intentional long press, so the parent ScrollView keeps first refusal.
+    .enabled(true)
+    .activateAfterLongPress(isCompact ? 400 : 0)
     .onBegin(() => {
       isDragging.value = true;
       scale.value = withSpring(1.04, springs.press);
@@ -503,10 +506,8 @@ export function KanbanBoard({
 
               {/* Cards Container */}
               <ScrollView
-                style={[
-                  styles.columnScroll,
-                  isCompact && styles.compactColumnScroll,
-                ]}
+                style={[styles.columnScroll, isCompact && styles.compactColumnScroll]}
+                scrollEnabled={!isCompact}
                 contentContainerStyle={styles.columnBody}
                 showsVerticalScrollIndicator={false}
               >
@@ -706,7 +707,7 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   compactColumnScroll: {
-    maxHeight: 430,
+    maxHeight: undefined,
   },
   columnBody: {
     paddingBottom: 8,
