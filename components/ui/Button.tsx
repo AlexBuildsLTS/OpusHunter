@@ -36,6 +36,7 @@ interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   style?: any;
+  accessibilityLabel?: string;
   /** Enable native haptic feedback on press. Defaults true. */
   haptic?: boolean;
 }
@@ -59,6 +60,7 @@ export function Button({
   disabled = false,
   loading = false,
   style,
+  accessibilityLabel,
   haptic = true,
 }: ButtonProps) {
   const scale = useSharedValue(1);
@@ -110,6 +112,8 @@ export function Button({
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       style={[
         styles.base,
         styles[variant],
@@ -132,6 +136,7 @@ export function Button({
 const styles = StyleSheet.create({
   base: {
     borderRadius: radius.md,
+    minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
