@@ -37,6 +37,7 @@ interface ButtonProps {
   loading?: boolean;
   style?: any;
   accessibilityLabel?: string;
+  testID?: string;
   /** Enable native haptic feedback on press. Defaults true. */
   haptic?: boolean;
 }
@@ -61,6 +62,7 @@ export function Button({
   loading = false,
   style,
   accessibilityLabel,
+  testID,
   haptic = true,
 }: ButtonProps) {
   const scale = useSharedValue(1);
@@ -114,6 +116,8 @@ export function Button({
       disabled={disabled || loading}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
+      testID={testID}
       style={[
         styles.base,
         styles[variant],

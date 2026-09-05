@@ -18,7 +18,6 @@ import {
   Linking,
   ActivityIndicator,
   useWindowDimensions,
-  Alert,
 } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
@@ -60,6 +59,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/authStore";
 import { colors, radius } from "@/constants/theme";
+import { useToast } from "@/components/ui/Toast";
 
 type ViewMode = "board" | "matrix";
 type StatusFilter = "all" | Status;
@@ -70,6 +70,7 @@ export default function PipelineScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isCompact = width < 768;
+  const { showToast } = useToast();
 
   // View & Filter States
   const [viewMode, setViewMode] = useState<ViewMode>("board");
@@ -120,11 +121,11 @@ export default function PipelineScreen() {
     },
     onError: (error) => {
       console.error("Pipeline removal failed:", error);
-      Alert.alert(
-        "Could not remove job",
+      showToast(
         error instanceof Error
           ? error.message
           : "The job was not removed. Please try again.",
+        "error",
       );
     },
     onSettled: () => {
@@ -309,12 +310,6 @@ export default function PipelineScreen() {
     const strat = strategyOverride || selectedStrategy;
 
     try {
-      if (Platform.OS !== "web") {
-        Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Success,
-        ).catch(() => {});
-      }
-
       const { data, error } = await supabase.functions.invoke(
         "generate-cover-letter",
         {
@@ -323,11 +318,6 @@ export default function PipelineScreen() {
             jobListingId: app.job_id,
             strategy: strat,
             formality: form,
-            selected_projects: [
-              "verax_ai",
-              "spring_boot_microservices",
-              "linux_virtualization",
-            ],
           },
         },
       );
@@ -337,13 +327,13 @@ export default function PipelineScreen() {
       if (data?.primary?.body) {
         setGeneratedLetter({
           body: data.primary.body,
-          ats_score: data.primary.ats_score || 94,
+          ats_score: data.primary.ats_score,
           strategy: data.primary.strategy || strat,
         });
       } else if (data?.body) {
         setGeneratedLetter({
           body: data.body,
-          ats_score: data.ats_score || 92,
+          ats_score: data.ats_score,
           strategy: data.strategy || strat,
         });
       } else {
@@ -352,9 +342,9 @@ export default function PipelineScreen() {
     } catch (err) {
       console.error("Cover letter synthesis error:", err);
       setCoverLetterApp(null);
-      Alert.alert(
-        "Cover letter unavailable",
+      showToast(
         "The listing-specific cover letter could not be generated. No placeholder content was created.",
+        "error",
       );
     } finally {
       setIsGeneratingLetter(false);
@@ -1496,6 +1486,8 @@ function MatrixListView({
                       }}
                       style={styles.actionIconButton}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Generate cover letter for ${job?.title || "job"}`}
                     >
                       <Sparkles size={15} color={colors.accent.cyan} />
                     </TouchableOpacity>
@@ -1508,6 +1500,8 @@ function MatrixListView({
                         }}
                         style={styles.actionIconButton}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="link"
+                        accessibilityLabel={`Open ${job?.title || "job"} application link`}
                       >
                         <ExternalLink size={15} color={colors.text.secondary} />
                       </TouchableOpacity>
@@ -1528,6 +1522,8 @@ function MatrixListView({
                             borderColor: colConfig.color + "50",
                           },
                         ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Move job to ${colConfig.nextStatus}`}
                       >
                         <Typography
                           variant="caption"
@@ -1592,6 +1588,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   refreshButton: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
@@ -1610,6 +1607,8 @@ const styles = StyleSheet.create({
     borderColor: colors.surface.border,
   },
   toggleBtn: {
+    minHeight: 44,
+    minWidth: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -1639,6 +1638,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statPill: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
@@ -1680,6 +1680,10 @@ const styles = StyleSheet.create({
     paddingLeft: 36,
   },
   clearSearchBtn: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
     position: "absolute",
     right: 12,
     zIndex: 2,
@@ -1690,6 +1694,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   filterChip: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -1895,7 +1900,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   matrixContent: {
-    paddingBottom: 40,
+    paddingBottom: 140,
     gap: 8,
   },
   matrixListHeader: {
@@ -2007,8 +2012,8 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   deleteActionButton: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     padding: 0,
     backgroundColor: `${colors.accent.red}12`,
     borderColor: `${colors.accent.red}45`,

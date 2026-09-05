@@ -1,4 +1,5 @@
 // app/+not-found.tsx
+import React from "react";
 import { Link, Stack } from "expo-router";
 import { View, Text, StyleSheet } from "react-native";
 import { C } from "../constants/theme";
@@ -13,7 +14,7 @@ export default function NotFoundScreen() {
           Sector trajectory missing in current pipeline.
         </Text>
 
-        <Link href="/(tabs)" style={styles.linkButton}>
+        <Link href={"/(tabs)" as any} style={styles.linkButton}>
           <Text style={styles.linkText}>Return to Core Deck</Text>
         </Link>
       </View>
@@ -44,6 +45,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   linkButton: {
+    minHeight: 44,
+    justifyContent: "center",
     paddingHorizontal: 32,
     paddingVertical: 16,
     backgroundColor: `${C.cyan}10`,

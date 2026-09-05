@@ -21,9 +21,12 @@ import {
   LogOut,
 } from "lucide-react-native";
 import Animated, { FadeIn, FadeOut, SlideInRight, SlideOutRight } from "react-native-reanimated";
+import { useAuthStore } from "../../stores/authStore";
 
 const ProfileMenu = ({ onClose, isAdmin }: { onClose: () => void; isAdmin: boolean }) => {
   const router = useRouter();
+  const signOut = useAuthStore((state) => state.signOut);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const navigateTo = (path: string) => {
     onClose();
     router.push(path as any);
@@ -58,9 +61,26 @@ const ProfileMenu = ({ onClose, isAdmin }: { onClose: () => void; isAdmin: boole
           </Pressable>
         )}
 
-        <Pressable className="mt-2 flex-row items-center rounded-lg border-t border-white/10 p-3 pt-4 active:bg-white/10">
+        <Pressable
+          onPress={async () => {
+            if (isSigningOut) return;
+            setIsSigningOut(true);
+            try {
+              onClose();
+              await signOut();
+              router.replace("/(auth)/auth" as any);
+            } finally {
+              setIsSigningOut(false);
+            }
+          }}
+          disabled={isSigningOut}
+          className="mt-2 min-h-[44px] flex-row items-center rounded-lg border-t border-white/10 p-3 pt-4 active:bg-white/10"
+          accessibilityRole="button"
+          accessibilityLabel="Sign out"
+          accessibilityState={{ disabled: isSigningOut, busy: isSigningOut }}
+        >
           <LogOut size={18} color="#94A3B8" />
-          <Text className="ml-3 font-medium text-slate-200">Disconnect</Text>
+          <Text className="ml-3 font-medium text-slate-200">{isSigningOut ? "Disconnecting…" : "Disconnect"}</Text>
         </Pressable>
       </BlurView>
     </Animated.View>
@@ -93,7 +113,13 @@ export default function ResponsiveNavShell({ children }: { children: React.React
       
       {/* ── TOP UNIFIED HEADER ── */}
       <BlurView intensity={40} tint="dark" className="z-40 h-20 flex-row items-center justify-between border-b border-white/5 bg-black/40 px-6 pt-4">
-        <Pressable onPress={() => router.push("/(tabs)/(dashboard)" as any)} className="flex-row items-center gap-3" hitSlop={10}>
+        <Pressable
+          onPress={() => router.push("/(tabs)/(dashboard)" as any)}
+          className="min-h-[44px] flex-row items-center gap-3"
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Open Discover"
+        >
           <Image source={require("../../assets/icon.png")} style={{ width: 32, height: 32, resizeMode: "contain" }} />
           <Text className="text-xl font-black tracking-tighter text-white">OPUS<Text className="text-cyan-400">HUNTER</Text></Text>
         </Pressable>
@@ -102,7 +128,14 @@ export default function ResponsiveNavShell({ children }: { children: React.React
         {isDesktop && (
           <View className="flex-row gap-6 absolute left-1/2 -translate-x-1/2">
             {NAV_ITEMS.map(item => (
-              <Pressable key={item.id} onPress={() => router.push(item.route as any)} className="items-center justify-center p-2">
+              <Pressable
+                key={item.id}
+                onPress={() => router.push(item.route as any)}
+                className="min-h-[44px] items-center justify-center p-2"
+                accessibilityRole="link"
+                accessibilityLabel={`Open ${item.label}`}
+                accessibilityState={{ selected: isItemActive(item) }}
+              >
                  <Text className={`text-sm font-bold tracking-widest ${isItemActive(item) ? "text-cyan-400" : "text-slate-400"}`}>
                    {item.label.toUpperCase()}
                  </Text>
@@ -127,7 +160,10 @@ export default function ResponsiveNavShell({ children }: { children: React.React
       )}
 
       {/* ── MAIN CONTENT ── */}
-      <View className="z-10 flex-1" style={{ overflow: "hidden" }}>
+      <View
+        className="z-10 flex-1"
+        style={{ overflow: "hidden", paddingBottom: isDesktop ? 16 : 120 }}
+      >
         {children}
       </View>
 
@@ -139,7 +175,14 @@ export default function ResponsiveNavShell({ children }: { children: React.React
               const active = isItemActive(item);
               const Icon = item.icon;
               return (
-                <Pressable key={item.id} onPress={() => router.push(item.route as any)} className="w-16 items-center justify-center h-full">
+                <Pressable
+                  key={item.id}
+                  onPress={() => router.push(item.route as any)}
+                  className="h-full min-h-[44px] w-16 items-center justify-center"
+                  accessibilityRole="tab"
+                  accessibilityLabel={`Open ${item.label}`}
+                  accessibilityState={{ selected: active }}
+                >
                   <Icon size={24} color={active ? "#22D3EE" : "#64748B"} />
                   {active && <View className="absolute bottom-1 h-1 w-1 rounded-full bg-cyan-400 shadow-[0_0_8px_#22D3EE]" />}
                 </Pressable>

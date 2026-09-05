@@ -14,6 +14,7 @@ import { Card } from "../../../../components/ui/GlassCard";
 import { Badge } from "../../../../components/ui/Badge";
 import { Input } from "../../../../components/ui/Input";
 import { Button } from "../../../../components/ui/Button";
+import { useToast } from "../../../../components/ui/Toast";
 import { Chip } from "../../../../components/ui/Chip";
 import { useAuthStore } from "../../../../stores/authStore";
 import { supabase } from "../../../../lib/supabase";
@@ -77,6 +78,7 @@ type BioTone = "formal" | "executive" | "technical" | "modern";
 
 export default function ProfileScreen() {
   const { profile, setProfile, user } = useAuthStore();
+  const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -94,18 +96,15 @@ export default function ProfileScreen() {
     seniority_levels: (profile?.seniority_level
       ? [profile.seniority_level as SeniorityLevel]
       : ["mid" as SeniorityLevel]) as SeniorityLevel[],
-    target_roles: profile?.target_roles || ["Full Stack Developer"],
-    work_type_preferences: (profile?.work_type_preferences || [
-      "remote",
-      "hybrid",
-    ]) as WorkType[],
-    target_cities: profile?.target_cities || ["Stockholm"],
-    target_countries: profile?.target_countries || ["Sweden"],
+    target_roles: profile?.target_roles || [],
+    work_type_preferences: (profile?.work_type_preferences || []) as WorkType[],
+    target_cities: profile?.target_cities || [],
+    target_countries: profile?.target_countries || [],
     location_radius_km: profile?.location_radius_km || 50,
     salary_min: profile?.salary_min != null ? String(profile.salary_min) : "",
     salary_max: profile?.salary_max != null ? String(profile.salary_max) : "",
-    salary_currency: profile?.salary_currency || "SEK",
-    languages: profile?.languages || ["English", "Swedish"],
+    salary_currency: profile?.salary_currency || "",
+    languages: profile?.languages || [],
   });
 
   // Keep form in sync when profile updates
@@ -114,6 +113,7 @@ export default function ProfileScreen() {
       setForm({
         first_name: profile.first_name || "",
         last_name: profile.last_name || "",
+        avatar_url: profile.avatar_url || "",
         professional_title: profile.professional_title || "",
         bio: profile.bio || "",
         years_experience:
@@ -124,18 +124,16 @@ export default function ProfileScreen() {
           ? [profile.seniority_level as SeniorityLevel]
           : ["mid"],
         target_roles: profile.target_roles || [],
-        work_type_preferences: (profile.work_type_preferences || [
-          "remote",
-        ]) as WorkType[],
+        work_type_preferences: (profile.work_type_preferences || []) as WorkType[],
         target_cities: profile.target_cities || [],
-        target_countries: profile.target_countries || ["Sweden"],
+        target_countries: profile.target_countries || [],
         location_radius_km: profile.location_radius_km || 50,
         salary_min:
           profile.salary_min != null ? String(profile.salary_min) : "",
         salary_max:
           profile.salary_max != null ? String(profile.salary_max) : "",
-        salary_currency: profile.salary_currency || "SEK",
-        languages: profile.languages || ["English"],
+        salary_currency: profile.salary_currency || "",
+        languages: profile.languages || [],
       });
     }
   }, [profile]);
@@ -161,7 +159,7 @@ export default function ProfileScreen() {
 
   const handleGenerateBio = async () => {
     if (!user) {
-      showToast({ message: "Please log in to generate bio", type: "error" });
+      showToast("Please log in to generate bio", "error");
       return;
     }
     setGeneratingBio(true);
@@ -169,19 +167,13 @@ export default function ProfileScreen() {
       const fullName = [form.first_name, form.last_name]
         .filter(Boolean)
         .join(" ");
-      const title =
-        form.professional_title || "Software Engineering Professional";
-      const years = form.years_experience || "established";
-      const skills = userContext?.extracted_skills || [
-        "Java",
-        "Spring Boot",
-        "TypeScript",
-        "React Native",
-        "PostgreSQL",
-        "Deno",
-        "Linux",
-      ];
-      const roles = form.target_roles || [title];
+      const title = form.professional_title.trim();
+      if (!title) {
+        throw new Error("Add a professional title before generating a bio.");
+      }
+      const years = form.years_experience;
+      const skills = userContext?.extracted_skills || [];
+      const roles = form.target_roles || [];
 
       const { data, error } = await supabase.functions.invoke(
         "extract-context",
@@ -202,19 +194,13 @@ export default function ProfileScreen() {
       if (error) throw error;
       if (data?.bio) {
         setForm((prev) => ({ ...prev, bio: data.bio }));
-        showToast({
-          message: `AI Bio generated via ${data.modelUsed || "Gemini"}`,
-          type: "success",
-        });
+        showToast(`AI Bio generated via ${data.modelUsed || "the configured AI provider"}`, "success");
       } else {
         throw new Error(data?.message || "No bio returned from AI model");
       }
     } catch (err: any) {
-      console.warn("Real AI bio generation fallback error:", err);
-      showToast({
-        message: err.message || "Failed to generate bio with AI",
-        type: "error",
-      });
+      console.warn("Real AI bio generation failed:", err);
+      showToast(err.message || "Failed to generate bio with AI", "error");
     } finally {
       setGeneratingBio(false);
     }

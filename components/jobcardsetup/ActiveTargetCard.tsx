@@ -64,17 +64,17 @@ export function ActiveTargetCard({
   const [scrapeSuccessMsg, setScrapeSuccessMsg] = useState<string | null>(null);
   const [scrapeError, setScrapeError] = useState<string | null>(null);
 
-  const title = profile?.professional_title || "Java Fullstack Developer";
+  const title = profile?.professional_title || "Target profile not configured";
   const roles = profile?.target_roles || [];
-  const cities = profile?.target_cities || ["Stockholm"];
-  const countries = profile?.target_countries || ["Sweden"];
-  const radiusKm = profile?.location_radius_km || 50;
-  const workTypes = profile?.work_type_preferences || ["remote", "hybrid"];
-  const seniority = profile?.seniority_level || "mid";
-  const maxDaily = profile?.max_daily_applications || 10;
+  const cities = profile?.target_cities || [];
+  const countries = profile?.target_countries || [];
+  const radiusKm = profile?.location_radius_km;
+  const workTypes = profile?.work_type_preferences || [];
+  const seniority = profile?.seniority_level || "not configured";
+  const maxDaily = profile?.max_daily_applications;
   const salaryMin = profile?.salary_min;
   const salaryMax = profile?.salary_max;
-  const currency = profile?.salary_currency || "SEK";
+  const currency = profile?.salary_currency || "";
 
   const handleStartScrape = async () => {
     if (isScraping || rateLimitStatus.limited) return;
@@ -172,6 +172,8 @@ export function ActiveTargetCard({
               onPress={onEditRules}
               style={styles.tuneButton}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Edit targeting rules"
             >
               <Settings size={14} color="#94A3B8" />
               <Text style={styles.tuneButtonText}>Tune Rules</Text>
@@ -191,7 +193,9 @@ export function ActiveTargetCard({
             <View style={{ flex: 1 }}>
               <Text style={styles.paramLabel}>GEO RADAR & RADIUS</Text>
               <Text style={styles.paramValue} numberOfLines={1}>
-                {cities.join(", ")} ({countries.join(", ")}) • {radiusKm} km
+                {cities.length ? cities.join(", ") : "Location not configured"}
+                {countries.length ? ` (${countries.join(", ")})` : ""}
+                {radiusKm ? ` • ${radiusKm} km` : ""}
               </Text>
             </View>
           </View>
@@ -206,7 +210,10 @@ export function ActiveTargetCard({
             <View style={{ flex: 1 }}>
               <Text style={styles.paramLabel}>WORK MODEL & SENIORITY</Text>
               <Text style={styles.paramValue} numberOfLines={1}>
-                {workTypes.map((w: string) => w.toUpperCase()).join(" / ")} •{" "}
+                {workTypes.length
+                  ? workTypes.map((w: string) => w.toUpperCase()).join(" / ")
+                  : "Work model not configured"}
+                {" • "}
                 {seniority.toUpperCase()}
               </Text>
             </View>
@@ -222,7 +229,9 @@ export function ActiveTargetCard({
             <View style={{ flex: 1 }}>
               <Text style={styles.paramLabel}>ALTERNATE TITLES</Text>
               <Text style={styles.paramValue} numberOfLines={1}>
-                {roles.length > 0 ? roles.join(", ") : "Single Focus Target"}
+                {roles.length > 0
+                  ? roles.join(", ")
+                  : "No alternate titles configured"}
               </Text>
             </View>
           </View>
@@ -237,10 +246,13 @@ export function ActiveTargetCard({
             <View style={{ flex: 1 }}>
               <Text style={styles.paramLabel}>SALARY FLOOR & PACE</Text>
               <Text style={styles.paramValue} numberOfLines={1}>
-                {salaryMin
-                  ? `${salaryMin} - ${salaryMax || "+"} ${currency}`
-                  : "Market Standard"}{" "}
-                • {maxDaily || 30} max applications/day
+                {salaryMin != null
+                  ? `${salaryMin} - ${salaryMax ?? "+"} ${currency}`
+                  : "Compensation not configured"}{" "}
+                •{" "}
+                {maxDaily != null
+                  ? `${maxDaily} max applications/day`
+                  : "Daily limit not configured"}
               </Text>
             </View>
           </View>
@@ -285,6 +297,16 @@ export function ActiveTargetCard({
             onPress={handleStartScrape}
             disabled={isScraping || rateLimitStatus.limited}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isScraping
+                ? "Searching live job endpoints"
+                : "Start live job search"
+            }
+            accessibilityState={{
+              disabled: isScraping || rateLimitStatus.limited,
+              busy: isScraping,
+            }}
           >
             {isScraping ? (
               <>
@@ -315,6 +337,8 @@ export function ActiveTargetCard({
               ]}
               onPress={onViewPipeline}
               activeOpacity={0.8}
+              accessibilityRole="link"
+              accessibilityLabel="View job pipeline"
             >
               <Text style={styles.viewPipelineBtnText}>View Pipeline</Text>
               <ChevronRight size={16} color="#CBD5E1" />
@@ -439,6 +463,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   tuneButton: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(255, 255, 255, 0.06)",
@@ -564,6 +589,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   viewPipelineBtn: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(255, 255, 255, 0.08)",

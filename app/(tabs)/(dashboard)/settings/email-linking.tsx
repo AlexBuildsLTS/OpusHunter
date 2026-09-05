@@ -20,7 +20,6 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  Alert,
   useWindowDimensions,
 } from "react-native";
 import { useAuthStore } from "../../../../stores/authStore";
@@ -30,6 +29,8 @@ import { Typography } from "../../../../components/ui/Typography";
 import { Card } from "../../../../components/ui/GlassCard";
 import { Button } from "../../../../components/ui/Button";
 import { Badge } from "../../../../components/ui/Badge";
+import { Modal } from "../../../../components/ui/Modal";
+import { useToast } from "../../../../components/ui/Toast";
 import { colors, radius } from "../../../../constants/theme";
 import {
   Mail,
@@ -61,6 +62,8 @@ export default function EmailLinkingScreen() {
   const [linking, setLinking] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [accountToRemove, setAccountToRemove] = useState<{ id: string; email: string } | null>(null);
+  const { showToast } = useToast();
 
   // Google OAuth setup
   const [googleRequest, googleResponse, googlePromptAsync] =
@@ -143,56 +146,48 @@ export default function EmailLinkingScreen() {
           throw new Error(data?.message || "Failed to link Gmail account");
         }
 
-        Alert.alert(
-          "Success",
-          `Gmail account ${data.email} linked successfully!`,
-        );
+        showToast(`Gmail account ${data.email} linked successfully.`, "success");
         await loadAccounts();
       }
     } catch (err: any) {
       console.error("Google linking error:", err);
       setError(err.message || "Failed to link Gmail");
-      Alert.alert("Error", err.message || "Failed to link Gmail account");
+      showToast(err.message || "Failed to link Gmail account", "error");
     } finally {
       setLinking(false);
     }
-  }, [googleRequest, googlePromptAsync, user?.id]);
+  }, [googleRequest, googlePromptAsync, showToast, user?.id]);
 
-  // TODO: Add Outlook OAuth flow
-  const handleOutlookLink = async () => {
-    Alert.alert("Coming Soon", "Outlook linking will be available soon");
+  // Outlook is not wired to an OAuth provider in this project yet. Be explicit
+  // rather than presenting a button that appears to have completed a link.
+  const handleOutlookLink = () => {
+    showToast("Outlook linking is not configured yet.", "info");
   };
 
-  const handleRemoveAccount = async (accountId: string, email: string) => {
-    Alert.alert(
-      "Remove Email Account",
-      `Are you sure you want to remove ${email}?`,
-      [
-        { text: "Cancel", onPress: () => {} },
-        {
-          text: "Remove",
-          onPress: async () => {
-            try {
-              setRemovingId(accountId);
-              const { error } = await supabase
-                .from("connected_email_accounts")
-                .delete()
-                .eq("id", accountId);
+  const handleRemoveAccount = (accountId: string, email: string) => {
+    setAccountToRemove({ id: accountId, email });
+  };
 
-              if (error) throw error;
-              await loadAccounts();
-              Alert.alert("Success", `${email} removed`);
-            } catch (err: any) {
-              setError(err.message);
-              Alert.alert("Error", err.message || "Failed to remove account");
-            } finally {
-              setRemovingId(null);
-            }
-          },
-          style: "destructive",
-        },
-      ],
-    );
+  const confirmRemoveAccount = async () => {
+    if (!accountToRemove) return;
+    const { id, email } = accountToRemove;
+    setAccountToRemove(null);
+    try {
+      setRemovingId(id);
+      const { error } = await supabase
+        .from("connected_email_accounts")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+      await loadAccounts();
+      showToast(`${email} removed.`, "success");
+    } catch (err: any) {
+      setError(err.message);
+      showToast(err.message || "Failed to remove account", "error");
+    } finally {
+      setRemovingId(null);
+    }
   };
 
   const handleSetPrimary = async (accountId: string) => {
@@ -215,7 +210,7 @@ export default function EmailLinkingScreen() {
 
       await loadAccounts();
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to set primary account");
+      showToast(err.message || "Failed to set primary account", "error");
     }
   };
 
@@ -533,6 +528,24 @@ export default function EmailLinkingScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={!!accountToRemove}
+        onClose={() => setAccountToRemove(null)}
+        title="Remove email account"
+      >
+        <Typography variant="bodySm" color="secondary">
+          Remove {accountToRemove?.email} from OpusHunter? This revokes its use for auto-apply.
+        </Typography>
+        <View style={styles.confirmActions}>
+          <Button variant="ghost" onPress={() => setAccountToRemove(null)} style={styles.confirmButton}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onPress={confirmRemoveAccount} style={styles.confirmButton}>
+            Remove account
+          </Button>
+        </View>
+      </Modal>
     </SafeAreaWrapper>
   );
 }
@@ -545,10 +558,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingVertical: 20,
+    paddingBottom: 140,
   },
   centeredContainer: {
     maxWidth: 900,
-    marginHorizontal: "auto",
+    alignSelf: "center",
     width: "100%",
     paddingHorizontal: 16,
   },
@@ -618,6 +632,8 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.1)",
   },
   primaryToggle: {
+    minHeight: 44,
+    minWidth: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -633,6 +649,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   removeButton: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
@@ -665,6 +682,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 60,
+  },
+  confirmActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 20,
+  },
+  confirmButton: {
+    flex: 1,
   },
   emptyState: {
     alignItems: "center",

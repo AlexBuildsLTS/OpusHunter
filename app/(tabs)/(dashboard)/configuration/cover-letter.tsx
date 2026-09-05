@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: colors.surface.card,
   },
-  scroll: { paddingHorizontal: 16, paddingBottom: 40 },
+  scroll: { paddingHorizontal: 16, paddingBottom: 140 },
   metaRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
   scoreCard: { padding: 16, marginBottom: 16 },
   scoreRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },

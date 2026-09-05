@@ -30,7 +30,12 @@ export const RateLimitBanner: React.FC<RateLimitBannerProps> = ({
             Next search available at: {nextAvailableAt?.toLocaleTimeString() || "soon"}
           </Typography>
         </View>
-        <TouchableOpacity onPress={onRefresh} style={styles.refreshBtn}>
+        <TouchableOpacity
+          onPress={onRefresh}
+          style={styles.refreshBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Refresh rate limit status"
+        >
           <RefreshCw size={16} color={colors.accent.cyan} />
         </TouchableOpacity>
       </View>
@@ -54,7 +59,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   refreshBtn: {
-    padding: 8,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 8,
     backgroundColor: `${colors.accent.cyan}10`,
   },

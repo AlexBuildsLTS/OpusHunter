@@ -79,7 +79,11 @@ export function Modal({
       animationType="none"
       onRequestClose={onClose}
     >
-      <View style={styles.overlay}>
+      <View
+        style={styles.overlay}
+        accessibilityViewIsModal
+        accessibilityLabel={title || "Dialog"}
+      >
         {Platform.OS === "ios" ? (
           <BlurView
             intensity={20}
@@ -169,7 +173,10 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.surface.border,
   },
   closeBtn: {
-    padding: 4,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: radius.md,
     backgroundColor: "rgba(255, 255, 255, 0.05)",
   },

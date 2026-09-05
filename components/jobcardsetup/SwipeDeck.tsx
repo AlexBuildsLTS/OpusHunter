@@ -552,14 +552,14 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
                   </Text>
                   {(currentJob.url || currentJob.source_url) && (
                     <TouchableOpacity
+                      accessibilityRole="link"
+                      accessibilityLabel={`Open ${formatSource(currentJob.source)} job posting`}
                       onPress={() =>
                         Linking.openURL(
                           currentJob.url || currentJob.source_url || "",
                         ).catch(() => {})
                       }
                       style={styles.readPostButton}
-                      accessibilityRole="link"
-                      accessibilityLabel={`Open ${formatSource(currentJob.source)} posting`}
                     >
                       <Text style={styles.readPostText}>Read Full Post</Text>
                     </TouchableOpacity>
@@ -570,6 +570,8 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
               {/* View Full Specs Trigger */}
               {onSelectJob && (
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="View full job specifications"
                   onPress={() => onSelectJob(currentJob)}
                   style={({ pressed }) => [
                     styles.detailsLink,
@@ -594,6 +596,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
       {/* ── Programmatic Swipe Action Bar ── */}
       <View style={styles.actionBar}>
         <Pressable
+          accessibilityRole="button"
           onPress={() => executeSwipe("left")}
           style={({ pressed }) => [
             styles.actionButton,
@@ -607,6 +610,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
 
         {onSelectJob && (
           <Pressable
+            accessibilityRole="button"
             onPress={() => onSelectJob(currentJob)}
             style={({ pressed }) => [
               styles.actionButton,
@@ -620,6 +624,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
         )}
 
         <Pressable
+          accessibilityRole="button"
           onPress={() => executeSwipe("up")}
           style={({ pressed }) => [
             styles.actionButton,
@@ -632,6 +637,7 @@ export const SwipeDeck: React.FC<SwipeDeckProps> = ({
         </Pressable>
 
         <Pressable
+          accessibilityRole="button"
           onPress={() => executeSwipe("right")}
           style={({ pressed }) => [
             styles.actionButton,
@@ -657,6 +663,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     columnGap: 6,
+    minHeight: 44,
     marginTop: 8,
     paddingVertical: 6,
   },

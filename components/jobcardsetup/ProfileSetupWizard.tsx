@@ -434,14 +434,13 @@ export function ProfileSetupWizard({
     setGeneratingBio(true);
     try {
       const fullName = `${formData.first_name} ${formData.last_name}`.trim();
-      const title = formData.professional_title || "Software Developer";
-      const years = formData.years_experience || "established";
-      const skillsList =
-        formData.skills.length > 0
-          ? formData.skills
-          : ["Full-Stack", "Backend", "Frontend"];
-      const rolesList =
-        formData.target_roles.length > 0 ? formData.target_roles : [title];
+      const title = formData.professional_title.trim();
+      if (!title) {
+        throw new Error("Add a professional title before generating a bio.");
+      }
+      const years = formData.years_experience;
+      const skillsList = formData.skills;
+      const rolesList = formData.target_roles;
 
       const { data, error } = await supabase.functions.invoke(
         "extract-context",
@@ -467,7 +466,7 @@ export function ProfileSetupWizard({
         throw new Error("No bio returned from AI model");
       }
     } catch (err: any) {
-      console.warn("AI bio generation fallback in wizard:", err);
+      console.warn("AI bio generation failed in wizard:", err);
       setError(err.message || "Failed to generate bio with AI");
     } finally {
       setGeneratingBio(false);

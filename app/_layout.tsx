@@ -9,6 +9,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "../lib/queryClient";
 import { useAuthRedirect } from "../hooks/useAuthRedirect";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { ToastProvider } from "../components/ui/Toast";
 import React from "react";
 
 export default function AppLayout() {
@@ -24,7 +25,8 @@ export default function AppLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
-        <View style={styles.root}>
+        <ToastProvider>
+          <View style={styles.root}>
           {/* Universal Ambient Engine - Sits at root, never unmounts */}
           <AnimatedBackground />
 
@@ -46,7 +48,8 @@ export default function AppLayout() {
               <Stack.Screen name="+not-found" />
             </Stack>
           )}
-        </View>
+          </View>
+        </ToastProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
   );

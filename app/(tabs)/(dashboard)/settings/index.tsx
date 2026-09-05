@@ -24,7 +24,7 @@ import { Input } from "../../../../components/ui/Input";
 import { Button } from "../../../../components/ui/Button";
 import { useAuthStore } from "../../../../stores/authStore";
 import { supabase } from "../../../../lib/supabase";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { colors, radius, shadows } from "../../../../constants/theme";
 import { isSecure } from "../../../../lib/secureStorage";
 import {
@@ -450,14 +450,12 @@ function NavModuleCard({
 // ─── MASTER SETTINGS SCREEN COMPONENT ───────────────────────────────────────
 export default function SettingsScreen() {
   const { profile, signOut, user } = useAuthStore();
-  const queryClient = useQueryClient();
   const router = useRouter();
 
   // Modals
   const [activeModal, setActiveModal] = useState<
     null | "gmail" | "diagnostics"
   >(null);
-  const [gmailLinking, setGmailLinking] = useState(false);
 
   // Fetch Connected Emails
   const { data: emails = [] } = useQuery({
@@ -477,23 +475,11 @@ export default function SettingsScreen() {
     },
   });
 
-  // Simulated / Real Gmail OAuth Trigger
-  const handleGmailLink = async () => {
-    setGmailLinking(true);
-    try {
-      if (Platform.OS !== "web") {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-      await new Promise((res) => setTimeout(res, 1400));
-      queryClient.invalidateQueries({
-        queryKey: ["connected_emails", profile?.id],
-      });
-      setActiveModal(null);
-    } catch (err) {
-      console.warn("Gmail Link failed", err);
-    } finally {
-      setGmailLinking(false);
-    }
+  // The actual OAuth flow lives in the dedicated account-linking screen.
+  // Keep this hub action truthful instead of implying a connection succeeded.
+  const handleGmailLink = () => {
+    setActiveModal(null);
+    router.push("/(tabs)/(dashboard)/settings/email-linking" as any);
   };
 
   const handleSignOut = async () => {
@@ -888,12 +874,11 @@ export default function SettingsScreen() {
             variant={emails.length > 0 ? "secondary" : "primary"}
             size="md"
             onPress={handleGmailLink}
-            loading={gmailLinking}
             style={{ width: "100%", marginTop: 8 }}
           >
             {emails.length > 0
-              ? "Re-Authenticate Gmail OAuth"
-              : "Authorize Google Workspace / Gmail"}
+              ? "Manage Gmail connection"
+              : "Open Gmail authorization"}
           </Button>
         </View>
       </Modal>

@@ -264,6 +264,8 @@ function JobCardCompact({
                   },
                 ]}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Move job to ${colConfig.nextStatus}`}
               >
                 <Typography
                   variant="caption"
@@ -770,10 +772,10 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   deleteActionBtn: {
-    width: 32,
-    height: 32,
-    minWidth: 32,
-    minHeight: 32,
+    width: 44,
+    height: 44,
+    minWidth: 44,
+    minHeight: 44,
     padding: 0,
     borderRadius: radius.sm,
     backgroundColor: `${colors.accent.red}12`,
@@ -789,6 +791,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     columnGap: 4,
     paddingHorizontal: 8,
+    minHeight: 44,
     paddingVertical: 4,
     borderRadius: radius.sm,
     borderWidth: 1,

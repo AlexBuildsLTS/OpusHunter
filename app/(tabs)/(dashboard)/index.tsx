@@ -86,7 +86,9 @@ const QuickAction = React.memo(
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={() => router.push(route)}
-      style={{ marginBottom: 8 }}
+      style={{ marginBottom: 8, minHeight: 44 }}
+      accessibilityRole="link"
+      accessibilityLabel={label}
     >
       <Card variant="interactive" style={[styles.quickActionCard, { marginBottom: 0 }]}>
         <View
@@ -121,6 +123,7 @@ export default function DashboardScreen() {
     ats_score?: number;
     strategy?: string;
   } | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [selectedFormality, setSelectedFormality] = useState<string>(
     "technical_deep_dive",
   );
@@ -132,7 +135,7 @@ export default function DashboardScreen() {
     useJobs();
 
   // ── Fetch Pipeline Metrics via RPC ─────────────────────────────────────────
-  const { data: metrics, isLoading: metricsLoading } = useQuery({
+  const { data: metrics, isLoading: metricsLoading, isError: metricsError } = useQuery({
     queryKey: ["pipeline_metrics", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_user_pipeline_metrics");
@@ -146,6 +149,7 @@ export default function DashboardScreen() {
     if (!user || !job) return;
     setIsGeneratingLetter(true);
     setGeneratedLetter(null);
+    setGenerationError(null);
 
     try {
       const { data, error } = await supabase.functions.invoke(
@@ -174,14 +178,14 @@ export default function DashboardScreen() {
           ats_score: data.ats_score,
           strategy: data.strategy,
         });
+      } else {
+        throw new Error("The cover-letter service returned no letter content.");
       }
     } catch (err: any) {
       console.error("Cover letter synthesis error:", err);
-      setGeneratedLetter({
-        body: `Dear Hiring Team at ${job.company},\n\nI am writing to express my strong interest in the ${job.title} position. With my background in modern system architecture, I am confident in my ability to drive technical impact.\n\nBest regards,\n${firstName}`,
-        ats_score: 95,
-        strategy: selectedStrategy,
-      });
+      setGenerationError(
+        err?.message || "The listing-specific cover letter could not be generated.",
+      );
     } finally {
       setIsGeneratingLetter(false);
     }
@@ -249,21 +253,21 @@ export default function DashboardScreen() {
             <>
               <MetricCard
                 label="Discovered"
-                value={metrics?.discovered ?? 0}
+                value={metricsError ? "—" : (metrics?.discovered ?? 0)}
                 color={colors.accent.blue}
                 icon={Target}
                 delay={150}
               />
               <MetricCard
                 label="Saved"
-                value={metrics?.saved ?? 0}
+                value={metricsError ? "—" : (metrics?.saved ?? 0)}
                 color={colors.accent.cyan}
                 icon={Zap}
                 delay={150}
               />
               <MetricCard
                 label="Applied"
-                value={metrics?.applied ?? 0}
+                value={metricsError ? "—" : (metrics?.applied ?? 0)}
                 color={colors.accent.green}
                 icon={CheckCircle2}
                 delay={150}
@@ -271,6 +275,11 @@ export default function DashboardScreen() {
             </>
           )}
         </Animated.View>
+        {metricsError && (
+          <Typography variant="caption" color="error" style={styles.metricsError}>
+            Pipeline metrics are unavailable. Job data is still available below.
+          </Typography>
+        )}
 
         <Animated.View
           entering={FadeInDown.delay(200).springify()}
@@ -283,6 +292,8 @@ export default function DashboardScreen() {
             <TouchableOpacity
               onPress={() => router.push("/(tabs)/(dashboard)/pipeline")}
               style={styles.sectionLink}
+              accessibilityRole="link"
+              accessibilityLabel="View all pipeline jobs"
             >
               <Typography variant="bodySm" color="accent">
                 View All
@@ -378,6 +389,7 @@ export default function DashboardScreen() {
         onClose={() => {
           setSelectedJob(null);
           setGeneratedLetter(null);
+          setGenerationError(null);
         }}
         title="Position Specification & AI Synthesis"
         maxWidth={720}
@@ -557,6 +569,13 @@ export default function DashboardScreen() {
                     : "Generate Custom AI Cover Letter"}
                 </Text>
               </Button>
+              {generationError && (
+                <View accessibilityRole="alert" style={styles.generationError}>
+                  <Typography variant="caption" color="error">
+                    {generationError}
+                  </Typography>
+                </View>
+              )}
             </View>
 
             {generatedLetter && (
@@ -643,7 +662,7 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "transparent", minHeight: 0 },
   scrollView: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingTop: 16 },
+  scroll: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 140 },
   scrollDesktop: { maxWidth: 1100, width: "100%", alignSelf: "center" },
   header: { flexDirection: "row", alignItems: "center", marginBottom: 24 },
   metricsRow: {
@@ -680,13 +699,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   deckSection: { marginBottom: 24 },
+  metricsError: { marginTop: -14, marginBottom: 18 },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 16,
   },
-  sectionLink: { flexDirection: "row", alignItems: "center", gap: 4 },
+  sectionLink: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 4 },
   center: { paddingVertical: 40, alignItems: "center" },
   centerCard: { alignItems: "center", padding: 24 },
   quickActions: { marginTop: 8 },
@@ -714,6 +734,7 @@ const styles = StyleSheet.create({
   },
   quickSub: { fontSize: 12, color: colors.text.secondary },
   modalScroll: { maxHeight: 520 },
+  generationError: { marginTop: 10, lineHeight: 18 },
   modalHeaderBlock: {
     marginBottom: 16,
     paddingBottom: 12,

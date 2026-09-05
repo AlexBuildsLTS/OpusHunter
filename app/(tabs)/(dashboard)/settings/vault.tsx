@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Platform,
-  Alert,
 } from "react-native";
 import { SafeAreaWrapper } from "../../../../components/shared/SafeAreaWrapper";
 import { Typography } from "../../../../components/ui/Typography";
@@ -18,6 +17,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../../../lib/supabase";
 import { useAuthStore } from "../../../../stores/authStore";
 import { colors, radius } from "../../../../constants/theme";
+import { useToast } from "../../../../components/ui/Toast";
 import {
   setSecureItem,
   getSecureItem,
@@ -83,6 +83,7 @@ const SUPPORTED_PROVIDERS: { id: ApiProvider; name: string; hint: string }[] = [
 export default function VaultScreen() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [showUploader, setShowUploader] = useState<
     false | "cv" | "certification"
   >(false);
@@ -163,10 +164,7 @@ export default function VaultScreen() {
 
   const handleToggleBiometrics = async () => {
     if (!biometricsAvailable) {
-      Alert.alert(
-        "Biometrics Unavailable",
-        "No biometric sensor enrolled on this device.",
-      );
+      showToast("No biometric sensor is enrolled on this device.", "info");
       return;
     }
     const nextState = !biometricsEnabled;
@@ -184,10 +182,7 @@ export default function VaultScreen() {
       );
       setBiometricsEnabled(nextState);
     } catch (err: any) {
-      Alert.alert(
-        "Biometric Error",
-        err.message || "Could not toggle biometrics.",
-      );
+      showToast(err.message || "Could not toggle biometrics.", "error");
     }
   };
 
@@ -387,7 +382,7 @@ export default function VaultScreen() {
         queryKey: ["resume-documents", user?.id],
       });
     } catch (err: any) {
-      Alert.alert("Delete Error", err.message);
+      showToast(err.message || "Failed to remove document", "error");
     }
   };
 
@@ -405,7 +400,7 @@ export default function VaultScreen() {
         queryKey: ["resume-documents", user?.id],
       });
     } catch (err: any) {
-      Alert.alert("Error", err.message);
+      showToast(err.message || "Failed to update primary resume", "error");
     }
   };
 
@@ -414,7 +409,7 @@ export default function VaultScreen() {
       await supabase.from("certifications").delete().eq("id", id);
       queryClient.invalidateQueries({ queryKey: ["certifications", user?.id] });
     } catch (err: any) {
-      Alert.alert("Delete Error", err.message);
+      showToast(err.message || "Failed to remove document", "error");
     }
   };
 
@@ -423,7 +418,7 @@ export default function VaultScreen() {
       await supabase.from("user_api_keys").delete().eq("id", id);
       queryClient.invalidateQueries({ queryKey: ["api-keys", user?.id] });
     } catch (err: any) {
-      Alert.alert("Delete Error", err.message);
+      showToast(err.message || "Failed to remove document", "error");
     }
   };
 

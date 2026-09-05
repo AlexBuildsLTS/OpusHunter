@@ -172,6 +172,8 @@ export default function HunterRulesScreen() {
                   style={styles.tuneWizardLink}
                   onPress={() => setActiveTab("wizard")}
                   activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Update radar parameters in setup wizard"
                 >
                   <Text style={styles.tuneWizardLinkText}>
                     Update radar parameters in setup wizard
@@ -270,7 +272,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 140,
   },
   infoCard: {
     backgroundColor: "rgba(15, 23, 42, 0.7)",
@@ -299,6 +301,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   tuneWizardLink: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,

@@ -4,7 +4,6 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
-  Alert,
   useWindowDimensions,
   Linking,
   Platform,
@@ -16,6 +15,7 @@ import { Badge } from "../../../../components/ui/Badge";
 import { Button } from "../../../../components/ui/Button";
 import { DocumentUploader } from "./DocumentUploader";
 import { Modal } from "../../../../components/ui/Modal";
+import { useToast } from "../../../../components/ui/Toast";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -45,6 +45,7 @@ export default function DocumentsScreen() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const { width } = useWindowDimensions();
+  const { showToast } = useToast();
   const isCompact = width < 560;
   const [showUploader, setShowUploader] = useState<
     false | "cv" | "certification"
@@ -57,6 +58,11 @@ export default function DocumentsScreen() {
   const [refinedSourceName, setRefinedSourceName] = useState<string | null>(
     null,
   );
+  const [pendingDelete, setPendingDelete] = useState<
+    | { kind: "document"; id: string; path: string; name: string }
+    | { kind: "certification"; id: string; name: string }
+    | null
+  >(null);
 
   // Queries
   const { data: resumeDocs = [], isLoading: loadingResumes } = useQuery({
@@ -106,7 +112,7 @@ export default function DocumentsScreen() {
         queryKey: ["resume-documents", user?.id],
       });
     } catch (err: any) {
-      Alert.alert("Delete Error", err.message || "Failed to remove document");
+      showToast(err.message || "Failed to remove document", "error");
     }
   };
 
@@ -130,7 +136,7 @@ export default function DocumentsScreen() {
       });
       return true;
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to set primary resume");
+      showToast(err.message || "Failed to set primary resume", "error");
       return false;
     }
   };
@@ -167,10 +173,7 @@ export default function DocumentsScreen() {
 
       await Linking.openURL(data.signedUrl);
     } catch (err: any) {
-      Alert.alert(
-        "Document unavailable",
-        err.message || "The document could not be opened.",
-      );
+      showToast(err.message || "The document could not be opened.", "error");
     }
   };
 
@@ -185,10 +188,18 @@ export default function DocumentsScreen() {
 
       queryClient.invalidateQueries({ queryKey: ["certifications", user?.id] });
     } catch (err: any) {
-      Alert.alert(
-        "Delete Error",
-        err.message || "Failed to remove certification",
-      );
+      showToast(err.message || "Failed to remove certification", "error");
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    const deletion = pendingDelete;
+    setPendingDelete(null);
+    if (deletion.kind === "document") {
+      await handleDeleteDoc(deletion.id, deletion.path);
+    } else {
+      await handleDeleteCert(deletion.id);
     }
   };
 
@@ -209,10 +220,7 @@ export default function DocumentsScreen() {
         queryKey: ["resume-documents", user?.id],
       });
     } catch (err: any) {
-      Alert.alert(
-        "Resume refinement failed",
-        err.message || "No refined draft was created.",
-      );
+      showToast(err.message || "No refined draft was created.", "error");
     } finally {
       setProcessingId(null);
     }
@@ -482,7 +490,12 @@ export default function DocumentsScreen() {
                         )}
                         <Pressable
                           onPress={() =>
-                            handleDeleteDoc(doc.id, doc.storage_path)
+                            setPendingDelete({
+                              kind: "document",
+                              id: doc.id,
+                              path: doc.storage_path,
+                              name: doc.file_name,
+                            })
                           }
                           style={styles.actionIconBtn}
                           hitSlop={10}
@@ -581,7 +594,13 @@ export default function DocumentsScreen() {
                       </Typography>
                     </View>
                     <Pressable
-                      onPress={() => handleDeleteCert(c.id)}
+                      onPress={() =>
+                        setPendingDelete({
+                          kind: "certification",
+                          id: c.id,
+                          name: c.cert_name || c.file_name,
+                        })
+                      }
                       style={styles.actionIconBtn}
                       hitSlop={10}
                       accessibilityRole="button"
@@ -648,6 +667,24 @@ export default function DocumentsScreen() {
               Make primary
             </Button>
           </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        title="Delete stored document"
+      >
+        <Typography variant="bodySm" color="secondary">
+          Delete {pendingDelete?.name}? This cannot be undone.
+        </Typography>
+        <View style={styles.confirmActions}>
+          <Button variant="ghost" onPress={() => setPendingDelete(null)} style={styles.confirmButton}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onPress={confirmDelete} style={styles.confirmButton}>
+            Delete
+          </Button>
         </View>
       </Modal>
     </SafeAreaWrapper>
@@ -830,6 +867,14 @@ const styles = StyleSheet.create({
   },
   refinedTextContent: {
     padding: 14,
+  },
+  confirmActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 20,
+  },
+  confirmButton: {
+    flex: 1,
   },
   refinedActions: {
     flexDirection: "row",

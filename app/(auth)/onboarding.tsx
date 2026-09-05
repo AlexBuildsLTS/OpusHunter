@@ -34,7 +34,6 @@ import {
 } from "lucide-react-native";
 import { useAuthStore } from "../../stores/authStore";
 import { SafeAreaWrapper } from "../../components/shared/SafeAreaWrapper";
-import { AnimatedBackground } from "../../components/shared/AnimatedBackground";
 import { Button } from "../../components/ui/Button";
 import { Typography } from "../../components/ui/Typography";
 import { Card } from "../../components/ui/GlassCard";
@@ -48,7 +47,7 @@ interface SlideData {
   subtitle: string;
   icon: any;
   color: string;
-  mockup: {
+  workflow: {
     badge: string;
     header: string;
     subtext: string;
@@ -70,16 +69,15 @@ const SLIDES: SlideData[] = [
       "OpusHunter continuously scours verified boards and company portals, matching roles to your precise seniority and compensation targets.",
     icon: Radar,
     color: colors.accent.cyan,
-    mockup: {
-      badge: "LIVE RADAR ACTIVE",
-      header: "Staff / Senior React Native Architect",
-      subtext: "Stripe • San Francisco, CA (Remote) • $190k - $240k",
+    workflow: {
+      badge: "TARGETING WORKFLOW",
+      header: "Define the roles you want to find",
+      subtext: "Titles • location • work model • compensation",
       items: [
-        { label: "Matches 98% of your core stack", highlight: true },
-        { label: "Posted 12m ago • Verified Greenhouse API" },
-        { label: "Zero recruiter spam filter applied" },
+        { label: "Set target titles and seniority", highlight: true },
+        { label: "Choose locations and work preferences" },
+        { label: "Adjust the search when your goals change" },
       ],
-      metricBadge: "98% MATCH",
     },
     tip: {
       tag: "RADAR PRO TIP",
@@ -95,19 +93,15 @@ const SLIDES: SlideData[] = [
       "Upload your CV once. Our context parser extracts your genuine engineering achievements, quantifiable metrics, and leadership voice.",
     icon: FileText,
     color: colors.accent.blue,
-    mockup: {
-      badge: "PARSED FINGERPRINT",
-      header: "Extracted Career Metrics & Proof Points",
-      subtext: "Analyzed 6 key achievements & 18 technical proficiencies",
+    workflow: {
+      badge: "CONTEXT WORKFLOW",
+      header: "Review the context from your documents",
+      subtext: "Keep the extracted skills and achievements grounded in your CV",
       items: [
-        {
-          label: "Scaled micro-frontends to 12M DAU (99.99% uptime)",
-          highlight: true,
-        },
-        { label: "Reduced CI/CD build latency by 45% via TurboRepo" },
-        { label: "Mentored 8 senior engineers across 3 distributed squads" },
+        { label: "Upload a CV or supporting document", highlight: true },
+        { label: "Review the extracted skills and proof points" },
+        { label: "Update your profile when your experience changes" },
       ],
-      metricBadge: "HIGH IMPACT",
     },
     tip: {
       tag: "RESUME PRO TIP",
@@ -123,19 +117,15 @@ const SLIDES: SlideData[] = [
       "For every job found, OpusHunter generates three distinct strategic angles, computes ATS keyword density, and surfaces the winning variant.",
     icon: Sparkles,
     color: colors.accent.cyan,
-    mockup: {
-      badge: "STRATEGY COMPARISON",
-      header: "3 Tailored Cover Letter Variants",
-      subtext: "Scored against recruiter ATS keyword models",
+    workflow: {
+      badge: "TAILORING WORKFLOW",
+      header: "Choose how a letter should be tailored",
+      subtext: "Use the job details and your saved profile context",
       items: [
-        {
-          label: "A: Direct Impact & Metrics (Score: 98% ATS)",
-          highlight: true,
-        },
-        { label: "B: Technical Architecture Deep-Dive (Score: 95%)" },
-        { label: "C: Vision & Cultural Leadership (Score: 92%)" },
+        { label: "Select a formality profile", highlight: true },
+        { label: "Choose a targeting strategy" },
+        { label: "Review the generated letter before copying it" },
       ],
-      metricBadge: "98% ATS SCORE",
     },
     tip: {
       tag: "STRATEGY PRO TIP",
@@ -151,25 +141,21 @@ const SLIDES: SlideData[] = [
       "Triage roles with an intuitive card deck. Dispatch personalized applications via connected Gmail and track interviews in real-time.",
     icon: Briefcase,
     color: colors.accent.blue,
-    mockup: {
-      badge: "PIPELINE PIPELINE",
-      header: "Automated Kanban & Follow-up Tracker",
-      subtext: "Live status across your active applications",
+    workflow: {
+      badge: "PIPELINE WORKFLOW",
+      header: "Track applications in one place",
+      subtext: "Move roles through the stages that match your process",
       items: [
-        {
-          label: "Discovered (14) ➔ Applied (6) ➔ Interviewing (3)",
-          highlight: true,
-        },
-        { label: "OAuth 2.0 Secure Gmail one-tap dispatch" },
-        { label: "Automated 5-day polite follow-up reminders" },
+        { label: "Review discovered roles", highlight: true },
+        { label: "Track saved, applied, interview, and offer stages" },
+        { label: "Connect an email account when you are ready to send" },
       ],
-      metricBadge: "3 INTERVIEWS",
     },
     tip: {
       tag: "SPEED PRO TIP",
       headline: "Apply Within The Golden Hour",
       description:
-        "Applications sent within 2 hours of a role posting receive a 3.8x higher interview rate. Use Swipe Deck daily to stay at the top of the recruiter pile.",
+        "Review new roles regularly, keep your profile current, and use the pipeline to keep follow-ups visible.",
     },
   },
 ];
@@ -200,7 +186,6 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaWrapper edges={["top", "bottom"]} style={styles.container}>
-      <AnimatedBackground />
       <View style={styles.contentWrapper}>
         {/* Top Navigation Bar */}
         <View style={styles.header}>
@@ -294,10 +279,10 @@ export default function OnboardingScreen() {
                             ]}
                           />
                           <Text style={styles.previewBadgeText}>
-                            {slide.mockup.badge}
+                            {slide.workflow.badge}
                           </Text>
                         </View>
-                        {slide.mockup.metricBadge && (
+                        {slide.workflow.metricBadge && (
                           <View
                             style={[
                               styles.metricPill,
@@ -310,21 +295,21 @@ export default function OnboardingScreen() {
                                 { color: slide.color },
                               ]}
                             >
-                              {slide.mockup.metricBadge}
+                              {slide.workflow.metricBadge}
                             </Text>
                           </View>
                         )}
                       </View>
 
                       <Text style={styles.previewTitle} numberOfLines={1}>
-                        {slide.mockup.header}
+                        {slide.workflow.header}
                       </Text>
                       <Text style={styles.previewSubtext} numberOfLines={1}>
-                        {slide.mockup.subtext}
+                        {slide.workflow.subtext}
                       </Text>
 
                       <View style={styles.previewItemsList}>
-                        {slide.mockup.items.map((item, itemIdx) => (
+                        {slide.workflow.items.map((item, itemIdx) => (
                           <View key={itemIdx} style={styles.previewItemRow}>
                             <CheckCircle2
                               size={14}

@@ -39,6 +39,7 @@ export function ProfileDropdown() {
   const router = useRouter();
   const { profile, user, signOut } = useAuthStore();
   const [open, setOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   // Dropdown open/close animation (scale + fade + slide).
   const progress = useSharedValue(0);
@@ -65,9 +66,15 @@ export function ProfileDropdown() {
   };
 
   const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
     setOpen(false);
-    await signOut();
-    router.replace("/(auth)/auth");
+    try {
+      await signOut();
+      router.replace("/(auth)/auth");
+    } finally {
+      setSigningOut(false);
+    }
   };
 
   const fullName = profile?.first_name
@@ -83,6 +90,9 @@ export function ProfileDropdown() {
         onPress={() => setOpen(!open)}
         style={styles.trigger}
         hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`${open ? "Close" : "Open"} profile menu`}
+        accessibilityState={{ expanded: open }}
       >
         {profile?.avatar_url ? (
           <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
@@ -122,7 +132,12 @@ export function ProfileDropdown() {
                         {user?.email || ""}
                       </Text>
                     </View>
-                    <Pressable onPress={() => setOpen(false)} hitSlop={8}>
+                    <Pressable
+                      onPress={() => setOpen(false)}
+                      style={styles.closeButton}
+                      accessibilityRole="button"
+                      accessibilityLabel="Close profile menu"
+                    >
                       <X size={18} color={colors.text.dim} />
                     </Pressable>
                   </View>
@@ -153,9 +168,16 @@ export function ProfileDropdown() {
                     )}
                   </View>
 
-                  <Pressable style={styles.signOutBtn} onPress={handleSignOut}>
+                  <Pressable
+                    style={styles.signOutBtn}
+                    onPress={handleSignOut}
+                    disabled={signingOut}
+                    accessibilityRole="button"
+                    accessibilityLabel="Sign out"
+                    accessibilityState={{ disabled: signingOut, busy: signingOut }}
+                  >
                     <LogOut size={16} color={colors.accent.red} />
-                    <Text style={styles.signOutText}>Sign Out</Text>
+                    <Text style={styles.signOutText}>{signingOut ? "Signing Out…" : "Sign Out"}</Text>
                   </Pressable>
                 </View>
               </Animated.View>
@@ -240,6 +262,7 @@ const styles = StyleSheet.create({
   userEmail: { color: colors.text.dim, fontSize: 11 },
   menu: { marginTop: 8, gap: 4 },
   menuItem: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -247,8 +270,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: radius.md,
   },
+  closeButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   menuText: { color: colors.text.primary, fontSize: 13, fontWeight: "500" },
   signOutBtn: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,

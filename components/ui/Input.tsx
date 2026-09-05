@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from "react";
-import { View, TextInput, Text, Pressable, StyleSheet } from "react-native";
+import { View, TextInput, Text, Pressable, StyleSheet, Platform } from "react-native";
 import { Eye, EyeOff } from "lucide-react-native";
 import { colors, radius } from "../../constants/theme";
 
@@ -72,14 +72,16 @@ export function Input({
           keyboardType={keyboardType}
           autoCapitalize={autoCapitalize}
           editable={!disabled}
+          accessibilityLabel={label || placeholder}
+          accessibilityState={{ disabled }}
           multiline={multiline}
           numberOfLines={numberOfLines}
           maxLength={maxLength}
           textAlignVertical={multiline ? "top" : "center"}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          // @ts-ignore: outlineStyle is a web-only TextInput prop absent from RN types.
-          outlineStyle="none"
+          // `outlineStyle` is a web-only prop; do not pass it to native text inputs.
+          {...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {})}
         />
 
         {secureTextEntry && (

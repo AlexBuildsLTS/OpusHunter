@@ -1336,8 +1336,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text.primary,
     fontSize: 14,
-    // @ts-ignore: outlineStyle is a web-only property not in React Native's TextStyle
-    outlineStyle: "none" as any,
+    ...(Platform.OS === "web" ? { outlineStyle: "none" as any } : {}),
   },
   authOptionsRow: {
     flexDirection: "row",
