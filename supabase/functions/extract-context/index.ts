@@ -30,15 +30,15 @@ Deno.serve(async (req) => {
   try {
     const jwtUser = await verifyJwt(req);
     const body = await req.json().catch(() => ({}));
-    const userId = body.userId || body.user_id || jwtUser?.userId;
+    const userId = jwtUser?.userId;
 
     if (!userId) {
       return Response.json(
         {
-          error: "missing_fields",
-          message: "Missing required field: userId",
+          error: "unauthorized",
+          message: "A valid authenticated session is required.",
         },
-        { status: 400, headers: corsHeaders },
+        { status: 401, headers: corsHeaders },
       );
     }
 
@@ -67,22 +67,24 @@ Deno.serve(async (req) => {
 
       const fullName =
         [profile.first_name, profile.last_name].filter(Boolean).join(" ") ||
-        body.fullName ||
         "Candidate";
-      const title =
-        body.professional_title ||
-        profile.professional_title ||
-        "Software Engineer";
-      const years =
-        body.years_experience || profile.years_experience || "established";
-      const skills = body.skills ||
-        context.extracted_skills || [
-          "Full-Stack Engineering",
-          "Systems Architecture",
-        ];
-      const roles = body.target_roles || profile.target_roles || [title];
-      const education = body.education || "";
+      const title = profile.professional_title || "Not provided";
+      const years = profile.years_experience || "Not provided";
+      const skills = context.extracted_skills || [];
+      const roles = profile.target_roles || [];
+      const education = "";
       const careerSummary = context.career_summary || "";
+
+      if (
+        skills.length === 0 &&
+        roles.length === 0 &&
+        !careerSummary &&
+        !profile.bio
+      ) {
+        throw new Error(
+          "incomplete_context: Upload and extract a CV before generating a professional bio.",
+        );
+      }
 
       let toneInstruction = "";
       switch (tone) {
@@ -219,6 +221,26 @@ STRICT CONSTRAINTS:
           message: "Missing required field: documentPath",
         },
         { status: 400, headers: corsHeaders },
+      );
+    }
+
+    const documentTable =
+      bucket === "resumes" ? "resume_documents" : "certifications";
+    const { data: ownedDocument, error: ownershipError } = await supabase
+      .from(documentTable)
+      .select("id")
+      .eq("user_id", userId)
+      .eq("storage_path", documentPath)
+      .maybeSingle();
+
+    if (ownershipError) throw ownershipError;
+    if (!ownedDocument) {
+      return Response.json(
+        {
+          error: "forbidden",
+          message: "The requested document does not belong to this account.",
+        },
+        { status: 403, headers: corsHeaders },
       );
     }
 
@@ -439,10 +461,8 @@ Return ONLY a valid JSON object matching this exact structure (do not include ma
     }
 
     // 4. Update document status
-    const docTable =
-      bucket === "resumes" ? "resume_documents" : "certifications";
     await supabase
-      .from(docTable)
+      .from(documentTable)
       .update({ extraction_status: "complete" })
       .eq("storage_path", documentPath);
 
