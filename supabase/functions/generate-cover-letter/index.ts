@@ -33,6 +33,8 @@ Deno.serve(async (req) => {
     const userId = jwtUser?.userId;
     const jobListingId = body.jobListingId || body.job_id || body.jobId;
     const strategy = body.strategy;
+    const requestedLanguage =
+      body.language === "swedish" ? "Swedish" : "English";
 
     if (!userId || !jobListingId) {
       return Response.json(
@@ -49,7 +51,8 @@ Deno.serve(async (req) => {
     const startTime = performance.now();
 
     // 1. Fetch Job + User Context + Profile in parallel
-    const [jobResult, contextResult, profileResult] = await Promise.all([
+    const [jobResult, contextResult, profileResult, certificationsResult] =
+      await Promise.all([
       supabase
         .from("job_vault")
         .select("*")
@@ -62,17 +65,23 @@ Deno.serve(async (req) => {
         .eq("user_id", userId)
         .maybeSingle(),
       supabase.from("profiles").select("*").eq("id", userId).single(),
-    ]);
+        supabase
+          .from("certifications")
+          .select("cert_name,cert_issuer,file_name")
+          .eq("user_id", userId),
+      ]);
 
     if (jobResult.error || !jobResult.data) throw new Error("Job not found");
     if (contextResult.error || !contextResult.data)
       throw new Error("User context not found. Upload a CV first.");
     if (profileResult.error || !profileResult.data)
       throw new Error("Profile not found");
+    if (certificationsResult.error) throw certificationsResult.error;
 
     const job = jobResult.data;
     const context = contextResult.data;
     const profile = profileResult.data;
+    const uploadedCertifications = certificationsResult.data || [];
 
     // 2. Resolve Gemini Candidate Keys
     const candidateKeys = await getCandidateKeys(supabase, userId, "gemini");
@@ -128,6 +137,20 @@ Deno.serve(async (req) => {
       .join("\n");
 
     // 3. Construct Strict Prompt with Zero-Hallucination & Concrete Project Selection
+    const certifications = Array.from(
+      new Set([
+        ...(context.extracted_certifications || []).map(
+          (cert: { name?: string; issuer?: string }) =>
+            [cert.name, cert.issuer].filter(Boolean).join(" — "),
+        ),
+        ...uploadedCertifications.map((cert) =>
+          [cert.cert_name, cert.cert_issuer, cert.file_name]
+            .filter(Boolean)
+            .join(" — "),
+        ),
+      ]),
+    ).filter(Boolean);
+
     const prompt = `
 You are an elite executive career strategist and technical recruiter.
 Write a top-tier, highly customized cover letter for:
@@ -145,7 +168,11 @@ Verified Skills: ${context.extracted_skills?.join(", ") || "None extracted"}
 Key Achievements: ${context.key_achievements?.join("; ") || "None extracted"}
 Experience & Real Projects:
 ${formattedExperience || "No experience details extracted."}
-Certifications: ${context.extracted_certifications?.map((c: { name?: string }) => c.name).filter(Boolean).join(", ") || "None extracted"}
+Certifications: ${certifications.join(", ") || "None extracted"}
+
+LANGUAGE REQUIREMENT:
+Write the entire cover letter in ${requestedLanguage}. Do not mix languages.
+This is an explicit user choice and must be followed exactly.
 
 CRITICAL ANTI-HALLUCINATION & APPLICATION INTEGRITY RULES:
 1. STRICT FACTUAL ACCURACY (ZERO HALLUCINATION): You must ONLY reference technologies, tools, frameworks, and projects explicitly present in the candidate's verified background above. NEVER invent unverified cloud platforms (e.g. NEVER mention AWS or GCP unless explicitly listed in verified skills), fake employers, or invented metrics.
