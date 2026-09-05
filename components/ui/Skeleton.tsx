@@ -63,6 +63,10 @@ export function Skeleton({
         },
         style,
       ]}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading"
+      accessibilityState={{ busy: true }}
     >
       {/* Shimmer gradient overlay */}
       <Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
