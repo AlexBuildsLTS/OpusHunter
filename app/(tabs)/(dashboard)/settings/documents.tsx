@@ -1,11 +1,23 @@
 import React, { useState } from "react";
-import { View, Pressable, StyleSheet, ScrollView, Alert } from "react-native";
+import {
+  View,
+  Pressable,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  useWindowDimensions,
+  Linking,
+  Platform,
+} from "react-native";
 import { SafeAreaWrapper } from "../../../../components/shared/SafeAreaWrapper";
 import { Typography } from "../../../../components/ui/Typography";
 import { Card } from "../../../../components/ui/GlassCard";
 import { Badge } from "../../../../components/ui/Badge";
 import { Button } from "../../../../components/ui/Button";
 import { DocumentUploader } from "./DocumentUploader";
+import { Modal } from "../../../../components/ui/Modal";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../../../lib/supabase";
 import { useAuthStore } from "../../../../stores/authStore";
@@ -32,10 +44,19 @@ type Cert = Database["public"]["Tables"]["certifications"]["Row"];
 export default function DocumentsScreen() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 560;
   const [showUploader, setShowUploader] = useState<
     false | "cv" | "certification"
   >(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [refinedText, setRefinedText] = useState<string | null>(null);
+  const [refinedDocumentId, setRefinedDocumentId] = useState<string | null>(
+    null,
+  );
+  const [refinedSourceName, setRefinedSourceName] = useState<string | null>(
+    null,
+  );
 
   // Queries
   const { data: resumeDocs = [], isLoading: loadingResumes } = useQuery({
@@ -69,8 +90,18 @@ export default function DocumentsScreen() {
 
   const handleDeleteDoc = async (id: string, path: string) => {
     try {
-      await supabase.storage.from("resumes").remove([path]);
-      await supabase.from("resume_documents").delete().eq("id", id);
+      const { error: storageError } = await supabase.storage
+        .from("resumes")
+        .remove([path]);
+      if (storageError) throw storageError;
+
+      const { error: deleteError } = await supabase
+        .from("resume_documents")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user!.id);
+      if (deleteError) throw deleteError;
+
       queryClient.invalidateQueries({
         queryKey: ["resume-documents", user?.id],
       });
@@ -81,25 +112,77 @@ export default function DocumentsScreen() {
 
   const handleSetPrimaryDoc = async (id: string) => {
     try {
-      await supabase
+      const { error: clearError } = await supabase
         .from("resume_documents")
         .update({ is_primary: false })
         .eq("user_id", user!.id);
-      await supabase
+      if (clearError) throw clearError;
+
+      const { error: setError } = await supabase
         .from("resume_documents")
         .update({ is_primary: true })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("user_id", user!.id);
+      if (setError) throw setError;
+
       queryClient.invalidateQueries({
         queryKey: ["resume-documents", user?.id],
       });
+      return true;
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to set primary resume");
+      return false;
+    }
+  };
+
+  const handleOpenDocument = async (doc: ResumeDoc) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from("resumes")
+        .createSignedUrl(doc.storage_path, 300);
+      if (error || !data?.signedUrl) {
+        throw error || new Error("Could not create a secure document link.");
+      }
+
+      if (Platform.OS === "web") {
+        await Linking.openURL(data.signedUrl);
+        return;
+      }
+
+      if (FileSystem.documentDirectory && (await Sharing.isAvailableAsync())) {
+        const localUri = `${FileSystem.documentDirectory}${doc.file_name.replace(
+          /[^a-zA-Z0-9._-]/g,
+          "_",
+        )}`;
+        const download = await FileSystem.downloadAsync(
+          data.signedUrl,
+          localUri,
+        );
+        await Sharing.shareAsync(download.uri, {
+          mimeType: doc.file_type || "application/octet-stream",
+          dialogTitle: `Open ${doc.file_name}`,
+        });
+        return;
+      }
+
+      await Linking.openURL(data.signedUrl);
+    } catch (err: any) {
+      Alert.alert(
+        "Document unavailable",
+        err.message || "The document could not be opened.",
+      );
     }
   };
 
   const handleDeleteCert = async (id: string) => {
     try {
-      await supabase.from("certifications").delete().eq("id", id);
+      const { error } = await supabase
+        .from("certifications")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user!.id);
+      if (error) throw error;
+
       queryClient.invalidateQueries({ queryKey: ["certifications", user?.id] });
     } catch (err: any) {
       Alert.alert(
@@ -109,24 +192,26 @@ export default function DocumentsScreen() {
     }
   };
 
-  const handleTriggerExtract = async (docId: string, storagePath: string) => {
-    setProcessingId(docId);
+  const handleRefineResume = async (doc: ResumeDoc) => {
+    setProcessingId(doc.id);
     try {
-      const { error } = await supabase.functions.invoke("extract-context", {
-        body: { documentId: docId, storagePath },
+      const { data, error } = await supabase.functions.invoke("refine-resume", {
+        body: { documentId: doc.id },
       });
       if (error) throw error;
-      queryClient.invalidateQueries({
+      if (!data?.refinedText || !data?.refinedDocument?.id) {
+        throw new Error("The refinement service returned no reviewable draft.");
+      }
+      setRefinedText(data.refinedText);
+      setRefinedDocumentId(data.refinedDocument.id);
+      setRefinedSourceName(doc.file_name);
+      await queryClient.invalidateQueries({
         queryKey: ["resume-documents", user?.id],
       });
-      queryClient.invalidateQueries({
-        queryKey: ["user_context", user?.id],
-      });
-      Alert.alert("Success", "AI skill extraction re-analyzed successfully.");
     } catch (err: any) {
       Alert.alert(
-        "Extraction Error",
-        err.message || "Failed to extract context.",
+        "Resume refinement failed",
+        err.message || "No refined draft was created.",
       );
     } finally {
       setProcessingId(null);
@@ -138,12 +223,20 @@ export default function DocumentsScreen() {
   return (
     <SafeAreaWrapper edges={["top"]} style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isCompact && styles.compactScrollContent,
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.centeredContainer}>
+        <View
+          style={[
+            styles.centeredContainer,
+            isCompact && styles.compactCenteredContainer,
+          ]}
+        >
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, isCompact && styles.compactHeader]}>
             <View style={{ flex: 1 }}>
               <Typography variant="h2" weight="bold" color="primary">
                 Document Vault & Resumes
@@ -157,7 +250,12 @@ export default function DocumentsScreen() {
                 credentials.
               </Typography>
             </View>
-            <View style={styles.badgeShield}>
+            <View
+              style={[
+                styles.badgeShield,
+                isCompact && styles.compactBadgeShield,
+              ]}
+            >
               <ShieldCheck size={14} color={colors.accent.cyan} />
               <Typography
                 variant="caption"
@@ -170,7 +268,7 @@ export default function DocumentsScreen() {
           </View>
 
           {/* Quick Metrics Bar */}
-          <View style={styles.metricsRow}>
+          <View style={[styles.metricsRow, isCompact && styles.compactMetricsRow]}>
             <View style={styles.metricCard}>
               <Typography variant="h3" weight="bold" color="primary">
                 {resumeDocs.length}
@@ -207,8 +305,11 @@ export default function DocumentsScreen() {
           </View>
 
           {/* 1. Resumes & CV Documents */}
-          <Card variant="elevated" style={styles.cardSection}>
-            <View style={styles.cardHeader}>
+          <Card
+            variant="elevated"
+            style={[styles.cardSection, isCompact && styles.compactCardSection]}
+          >
+            <View style={[styles.cardHeader, isCompact && styles.compactCardHeader]}>
               <View style={styles.cardHeaderLeft}>
                 <FileText size={18} color={colors.accent.cyan} />
                 <Typography
@@ -224,7 +325,7 @@ export default function DocumentsScreen() {
                 variant="primary"
                 size="sm"
                 onPress={() => setShowUploader("cv")}
-                style={{ flexDirection: "row", gap: 6 }}
+                style={styles.inlineButton}
               >
                 <Upload size={14} color={colors.text.inverse} />
                 Upload CV
@@ -262,23 +363,30 @@ export default function DocumentsScreen() {
                 </Typography>
               </View>
             ) : (
-              <View style={{ gap: 10 }}>
+              <View>
                 {resumeDocs.map((doc) => {
                   const isPending =
                     (doc as any).extraction_status === "pending";
                   const isExtracted =
                     (doc as any).extraction_status === "completed" ||
-                    (doc as any).extraction_status === "extracted";
+                    (doc as any).extraction_status === "extracted" ||
+                    (doc as any).extraction_status === "complete";
                   const isExtracting = processingId === doc.id;
 
                   return (
-                    <View key={doc.id} style={styles.docItem}>
+                    <View
+                      key={doc.id}
+                      style={[
+                        styles.docItem,
+                        isCompact && styles.compactDocItem,
+                      ]}
+                    >
                       <View style={{ flex: 1, marginRight: 12 }}>
                         <View
                           style={{
                             flexDirection: "row",
                             alignItems: "center",
-                            gap: 8,
+                            columnGap: 8,
                             flexWrap: "wrap",
                           }}
                         >
@@ -286,6 +394,7 @@ export default function DocumentsScreen() {
                             variant="bodySm"
                             weight="bold"
                             color="primary"
+                            numberOfLines={2}
                           >
                             {doc.file_name}
                           </Typography>
@@ -317,33 +426,58 @@ export default function DocumentsScreen() {
                         </Typography>
                       </View>
 
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 10,
-                        }}
-                      >
+                      <View style={styles.actionRow}>
                         <Button
                           variant="ghost"
                           size="sm"
                           onPress={() =>
-                            handleTriggerExtract(doc.id, doc.storage_path)
+                            handleRefineResume(doc)
                           }
                           loading={isExtracting}
                           disabled={isExtracting}
                           style={styles.actionIconBtn}
+                          accessibilityLabel={`Create a reviewable refined draft from ${doc.file_name}`}
                         >
                           <Sparkles size={16} color={colors.accent.cyan} />
                         </Button>
 
-                        {!doc.is_primary && (
+                        <Pressable
+                          onPress={() => handleOpenDocument(doc)}
+                          style={styles.actionIconBtn}
+                          hitSlop={10}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Open or download ${doc.file_name}`}
+                        >
+                          <FileText size={16} color={colors.text.secondary} />
+                        </Pressable>
+
+                        {doc.is_primary ? (
+                          <View style={styles.primarySwitch}>
+                            <View style={styles.primarySwitchDot} />
+                            <Typography
+                              variant="caption"
+                              weight="bold"
+                              style={{ color: colors.accent.green }}
+                            >
+                              IN USE
+                            </Typography>
+                          </View>
+                        ) : (
                           <Pressable
                             onPress={() => handleSetPrimaryDoc(doc.id)}
-                            style={styles.actionIconBtn}
-                            hitSlop={8}
+                            style={styles.useVersionButton}
+                            hitSlop={10}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Use ${doc.file_name} for applications`}
                           >
-                            <Star size={16} color={colors.text.dim} />
+                            <Star size={14} color={colors.accent.cyan} />
+                            <Typography
+                              variant="caption"
+                              weight="bold"
+                              style={{ color: colors.accent.cyan }}
+                            >
+                              USE
+                            </Typography>
                           </Pressable>
                         )}
                         <Pressable
@@ -351,7 +485,9 @@ export default function DocumentsScreen() {
                             handleDeleteDoc(doc.id, doc.storage_path)
                           }
                           style={styles.actionIconBtn}
-                          hitSlop={8}
+                          hitSlop={10}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Delete ${doc.file_name}`}
                         >
                           <Trash2 size={16} color={colors.accent.red} />
                         </Pressable>
@@ -381,7 +517,7 @@ export default function DocumentsScreen() {
                 variant="ghost"
                 size="sm"
                 onPress={() => setShowUploader("certification")}
-                style={{ flexDirection: "row", gap: 4 }}
+                style={styles.inlineButton}
               >
                 <Plus size={14} color={colors.accent.cyan} />
                 Add Cert
@@ -418,9 +554,15 @@ export default function DocumentsScreen() {
                 </Typography>
               </View>
             ) : (
-              <View style={{ gap: 10 }}>
+              <View>
                 {certs.map((c) => (
-                  <View key={c.id} style={styles.docItem}>
+                  <View
+                    key={c.id}
+                    style={[
+                      styles.docItem,
+                      isCompact && styles.compactDocItem,
+                    ]}
+                  >
                     <View style={{ flex: 1 }}>
                       <Typography
                         variant="bodySm"
@@ -441,7 +583,9 @@ export default function DocumentsScreen() {
                     <Pressable
                       onPress={() => handleDeleteCert(c.id)}
                       style={styles.actionIconBtn}
-                      hitSlop={8}
+                      hitSlop={10}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete ${c.cert_name || c.file_name}`}
                     >
                       <Trash2 size={16} color={colors.accent.red} />
                     </Pressable>
@@ -459,6 +603,53 @@ export default function DocumentsScreen() {
         type={showUploader || "cv"}
         onClose={() => setShowUploader(false)}
       />
+
+      <Modal
+        visible={!!refinedText}
+        onClose={() => setRefinedText(null)}
+        title="Refined resume draft"
+        maxWidth={680}
+      >
+        <View style={styles.refinedModalContent}>
+          <Typography variant="caption" color="secondary">
+            Draft created from {refinedSourceName || "your resume"}. Your
+            original file remains unchanged. Review every line before making
+            this version primary.
+          </Typography>
+          <ScrollView
+            style={styles.refinedTextBox}
+            contentContainerStyle={styles.refinedTextContent}
+            showsVerticalScrollIndicator
+          >
+            <Typography variant="caption" color="primary">
+              {refinedText}
+            </Typography>
+          </ScrollView>
+          <View style={styles.refinedActions}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onPress={() => setRefinedText(null)}
+              style={styles.refinedAction}
+            >
+              Keep as draft
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onPress={async () => {
+                if (!refinedDocumentId) return;
+                if (await handleSetPrimaryDoc(refinedDocumentId)) {
+                  setRefinedText(null);
+                }
+              }}
+              style={styles.refinedAction}
+            >
+              Make primary
+            </Button>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaWrapper>
   );
 }
@@ -474,10 +665,17 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
     alignItems: "center",
   },
+  compactScrollContent: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
   centeredContainer: {
     width: "100%",
     maxWidth: 800,
     alignSelf: "center",
+  },
+  compactCenteredContainer: {
+    maxWidth: "100%",
   },
   header: {
     flexDirection: "row",
@@ -485,7 +683,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
     paddingHorizontal: 4,
-    gap: 12,
+    columnGap: 12,
+  },
+  compactHeader: {
+    alignItems: "flex-start",
+    flexDirection: "column",
   },
   headerSubtitle: {
     marginTop: 4,
@@ -493,7 +695,7 @@ const styles = StyleSheet.create({
   badgeShield: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    columnGap: 6,
     backgroundColor: "rgba(6, 182, 212, 0.08)",
     borderColor: "rgba(6, 182, 212, 0.25)",
     borderWidth: 1,
@@ -501,10 +703,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.full,
   },
+  compactBadgeShield: {
+    alignSelf: "flex-start",
+  },
   metricsRow: {
     flexDirection: "row",
-    gap: 12,
+    marginHorizontal: 0,
+    columnGap: 12,
     marginBottom: 20,
+  },
+  compactMetricsRow: {
+    columnGap: 8,
   },
   metricCard: {
     flex: 1,
@@ -520,16 +729,25 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderRadius: radius.lg,
   },
+  compactCardSection: {
+    padding: 14,
+    marginBottom: 14,
+  },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 14,
   },
+  compactCardHeader: {
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    rowGap: 10,
+  },
   cardHeaderLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    columnGap: 8,
   },
   sectionTag: {
     letterSpacing: 0.8,
@@ -555,7 +773,70 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.06)",
   },
+  compactDocItem: {
+    alignItems: "flex-start",
+    flexDirection: "column",
+    rowGap: 10,
+  },
+  actionRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    columnGap: 8,
+    minHeight: 44,
+  },
+  inlineButton: {
+    flexDirection: "row",
+  },
   actionIconBtn: {
-    padding: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    minWidth: 44,
+    padding: 8,
+  },
+  primarySwitch: {
+    alignItems: "center",
+    flexDirection: "row",
+    columnGap: 5,
+    minHeight: 44,
+    paddingHorizontal: 8,
+  },
+  primarySwitchDot: {
+    backgroundColor: colors.accent.green,
+    borderRadius: 4,
+    height: 8,
+    width: 8,
+  },
+  useVersionButton: {
+    alignItems: "center",
+    borderColor: `${colors.accent.cyan}66`,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flexDirection: "row",
+    columnGap: 4,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingHorizontal: 9,
+  },
+  refinedModalContent: {
+    rowGap: 14,
+  },
+  refinedTextBox: {
+    maxHeight: 420,
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
+    borderColor: colors.surface.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  refinedTextContent: {
+    padding: 14,
+  },
+  refinedActions: {
+    flexDirection: "row",
+    columnGap: 10,
+  },
+  refinedAction: {
+    flex: 1,
+    minHeight: 44,
   },
 });
