@@ -46,12 +46,14 @@ type CoverLetter = Database["public"]["Tables"]["cover_letters"]["Row"];
 export default function CoverLetterScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { user, profile } = useAuthStore();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [editedBody, setEditedBody] = useState("");
   const [saving, setSaving] = useState(false);
-  const [language, setLanguage] = useState<"english" | "swedish">("english");
+  const [language, setLanguage] = useState<"english" | "swedish">(
+    profile?.preferred_ai_language === "swedish" ? "swedish" : "english",
+  );
 
   // Fetch Cover Letter
   const { data: letter, isLoading } = useQuery({
