@@ -53,17 +53,24 @@ Deno.serve(async (req) => {
       }
 
       // Fetch verified candidate context & profile from database
-      const [profileRes, contextRes] = await Promise.all([
+      const [profileRes, contextRes, certificationsRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
         supabase
           .from("user_context")
           .select("*")
           .eq("user_id", userId)
           .maybeSingle(),
+        supabase
+          .from("certifications")
+          .select("cert_name,cert_issuer,file_name")
+          .eq("user_id", userId),
       ]);
 
       const profile = profileRes.data || {};
       const context = contextRes.data || {};
+      if (profileRes.error) throw profileRes.error;
+      if (contextRes.error) throw contextRes.error;
+      if (certificationsRes.error) throw certificationsRes.error;
 
       const fullName =
         [profile.first_name, profile.last_name].filter(Boolean).join(" ") ||
@@ -72,8 +79,51 @@ Deno.serve(async (req) => {
       const years = profile.years_experience || "Not provided";
       const skills = context.extracted_skills || [];
       const roles = profile.target_roles || [];
-      const education = "";
+      const education = Array.isArray(context.extracted_education)
+        ? context.extracted_education
+            .map((item: { institution?: string; degree?: string }) =>
+              [item.degree, item.institution].filter(Boolean).join(" — "),
+            )
+            .filter(Boolean)
+            .join("; ")
+        : "";
       const careerSummary = context.career_summary || "";
+      const skillClusters =
+        context.skill_clusters &&
+        typeof context.skill_clusters === "object" &&
+        !Array.isArray(context.skill_clusters)
+          ? context.skill_clusters
+          : {};
+      const certifications = [
+        ...(Array.isArray(context.extracted_certifications)
+          ? context.extracted_certifications.map(
+              (item: { name?: string; issuer?: string }) =>
+                [item.name, item.issuer].filter(Boolean).join(" — "),
+            )
+          : []),
+        ...(certificationsRes.data || []).map((item) =>
+          [item.cert_name, item.cert_issuer, item.file_name]
+            .filter(Boolean)
+            .join(" — "),
+        ),
+      ].filter(Boolean);
+
+      const externalEvidence = await Promise.all(
+        [skillClusters.github_url, skillClusters.portfolio_url]
+          .filter((value): value is string => typeof value === "string" && value.startsWith("http"))
+          .map(async (url) => {
+            try {
+              const response = await fetch(url, {
+                headers: { "User-Agent": "OpusHunter-Career-Context/1.0" },
+              });
+              if (!response.ok) return "";
+              const html = await response.text();
+              return `Source: ${url}\n${html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/gi, " ").replace(/\s+/g, " ").slice(0, 6000)}`;
+            } catch {
+              return "";
+            }
+          }),
+      );
 
       if (
         skills.length === 0 &&
@@ -117,14 +167,18 @@ CANDIDATE PROFILE:
 - Target Roles: ${Array.isArray(roles) ? roles.join(", ") : roles}
 ${education ? `- Education: ${education}` : ""}
 ${careerSummary ? `- Career Summary Context: ${careerSummary}` : ""}
+- Verified Certifications: ${certifications.join(", ") || "None recorded"}
+- GitHub / Portfolio evidence:
+${externalEvidence.filter(Boolean).join("\n\n") || "Use only the verified CV context above."}
 
 TONE DIRECTIVE:
 ${toneInstruction}
 
 STRICT CONSTRAINTS:
 1. Ground strictly in the candidate's real skills and experience. Do NOT invent unrelated technologies, fake degrees, or false metrics.
-2. Length: Exactly 2 to 4 concise, powerful sentences.
-3. Return ONLY the raw biography text. No preamble, no quotes, no markdown formatting, no explanations.`;
+2. Length: Exactly 3 concise, powerful sentences.
+3. Return ONLY the raw biography text. No preamble, no quotes, no markdown formatting, no explanations.
+4. Never return the instructions, labels, or a description of the requested format.`;
 
       let generatedBio = "";
       let successfulModel = "";
@@ -172,7 +226,31 @@ STRICT CONSTRAINTS:
             const textResult =
               geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
             if (textResult) {
-              generatedBio = textResult.trim().replace(/^["']|["']$/g, "");
+              const candidateBio = textResult
+                .trim()
+                .replace(/^["']|["']$/g, "")
+                .replace(/^```(?:text|markdown)?\s*/i, "")
+                .replace(/\s*```$/i, "")
+                .trim();
+              const sentenceCount = candidateBio
+                .split(/(?<=[.!?])\s+/)
+                .filter((sentence: string) => sentence.trim().length > 20)
+                .length;
+              const containsInstructionLeak =
+                /\b(exactly\s+\d+\s+sentences?|tone\s*:|tone directive|return only|candidate profile)\b/i.test(
+                  candidateBio,
+                );
+              if (
+                sentenceCount < 2 ||
+                sentenceCount > 4 ||
+                containsInstructionLeak
+              ) {
+                console.warn(
+                  `[generate_bio] Rejected invalid model output (${sentenceCount} sentences)`,
+                );
+                continue;
+              }
+              generatedBio = candidateBio;
               successfulModel = model;
               await markKeyUsed(supabase, keyObj);
               await logUsage(
