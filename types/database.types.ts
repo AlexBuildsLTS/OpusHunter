@@ -1025,7 +1025,14 @@ export type Database = {
         | "mirror_matching"
         | "achievement_amplification"
         | "insider_narrative"
-      job_source_enum: "jsearch" | "adzuna" | "linkedin" | "indeed" | "custom"
+      job_source_enum:
+        | "jsearch"
+        | "adzuna"
+        | "linkedin"
+        | "indeed"
+        | "custom"
+        | "jobtech"
+        | "thehub"
       job_status: "pending" | "approved" | "rejected" | "applied"
       key_source_enum: "user" | "system"
       seniority_level_enum:
@@ -1195,7 +1202,15 @@ export const Constants = {
         "achievement_amplification",
         "insider_narrative",
       ],
-      job_source_enum: ["jsearch", "adzuna", "linkedin", "indeed", "custom"],
+      job_source_enum: [
+        "jsearch",
+        "adzuna",
+        "linkedin",
+        "indeed",
+        "custom",
+        "jobtech",
+        "thehub",
+      ],
       job_status: ["pending", "approved", "rejected", "applied"],
       key_source_enum: ["user", "system"],
       seniority_level_enum: [
