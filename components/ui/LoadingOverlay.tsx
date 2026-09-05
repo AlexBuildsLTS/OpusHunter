@@ -79,6 +79,9 @@ export function LoadingOverlay({
     <Animated.View
       style={[styles.overlay, animatedStyle]}
       pointerEvents={visible ? "auto" : "none"}
+      accessibilityRole="progressbar"
+      accessibilityLabel={message}
+      accessibilityState={{ busy: visible }}
     >
       {Platform.OS === "ios" ? (
         <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />

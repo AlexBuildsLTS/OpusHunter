@@ -87,6 +87,9 @@ export function Input({
             onPress={() => setShowPassword(!showPassword)}
             style={styles.iconRight}
             hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+            accessibilityState={{ expanded: showPassword }}
           >
             {showPassword ? (
               <EyeOff size={18} color={colors.text.dim} />
@@ -124,7 +127,7 @@ const styles = StyleSheet.create({
     borderColor: colors.surface.border,
     borderRadius: radius.md,
     minHeight: 50,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
   },
 
   inputWrapperMultiline: {
@@ -157,11 +160,15 @@ const styles = StyleSheet.create({
   },
 
   iconLeft: {
-    marginRight: 12,
+    marginRight: 8,
   },
 
   iconRight: {
-    marginLeft: 12,
+    width: 44,
+    minHeight: 44,
+    marginLeft: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   errorText: {
