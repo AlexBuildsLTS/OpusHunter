@@ -33,8 +33,6 @@ Deno.serve(async (req) => {
     const userId = jwtUser?.userId;
     const jobListingId = body.jobListingId || body.job_id || body.jobId;
     const strategy = body.strategy;
-    const requestedLanguage =
-      body.language === "swedish" ? "Swedish" : "English";
 
     if (!userId || !jobListingId) {
       return Response.json(
@@ -81,6 +79,11 @@ Deno.serve(async (req) => {
     const job = jobResult.data;
     const context = contextResult.data;
     const profile = profileResult.data;
+    const requestedLanguage =
+      body.language === "swedish" ||
+      profile.preferred_ai_language === "swedish"
+        ? "Swedish"
+        : "English";
     const uploadedCertifications = certificationsResult.data || [];
 
     // 2. Resolve Gemini Candidate Keys

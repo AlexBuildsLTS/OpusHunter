@@ -638,20 +638,26 @@ Deno.serve(async (req: Request) => {
       thehub: true,
     };
 
+    const keywordQuery = (searchParams.keywords || [])
+      .map((keyword) => keyword.trim())
+      .filter((keyword) => keyword.length > 0)
+      .join(" ");
+
+    if (!keywordQuery) {
+      return Response.json(
+        {
+          error: "missing_search_keywords",
+          message:
+            "Configure at least one target role or professional title before scraping jobs.",
+        },
+        { status: 400, headers: corsHeaders },
+      );
+    }
+
     // 2. Run scrapers in parallel
     const scrapePromises: Promise<NormalizedJob[]>[] = [];
-    scrapePromises.push(fetchJSearch(searchParams, userId));
-    scrapePromises.push(scrapeAdzuna(supabase, searchParams, userId));
-    scrapePromises.push(fetchLinkedIn(searchParams, userId));
-    scrapePromises.push(
-      scrapeJobTechSweden(
-        searchParams.keywords?.join(" ") || "",
-        searchParams.cities?.[0] || "",
-      ),
-    );
     const country = (searchParams.countries?.[0] || "").toUpperCase();
     const city = searchParams.cities?.[0] || "";
-    const keywordQuery = searchParams.keywords?.join(" ") || "";
 
     // Toggle: JobTech (Strictly Sweden)
     if (
@@ -685,7 +691,7 @@ Deno.serve(async (req: Request) => {
 
     // Toggle: Adzuna
     if (enabled.adzuna !== false) {
-      scrapePromises.push(fetchAdzuna(searchParams, userId));
+      scrapePromises.push(scrapeAdzuna(supabase, searchParams, userId));
     }
 
     // Toggle: LinkedIn
