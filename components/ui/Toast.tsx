@@ -121,7 +121,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 { backgroundColor: style.bg, borderColor: style.border },
               ]}
             >
-              <Icon size={18} color={style.color} accessible={false} />
+              <Icon size={18} color={style.color} />
               <Text
                 style={[styles.message, { color: style.color }]}
                 numberOfLines={2}
@@ -135,7 +135,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 accessibilityRole="button"
                 accessibilityLabel="Dismiss notification"
               >
-                <X size={16} color={style.color} accessible={false} />
+                <X size={16} color={style.color} />
               </Pressable>
             </Animated.View>
           );

@@ -5,7 +5,7 @@
  * Handles optimistic status updates and rate limits.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../stores/authStore";
@@ -24,7 +24,12 @@ export function useJobs() {
     nextAvailableAt: string | null;
   }>({ limited: false, nextAvailableAt: null });
   const [isScraping, setIsScraping] = useState(false);
+  const scrapePageRef = useRef(1);
   const { filters } = useJobStore();
+
+  useEffect(() => {
+    scrapePageRef.current = 1;
+  }, [JSON.stringify(filters)]);
 
   // Fetch Jobs from Supabase
   const fetchJobs = async () => {
@@ -52,11 +57,17 @@ export function useJobs() {
     if (!user) throw new Error("No user");
     setIsScraping(true);
 
+    const requestedPage =
+      typeof overrideParams?.page === "number" && overrideParams.page > 0
+        ? overrideParams.page
+        : scrapePageRef.current;
+
     const { data, error } = await supabase.functions.invoke("scrape-jobs", {
       body: {
         userId: user.id,
         searchParams: {
           ...filters, // Includes keywords, workTypes, cities, radiusKm, latitude, longitude
+          page: requestedPage,
           ...(overrideParams || {}),
         },
         ...(options || {}),
@@ -92,6 +103,9 @@ export function useJobs() {
     }
 
     await queryClient.invalidateQueries({ queryKey: ["jobs", user.id] });
+    if (!overrideParams?.page) {
+      scrapePageRef.current = requestedPage + 3;
+    }
     setRateLimit({ limited: false, nextAvailableAt: null });
     return data;
   };
