@@ -155,11 +155,27 @@ export function ActiveTargetCard({
     }
 
     try {
-      const res = await triggerScrape(undefined, {
+      const keywords = Array.from(
+        new Set(
+          [title, ...roles]
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0),
+        ),
+      );
+
+      const res = await triggerScrape(
+        {
+          keywords,
+          cities,
+          countries,
+          workTypes,
+        },
+        {
         batchSize,
         enableSources: enabledSources,
         forceFresh: true,
-      });
+        },
+      );
 
       const harvestedCount =
         res?.count ?? res?.scraped ?? res?.listings?.length ?? 0;
