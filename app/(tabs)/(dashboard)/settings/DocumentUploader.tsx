@@ -76,6 +76,7 @@ export function DocumentUploader({
       const bucket = type === "cv" ? "resumes" : "certifications";
       const table = type === "cv" ? "resume_documents" : "certifications";
       let lastUploadedCVPath = "";
+      const uploadedCertificationPaths: string[] = [];
 
       for (let i = 0; i < totalFiles; i++) {
         const asset = result.assets[i];
@@ -126,6 +127,8 @@ export function DocumentUploader({
 
         if (type === "cv") {
           lastUploadedCVPath = path;
+        } else {
+          uploadedCertificationPaths.push(path);
         }
       }
 
@@ -139,6 +142,21 @@ export function DocumentUploader({
           },
         );
         if (extractionError) throw extractionError;
+      } else if (uploadedCertificationPaths.length > 0) {
+        for (const documentPath of uploadedCertificationPaths) {
+          setStatusMessage("Extracting certification details with AI...");
+          const { error: extractionError } = await supabase.functions.invoke(
+            "extract-context",
+            {
+              body: {
+                userId: user.id,
+                documentPath,
+                bucket,
+              },
+            },
+          );
+          if (extractionError) throw extractionError;
+        }
       }
 
       // 5. Invalidate queries (refresh list)
