@@ -1,5 +1,6 @@
 packages: []
 allowBuilds:
+  '@shopify/react-native-skia': true
   deno: true
   dtrace-provider: true
 minimumReleaseAgeExclude:

@@ -188,4 +188,8 @@ module.exports = {
     },
   },
   plugins: [],
+
+  corePlugins: {
+    aspectRatio: false,
+  },
 };
