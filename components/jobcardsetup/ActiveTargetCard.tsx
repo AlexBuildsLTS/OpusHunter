@@ -57,6 +57,44 @@ const SCRAPE_SOURCES = [
   { key: "linkedin", label: "LinkedIn" },
 ] as const;
 
+const ADZUNA_COUNTRIES = new Set([
+  "gb",
+  "us",
+  "at",
+  "au",
+  "be",
+  "br",
+  "ca",
+  "de",
+  "es",
+  "fr",
+  "in",
+  "it",
+  "mx",
+  "nl",
+  "nz",
+  "pl",
+  "ru",
+  "sg",
+  "za",
+]);
+
+const COUNTRY_CODES: Record<string, string> = {
+  sweden: "se",
+  sverige: "se",
+  "united kingdom": "gb",
+  uk: "gb",
+  england: "gb",
+  norway: "no",
+  denmark: "dk",
+  finland: "fi",
+};
+
+function normalizeCountry(country: string) {
+  const normalized = country.trim().toLowerCase();
+  return COUNTRY_CODES[normalized] || normalized.replace(/[^a-z]/g, "");
+}
+
 export function ActiveTargetCard({
   onEditRules,
   onViewPipeline,
@@ -92,6 +130,20 @@ export function ActiveTargetCard({
   const salaryMin = profile?.salary_min;
   const salaryMax = profile?.salary_max;
   const currency = profile?.salary_currency || "";
+  const selectedCountryCodes = countries.map(normalizeCountry);
+  const relevantSources = SCRAPE_SOURCES.filter(({ key }) => {
+    if (key === "linkedin" || key === "jsearch") return true;
+    if (key === "jobtech") return selectedCountryCodes.includes("se");
+    if (key === "thehub")
+      return selectedCountryCodes.some((country) =>
+        ["se", "dk", "no", "fi"].includes(country),
+      );
+    if (key === "adzuna")
+      return selectedCountryCodes.some((country) =>
+        ADZUNA_COUNTRIES.has(country),
+      );
+    return false;
+  });
 
   const handleStartScrape = async () => {
     if (isScraping || rateLimitStatus.limited) return;
@@ -323,7 +375,7 @@ export function ActiveTargetCard({
           <View style={styles.optionGroup}>
             <Text style={styles.optionLabel}>LIVE SYSTEMS</Text>
             <View style={styles.sourceRow}>
-              {SCRAPE_SOURCES.map(({ key, label }) => (
+              {relevantSources.map(({ key, label }) => (
                 <TouchableOpacity
                   key={key}
                   onPress={() => toggleSource(key)}
