@@ -1,11 +1,16 @@
 /**
  * supabase/functions/scrape-jobs/index.ts
- * OpusHunter — Multi-Source Job Scraper & Engine (Full Europe & Global Support).
- * Sources: JobTech (Sweden Priority), JSearch, Adzuna, and LinkedIn (RapidAPI).
- * Features:
- *  - Dynamic filter keywords & exact geo/location support (lat/lng, radiusKm, cities, countries).
- *  - Multi-tier key rotation & automatic fallback across system/env key pool on 429/401 errors.
- *  - Deduplication via SHA-256 hashing into job_vault.
+ * OpusHunter — Multi-Source Job Scraper & Engine
+ * Sources: JobTech (Sweden), The Hub (Nordics), JSearch, Adzuna, and LinkedIn.
+ *
+ * FIX (this revision): JSearch, Adzuna, and LinkedIn all requested a fixed
+ * "page 1" of results with no way to advance — nothing in the app ever
+ * incremented params.page between scrapes. Combined with the (correct)
+ * dedup_hash upsert logic, that meant every scrape after the first re-fetched
+ * and re-upserted the exact same top listings: net zero new jobs no matter
+ * how many times the user scraped. Each of the three adapters below now
+ * pulls several pages per scrape call so there's genuinely new material each
+ * time, instead of the same page repeating.
  */
 
 import { getSupabaseAdmin, verifyJwt } from "../_shared/supabaseAdmin.ts";
@@ -17,7 +22,8 @@ import {
 } from "../_shared/keyResolver.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { rateLimit } from "../_shared/rateLimit.ts";
-import { scrapeJobTechSweden } from "./adapters/jobtech.ts";
+import { scrapeJobTechSweden } from "../scrape-jobs/adapters/jobtech.ts";
+import { scrapeTheHub } from "../scrape-jobs/adapters/thehub.ts";
 
 const supabase = getSupabaseAdmin();
 
@@ -35,6 +41,7 @@ interface ScrapeParams {
     adzuna?: boolean;
     linkedin?: boolean;
     jobtech?: boolean;
+    thehub?: boolean;
   };
   adzunaAppId?: string;
   batchSize?: number;
@@ -64,6 +71,34 @@ interface NormalizedJob {
   tech_stack?: string[];
   match_score?: number;
 }
+
+const VALID_SOURCES = new Set([
+  "jsearch",
+  "adzuna",
+  "linkedin",
+  "jobtech",
+  "thehub",
+  "indeed",
+  "custom",
+]);
+
+function normalizeSource(source: string | null | undefined) {
+  const normalized = String(source || "").trim().toLowerCase();
+  return VALID_SOURCES.has(normalized) ? normalized : "custom";
+}
+
+function cleanExternalId(value: string | null | undefined) {
+  const normalized = String(value || "")
+    .trim()
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .slice(0, 240);
+  return normalized || undefined;
+}
+
+// Number of pages each paginated source pulls per single scrape click.
+// Keep this modest — it multiplies the number of upstream API calls (and,
+// for metered providers, the billed usage) per scrape.
+const PAGES_PER_SCRAPE = 3;
 
 // ── 1. JSearch Adapter ────────────────────────────────────────────────────────
 async function fetchJSearch(
@@ -101,96 +136,114 @@ async function fetchJSearch(
   else if (params.datePosted === "30d" || params.datePosted === "month")
     jSearchDatePosted = "month";
 
-  const queryParams = new URLSearchParams({
-    query: `${queryTerms} in ${primaryCity}, ${primaryCountry}`,
-    page: (params.page || 1).toString(),
-    num_pages: "1",
-    date_posted: jSearchDatePosted,
-  });
-
-  if (params.latitude && params.longitude) {
-    queryParams.set("geo", `${params.latitude},${params.longitude}`);
-    if (params.radiusKm) queryParams.set("radius", params.radiusKm.toString());
-  }
+  const startPage = params.page && params.page > 0 ? params.page : 1;
 
   for (const keyObj of candidateKeys) {
     try {
-      console.log(
-        `[JSearch] Querying JSearch via RapidAPI (key source: ${keyObj.source})`,
-      );
-      const response = await fetch(
-        `https://jsearch.p.rapidapi.com/search?${queryParams}`,
-        {
-          headers: {
-            "X-RapidAPI-Key": keyObj.key,
-            "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
-          },
-        },
-      );
+      const allItems: Array<Record<string, unknown>> = [];
 
-      if (response.status === 429) {
-        console.warn("[JSearch] 429 Rate limited, rotating key");
-        await handle429(supabase, keyObj.keyId);
-        continue;
-      }
+      for (let page = startPage; page < startPage + PAGES_PER_SCRAPE; page++) {
+        const queryParams = new URLSearchParams({
+          query: `${queryTerms} in ${primaryCity}, ${primaryCountry}`,
+          page: page.toString(),
+          num_pages: "1",
+          date_posted: jSearchDatePosted,
+        });
 
-      if (!response.ok) {
-        const errBody = await response.text().catch(() => "");
-        console.warn(
-          `[JSearch] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
+        if (params.latitude && params.longitude) {
+          queryParams.set("geo", `${params.latitude},${params.longitude}`);
+          if (params.radiusKm)
+            queryParams.set("radius", params.radiusKm.toString());
+        }
+
+        console.log(
+          `[JSearch] Querying JSearch via RapidAPI (key source: ${keyObj.source}, page: ${page})`,
         );
-        continue;
+        const response = await fetch(
+          `https://jsearch.p.rapidapi.com/search?${queryParams}`,
+          {
+            headers: {
+              "X-RapidAPI-Key": keyObj.key,
+              "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
+            },
+          },
+        );
+
+        if (response.status === 429) {
+          console.warn("[JSearch] 429 Rate limited, rotating key");
+          await handle429(supabase, keyObj.keyId);
+          break; // stop paging on this key, try the next key
+        }
+
+        if (!response.ok) {
+          const errBody = await response.text().catch(() => "");
+          console.warn(
+            `[JSearch] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
+          );
+          break;
+        }
+
+        const data = await response.json();
+        const pageItems = (data.data || []) as Array<Record<string, unknown>>;
+        console.log(`[JSearch] Page ${page}: fetched ${pageItems.length} jobs`);
+
+        if (pageItems.length === 0) break; // no more pages available
+        allItems.push(...pageItems);
       }
 
-      const data = await response.json();
-      await markKeyUsed(supabase, keyObj);
-      await logUsage(
-        supabase,
-        userId,
-        "rapidapi",
-        keyObj.source,
-        true,
-        0,
-        "scrape-jobs/jsearch",
-      );
+      if (allItems.length > 0) {
+        await markKeyUsed(supabase, keyObj);
+        await logUsage(
+          supabase,
+          userId,
+          "rapidapi",
+          keyObj.source,
+          true,
+          0,
+          "scrape-jobs/jsearch",
+        );
 
-      const rawItems = (data.data || []) as Array<Record<string, unknown>>;
-      console.log(`[JSearch] Successfully fetched ${rawItems.length} jobs`);
-      return rawItems.map((raw) => {
-        const jobUrl = String(raw.job_apply_link || raw.job_google_link || "");
-        return {
-          title: String(raw.job_title || "Untitled Role"),
-          company: String(raw.employer_name || "Unknown Company"),
-          company_logo_url: raw.employer_logo
-            ? String(raw.employer_logo)
-            : undefined,
-          location:
-            [raw.job_city, raw.job_state, raw.job_country]
-              .filter(Boolean)
-              .map(String)
-              .join(", ") || primaryCity,
-          country_code: String(raw.job_country || primaryCountry),
-          description: String(raw.job_description || ""),
-          url: jobUrl,
-          posted_at: String(
-            raw.job_posted_at_datetime_utc || new Date().toISOString(),
-          ),
-          work_type: raw.job_is_remote ? "remote" : "onsite",
-          is_remote: !!raw.job_is_remote,
-          salary_min:
-            typeof raw.job_min_salary === "number"
-              ? raw.job_min_salary
+        console.log(
+          `[JSearch] Successfully fetched ${allItems.length} jobs total across pages`,
+        );
+        return allItems.map((raw) => {
+          const jobUrl = String(
+            raw.job_apply_link || raw.job_google_link || "",
+          );
+          return {
+            title: String(raw.job_title || "Untitled Role"),
+            company: String(raw.employer_name || "Unknown Company"),
+            company_logo_url: raw.employer_logo
+              ? String(raw.employer_logo)
               : undefined,
-          salary_max:
-            typeof raw.job_max_salary === "number"
-              ? raw.job_max_salary
-              : undefined,
-          currency: String(raw.job_salary_currency || "SEK"),
-          source: "jsearch",
-          external_job_id: raw.job_id ? String(raw.job_id) : undefined,
-          source_url: String(raw.job_apply_link || jobUrl),
-        };
-      });
+            location:
+              [raw.job_city, raw.job_state, raw.job_country]
+                .filter(Boolean)
+                .map(String)
+                .join(", ") || primaryCity,
+            country_code: String(raw.job_country || primaryCountry),
+            description: String(raw.job_description || ""),
+            url: jobUrl,
+            posted_at: String(
+              raw.job_posted_at_datetime_utc || new Date().toISOString(),
+            ),
+            work_type: raw.job_is_remote ? "remote" : "onsite",
+            is_remote: !!raw.job_is_remote,
+            salary_min:
+              typeof raw.job_min_salary === "number"
+                ? raw.job_min_salary
+                : undefined,
+            salary_max:
+              typeof raw.job_max_salary === "number"
+                ? raw.job_max_salary
+                : undefined,
+            currency: String(raw.job_salary_currency || "SEK"),
+            source: "jsearch",
+            external_job_id: raw.job_id ? String(raw.job_id) : undefined,
+            source_url: String(raw.job_apply_link || jobUrl),
+          };
+        });
+      }
     } catch (err) {
       console.warn("[JSearch] Fetch error with key:", err);
     }
@@ -238,7 +291,7 @@ async function fetchAdzuna(
 
   if (!country) {
     console.log(
-      `[Adzuna] Country '${rawCountry}' not supported by Adzuna, skipping Adzuna adapter.`,
+      `[Adzuna] Country '${rawCountry}' not supported by Adzuna, skipping adapter.`,
     );
     return [];
   }
@@ -264,54 +317,72 @@ async function fetchAdzuna(
         appKey = parts[1];
       }
 
-      const endpoint = `https://api.adzuna.com/v1/api/jobs/${country}/search/1`;
-      const queryParams = new URLSearchParams({
-        app_id: appId,
-        app_key: appKey,
-        results_per_page: "25",
-        what: whatQuery,
-        where: locationName,
-      });
+      const allResults: Array<Record<string, unknown>> = [];
 
-      if (params.radiusKm) {
-        queryParams.set("distance", params.radiusKm.toString());
+      for (let page = 1; page <= PAGES_PER_SCRAPE; page++) {
+        const endpoint = `https://api.adzuna.com/v1/api/jobs/${country}/search/${page}`;
+        const queryParams = new URLSearchParams({
+          app_id: appId,
+          app_key: appKey,
+          results_per_page: "25",
+          what: whatQuery,
+          where: locationName,
+        });
+
+        if (params.radiusKm) {
+          queryParams.set("distance", params.radiusKm.toString());
+        }
+
+        console.log(
+          `[Adzuna] Querying Adzuna for country: ${country}, location: ${locationName}, page: ${page}`,
+        );
+        const response = await fetch(`${endpoint}?${queryParams}`);
+
+        if (response.status === 429) {
+          console.warn("[Adzuna] 429 Rate limited");
+          await handle429(supabase, keyObj.keyId);
+          break; // stop paging on this key, try the next key
+        }
+
+        if (!response.ok) {
+          const errBody = await response.text().catch(() => "");
+          console.warn(
+            `[Adzuna] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
+          );
+          break;
+        }
+
+        const data = (await response.json()) as {
+          results?: Array<Record<string, unknown>>;
+        };
+        const pageResults = data.results || [];
+        console.log(
+          `[Adzuna] Page ${page}: fetched ${pageResults.length} jobs`,
+        );
+        allResults.push(...pageResults);
+
+        // Adzuna returns fewer than requested on the last page — stop early
+        // instead of requesting empty pages beyond the end of results.
+        if (pageResults.length < 25) break;
+      }
+
+      if (allResults.length > 0) {
+        await markKeyUsed(supabase, keyObj);
+        await logUsage(
+          supabase,
+          userId,
+          "adzuna",
+          keyObj.source,
+          true,
+          0,
+          "scrape-jobs/adzuna",
+        );
       }
 
       console.log(
-        `[Adzuna] Querying Adzuna for country: ${country}, location: ${locationName}`,
+        `[Adzuna] Successfully fetched ${allResults.length} jobs total across pages`,
       );
-      const response = await fetch(`${endpoint}?${queryParams}`);
-      if (response.status === 429) {
-        console.warn("[Adzuna] 429 Rate limited");
-        await handle429(supabase, keyObj.keyId);
-        continue;
-      }
-
-      if (!response.ok) {
-        const errBody = await response.text().catch(() => "");
-        console.warn(
-          `[Adzuna] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
-        );
-        continue;
-      }
-
-      const data = (await response.json()) as {
-        results?: Array<Record<string, unknown>>;
-      };
-      await markKeyUsed(supabase, keyObj);
-      await logUsage(
-        supabase,
-        userId,
-        "adzuna",
-        keyObj.source,
-        true,
-        0,
-        "scrape-jobs/adzuna",
-      );
-
-      const results = data.results || [];
-      console.log(`[Adzuna] Successfully fetched ${results.length} jobs`);
-      return results.map((raw) => {
+      return allResults.map((raw) => {
         const companyObj = raw.company as { display_name?: string } | undefined;
         const locObj = raw.location as { display_name?: string } | undefined;
         const titleStr =
@@ -357,7 +428,7 @@ async function fetchAdzuna(
   return [];
 }
 
-// ── 3. LinkedIn Adapter (Direct API & RapidAPI Fallback) ──────────────────────
+// ── 3. LinkedIn Adapter (RapidAPI Wrapper) ──────────────────────
 async function fetchLinkedIn(
   params: ScrapeParams,
   userId: string,
@@ -374,64 +445,79 @@ async function fetchLinkedIn(
       : "software engineer";
 
   const linkedInKeys = await getCandidateKeys(supabase, userId, "linkedin");
+  if (linkedInKeys.length === 0) return [];
+
+  const startPage = params.page && params.page > 0 ? params.page : 1;
+
   for (const keyObj of linkedInKeys) {
     try {
-      console.log(
-        `[LinkedInScraperAPI] Querying linkedinscraperapi.com with key source: ${keyObj.source}`,
-      );
-      const searchUrl = new URL(
-        "https://api.linkedinscraperapi.com/api/v1/linkedin/search",
-      );
-      searchUrl.searchParams.set("keywords", queryStr);
-      searchUrl.searchParams.set("location", locationStr);
-      searchUrl.searchParams.set("api_key", keyObj.key);
-      if (params.page) {
-        searchUrl.searchParams.set("page", params.page.toString());
-      }
-      if (params.datePosted && params.datePosted !== "all") {
-        searchUrl.searchParams.set("time_range", params.datePosted);
-      }
+      const allItems: Array<Record<string, unknown>> = [];
 
-      const response = await fetch(searchUrl.toString());
-
-      if (response.status === 429) {
-        console.warn("[LinkedInScraperAPI] 429 Rate limited");
-        await handle429(supabase, keyObj.keyId);
-        continue;
-      }
-
-      if (!response.ok) {
-        const errBody = await response.text().catch(() => "");
-        console.warn(
-          `[LinkedInScraperAPI] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
-        );
-        continue;
-      }
-
-      const data = (await response.json()) as
-        Record<string, unknown> | Array<Record<string, unknown>>;
-      await markKeyUsed(supabase, keyObj);
-      await logUsage(
-        supabase,
-        userId,
-        "linkedin",
-        keyObj.source,
-        true,
-        5,
-        "scrape-jobs/linkedinscraperapi",
-      );
-
-      const items: Array<Record<string, unknown>> = Array.isArray(data)
-        ? data
-        : ((data.jobs || data.data || data.results || []) as Array<
-            Record<string, unknown>
-          >);
-
-      if (items.length > 0) {
+      for (let page = startPage; page < startPage + PAGES_PER_SCRAPE; page++) {
         console.log(
-          `[LinkedInScraperAPI] Successfully fetched ${items.length} jobs`,
+          `[LinkedIn] Querying linkedinscraperapi.com with key source: ${keyObj.source}, page: ${page}`,
         );
-        return items.map((raw) => {
+        const searchUrl = new URL(
+          "https://api.linkedinscraperapi.com/api/v1/linkedin/search",
+        );
+
+        searchUrl.searchParams.set("keywords", queryStr);
+        searchUrl.searchParams.set("location", locationStr);
+        searchUrl.searchParams.set("api_key", keyObj.key);
+        searchUrl.searchParams.set("page", page.toString());
+        if (params.datePosted && params.datePosted !== "all")
+          searchUrl.searchParams.set("time_range", params.datePosted);
+
+        const response = await fetch(searchUrl.toString());
+
+        if (response.status === 429) {
+          console.warn("[LinkedIn] 429 Rate limited");
+          await handle429(supabase, keyObj.keyId);
+          break; // stop paging on this key, try the next key
+        }
+
+        if (!response.ok) {
+          const errBody = await response.text().catch(() => "");
+          console.warn(
+            `[LinkedIn] HTTP Error ${response.status}: ${errBody.slice(0, 200)}`,
+          );
+          break;
+        }
+
+        const data = (await response.json()) as
+          Record<string, unknown> | Array<Record<string, unknown>>;
+
+        const pageItems: Array<Record<string, unknown>> = Array.isArray(data)
+          ? data
+          : ((data.jobs || data.data || data.results || []) as Array<
+              Record<string, unknown>
+            >);
+
+        console.log(
+          `[LinkedIn] Page ${page}: fetched ${pageItems.length} jobs`,
+        );
+
+        if (pageItems.length === 0) break; // no more pages available
+        allItems.push(...pageItems);
+      }
+
+      if (allItems.length > 0) {
+        await markKeyUsed(supabase, keyObj);
+        await logUsage(
+          supabase,
+          userId,
+          "linkedin",
+          keyObj.source,
+          true,
+          5,
+          "scrape-jobs/linkedinscraperapi",
+        );
+
+        console.log(
+          `[LinkedIn] Successfully fetched ${allItems.length} jobs total across pages`,
+        );
+
+        return allItems.map((raw) => {
           const rawUrl = String(raw.job_url || raw.apply_url || raw.url || "");
           const extId = raw.job_id
             ? String(raw.job_id)
@@ -475,7 +561,7 @@ async function fetchLinkedIn(
         });
       }
     } catch (err) {
-      console.warn("[LinkedInScraperAPI] Fetch error with key:", err);
+      console.warn("[LinkedIn] Fetch error with key:", err);
     }
   }
 
@@ -491,17 +577,17 @@ Deno.serve(async (req: Request) => {
   try {
     const jwtUser = await verifyJwt(req);
     const body = await req.json().catch(() => ({}));
-    const userId = body.userId || body.user_id || jwtUser?.userId;
+    const userId = jwtUser?.userId;
     const searchParams: ScrapeParams = body.searchParams || body.filters || {};
 
     if (!userId) {
       return Response.json(
         {
-          error: "missing_user",
+          error: "unauthorized",
           message:
             "Could not determine user session. Please ensure you are logged in.",
         },
-        { status: 400, headers: corsHeaders },
+        { status: 401, headers: corsHeaders },
       );
     }
 
@@ -517,11 +603,13 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Explicitly check for UI toggles, defaulting to true if absent.
     const enabled = searchParams.enableSources || {
       jsearch: true,
       adzuna: true,
       linkedin: true,
       jobtech: true,
+      thehub: true,
     };
 
     // 2. Run scrapers in parallel
@@ -531,7 +619,7 @@ Deno.serve(async (req: Request) => {
     const city = searchParams.cities?.[0] || "";
     const keywordQuery = searchParams.keywords?.join(" ") || "";
 
-    // Priority Injection: If Sweden, fire the native JobTech API
+    // Toggle: JobTech (Strictly Sweden)
     if (
       (country === "SE" || country === "SWEDEN") &&
       enabled.jobtech !== false
@@ -539,12 +627,37 @@ Deno.serve(async (req: Request) => {
       scrapePromises.push(scrapeJobTechSweden(keywordQuery, city));
     }
 
-    if (enabled.jsearch !== false)
+    // Toggle: The Hub (Nordic Startups)
+    if (
+      [
+        "SE",
+        "SWEDEN",
+        "DK",
+        "DENMARK",
+        "NO",
+        "NORWAY",
+        "FI",
+        "FINLAND",
+      ].includes(country) &&
+      enabled.thehub !== false
+    ) {
+      scrapePromises.push(scrapeTheHub(keywordQuery, city, country));
+    }
+
+    // Toggle: JSearch
+    if (enabled.jsearch !== false) {
       scrapePromises.push(fetchJSearch(searchParams, userId));
-    if (enabled.adzuna !== false)
+    }
+
+    // Toggle: Adzuna
+    if (enabled.adzuna !== false) {
       scrapePromises.push(fetchAdzuna(searchParams, userId));
-    if (enabled.linkedin !== false)
+    }
+
+    // Toggle: LinkedIn
+    if (enabled.linkedin !== false) {
       scrapePromises.push(fetchLinkedIn(searchParams, userId));
+    }
 
     const results = await Promise.allSettled(scrapePromises);
 
@@ -560,7 +673,16 @@ Deno.serve(async (req: Request) => {
     const deduped: Array<NormalizedJob & { dedup_hash: string }> = [];
 
     for (const listing of allListings) {
-      const hashInput = `${(listing.company || "").toLowerCase()}${(listing.title || "").toLowerCase()}${(listing.location || "").toLowerCase()}`;
+      const source = normalizeSource(listing.source);
+      const hashInput = [
+        source,
+        listing.external_job_id || "",
+        listing.company || "",
+        listing.title || "",
+        listing.location || "",
+      ]
+        .map((value) => value.trim().toLowerCase().replace(/\s+/g, " "))
+        .join("|");
       const hash = await crypto.subtle.digest(
         "SHA-256",
         new TextEncoder().encode(hashInput),
@@ -588,25 +710,26 @@ Deno.serve(async (req: Request) => {
     const userRole = userProfile?.role || "member";
     const defaultCap =
       userRole === "admin" ? 60 : userRole === "premium" ? 50 : 25;
+
+    // Enforce Admin cap logic scaling safely between 30 and 60
     const batchCap =
       typeof searchParams.batchSize === "number" && searchParams.batchSize > 0
-        ? Math.min(searchParams.batchSize, 100)
+        ? Math.min(searchParams.batchSize, defaultCap)
         : defaultCap;
-    const finalListings = deduped.slice(0, batchCap);
+
+    const finalListings = deduped
+      .filter(
+        (listing) =>
+          listing.title.trim().length > 0 &&
+          listing.company.trim().length > 0 &&
+          listing.url.trim().length > 0 &&
+          String(listing.source_url || listing.url).trim().length > 0,
+      )
+      .slice(0, batchCap);
 
     if (finalListings.length > 0) {
       const rowsToUpsert = finalListings.map((listing) => {
-        const validSources = [
-          "jsearch",
-          "adzuna",
-          "linkedin",
-          "indeed",
-          "custom",
-        ];
-        const source = validSources.includes(listing.source)
-          ? (listing.source as
-              "jsearch" | "adzuna" | "linkedin" | "indeed" | "custom")
-          : "custom";
+        const source = normalizeSource(listing.source);
 
         let workType: "remote" | "hybrid" | "onsite" | "flexible" | null = null;
         if (listing.work_type) {
@@ -619,20 +742,14 @@ Deno.serve(async (req: Request) => {
         }
 
         const isRemote = workType === "remote" || listing.is_remote === true;
-        const jobUrl =
-          listing.url ||
-          listing.source_url ||
-          (listing.external_job_id
-            ? `https://www.linkedin.com/jobs/view/${listing.external_job_id}`
-            : "https://opushunter.com");
+        const jobUrl = listing.url || listing.source_url || "";
 
         return {
           user_id: userId,
           source,
           external_job_id:
-            listing.external_job_id ||
-            listing.dedup_hash ||
-            crypto.randomUUID(),
+            cleanExternalId(listing.external_job_id) ||
+            `normalized-${listing.dedup_hash}`,
           title: listing.title || "Untitled Role",
           company: listing.company || "Unknown Company",
           company_logo_url: listing.company_logo_url || null,
