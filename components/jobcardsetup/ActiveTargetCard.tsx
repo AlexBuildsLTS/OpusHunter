@@ -41,6 +41,7 @@ import {
 } from "lucide-react-native";
 import { useJobs } from "../../hooks/useJobs";
 import { useAuthStore } from "../../stores/authStore";
+import { RateLimitBanner } from "./RateLimitBanner";
 
 interface ActiveTargetCardProps {
   onEditRules?: () => void;
@@ -76,7 +77,7 @@ export function ActiveTargetCard({
   const currency = profile?.salary_currency || "SEK";
 
   const handleStartScrape = async () => {
-    if (isScraping) return;
+    if (isScraping || rateLimitStatus.limited) return;
     setScrapeSuccessMsg(null);
     setScrapeError(null);
 
@@ -126,6 +127,17 @@ export function ActiveTargetCard({
       <View style={styles.glowUnderlay} />
 
       <View style={styles.cardBox}>
+        {/* Rate Limit Banner */}
+        <RateLimitBanner
+          limited={rateLimitStatus.limited}
+          nextAvailableAt={
+            rateLimitStatus.nextAvailableAt
+              ? new Date(rateLimitStatus.nextAvailableAt)
+              : null
+          }
+          onRefresh={handleStartScrape}
+        />
+
         {/* Card Header Ribbon */}
         <View style={styles.cardHeaderRow}>
           <View style={styles.headerLeft}>
@@ -246,7 +258,7 @@ export function ActiveTargetCard({
           </View>
         )}
 
-        {scrapeError && (
+        {scrapeError && !rateLimitStatus.limited && (
           <View style={styles.errorBox}>
             <AlertTriangle
               size={16}
@@ -267,11 +279,11 @@ export function ActiveTargetCard({
           <TouchableOpacity
             style={[
               styles.startScrapeBtn,
-              isScraping && styles.btnDisabled,
+              (isScraping || rateLimitStatus.limited) && styles.btnDisabled,
               isMobile && { width: "100%" },
             ]}
             onPress={handleStartScrape}
-            disabled={isScraping}
+            disabled={isScraping || rateLimitStatus.limited}
             activeOpacity={0.85}
           >
             {isScraping ? (
@@ -287,7 +299,9 @@ export function ActiveTargetCard({
                   <Play size={13} color="#050811" fill="#050811" />
                 </View>
                 <Text style={styles.startScrapeBtnText}>
-                  START SCRAPE FROM THIS TARGET
+                  {rateLimitStatus.limited
+                    ? "RATE LIMITED"
+                    : "START SCRAPE FROM THIS TARGET"}
                 </Text>
               </>
             )}
@@ -319,7 +333,10 @@ const styles = StyleSheet.create({
   },
   glowUnderlay: {
     position: "absolute",
-    top: 4, left: 4, right: 4, bottom: 4,
+    top: 4,
+    left: 4,
+    right: 4,
+    bottom: 4,
     borderRadius: radius.xl,
     backgroundColor: "rgba(0, 242, 254, 0.08)",
     // REMOVED: filter: "blur(24px)" - Fatal to Android performance
@@ -333,7 +350,8 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         // REMOVED: backdropFilter: "blur(20px)"
-        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 242, 254, 0.08)",
+        boxShadow:
+          "0 8px 32px rgba(0, 0, 0, 0.5), 0 0 10px rgba(0, 242, 254, 0.08)",
       } as any,
     }),
   },
