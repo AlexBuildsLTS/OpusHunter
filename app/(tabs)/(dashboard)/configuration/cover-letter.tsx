@@ -51,6 +51,7 @@ export default function CoverLetterScreen() {
   const [editing, setEditing] = useState(false);
   const [editedBody, setEditedBody] = useState("");
   const [saving, setSaving] = useState(false);
+  const [language, setLanguage] = useState<"english" | "swedish">("english");
 
   // Fetch Cover Letter
   const { data: letter, isLoading } = useQuery({
@@ -109,6 +110,7 @@ export default function CoverLetterScreen() {
           userId: user.id,
           jobListingId: letter.job_id,
           strategy: letter.strategy_used,
+          language,
         },
       },
     );
@@ -223,6 +225,38 @@ export default function CoverLetterScreen() {
         </Card>
 
         {/* Letter Content */}
+        <Card style={styles.languageCard}>
+          <Typography variant="caption" color="secondary">
+            Cover letter language
+          </Typography>
+          <View style={styles.languageRow}>
+            {(["english", "swedish"] as const).map((option) => (
+              <Pressable
+                key={option}
+                onPress={() => setLanguage(option)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: language === option }}
+                style={[
+                  styles.languageOption,
+                  language === option && styles.languageOptionSelected,
+                ]}
+              >
+                <Typography
+                  variant="bodySm"
+                  weight="semiBold"
+                  color={language === option ? "primary" : "secondary"}
+                >
+                  {option === "english" ? "English" : "Swedish"}
+                </Typography>
+              </Pressable>
+            ))}
+          </View>
+          <Typography variant="caption" color="dim">
+            Choose the language, then select Regenerate to create the letter in
+            that language.
+          </Typography>
+        </Card>
+
         <Card style={styles.letterCard}>
           {editing ? (
             <TextInput
@@ -328,6 +362,19 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingBottom: 140 },
   metaRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
   scoreCard: { padding: 16, marginBottom: 16 },
+  languageCard: { padding: 16, marginBottom: 16, gap: 10 },
+  languageRow: { flexDirection: "row", gap: 8 },
+  languageOption: {
+    borderWidth: 1,
+    borderColor: colors.surface.border,
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  languageOptionSelected: {
+    borderColor: colors.accent.cyan,
+    backgroundColor: colors.surface.card,
+  },
   scoreRow: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   scoreItem: { alignItems: "center", gap: 4, flex: 1 },
   letterCard: { padding: 20, marginBottom: 16 },
