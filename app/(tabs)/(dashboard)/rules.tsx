@@ -28,6 +28,8 @@ import {
   ShieldCheck,
   Crown,
   ChevronRight,
+  Projector,
+  Crosshair,
 } from "lucide-react-native";
 import { useAuthStore } from "../../../stores/authStore";
 import { ActiveTargetCard } from "../../../components/jobcardsetup/ActiveTargetCard";
@@ -56,10 +58,9 @@ export default function HunterRulesScreen() {
             </View>
             <View>
               <View style={styles.headerCopy}>
-                <Text style={styles.title}>Hunter Targeting & Rules</Text>
+                <Text style={styles.title}>Hunter Target & RULES</Text>
                 <Text style={styles.subtitle} numberOfLines={isMobile ? 2 : 1}>
-                Define your radar parameters to generate your active job search
-                card box.
+                  Define Parameters for the target
                 </Text>
               </View>
             </View>
@@ -78,7 +79,7 @@ export default function HunterRulesScreen() {
               accessibilityLabel="Show active target card"
               accessibilityState={{ selected: activeTab === "card" }}
             >
-              <Layers
+              <Crosshair
                 size={14}
                 color={activeTab === "card" ? C.cyan : "#94A3B8"}
               />
@@ -88,7 +89,7 @@ export default function HunterRulesScreen() {
                   activeTab === "card" && { color: C.cyan, fontWeight: "800" },
                 ]}
               >
-                {isMobile ? "Active target" : "Active Target Card"}
+                {isMobile ? "   Active target" : "Active Target Card"}
               </Text>
             </TouchableOpacity>
 
@@ -103,7 +104,7 @@ export default function HunterRulesScreen() {
               accessibilityLabel="Open targeting setup wizard"
               accessibilityState={{ selected: activeTab === "wizard" }}
             >
-              <Sliders
+              <Projector
                 size={14}
                 color={activeTab === "wizard" ? C.cyan : "#94A3B8"}
               />
@@ -116,7 +117,7 @@ export default function HunterRulesScreen() {
                   },
                 ]}
               >
-                {isMobile ? "Setup" : "Targeting Setup Wizard"}
+                {isMobile ? "  Setup" : "Targeting Setup Wizard"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -159,7 +160,9 @@ export default function HunterRulesScreen() {
                     size="sm"
                   />
                   <Text style={styles.infoCardTitle}>
-                    {isAdmin ? "Multi-target radar access" : "Focused radar access"}
+                    {isAdmin
+                      ? "Multi-target radar access"
+                      : "Focused radar access"}
                   </Text>
                 </View>
                 <Text style={styles.infoCardDesc}>
@@ -173,7 +176,7 @@ export default function HunterRulesScreen() {
                   onPress={() => setActiveTab("wizard")}
                   activeOpacity={0.8}
                   accessibilityRole="button"
-                  accessibilityLabel="Update radar parameters in setup wizard"
+                  accessibilityLabel="Update radar parameters in the setup"
                 >
                   <Text style={styles.tuneWizardLinkText}>
                     Update radar parameters in setup wizard
