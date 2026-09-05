@@ -24,6 +24,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { rateLimit } from "../_shared/rateLimit.ts";
 import { scrapeJobTechSweden } from "../scrape-jobs/adapters/jobtech.ts";
 import { scrapeTheHub } from "../scrape-jobs/adapters/thehub.ts";
+import { scrapeAdzuna } from "../scrape-jobs/adapters/Adzuna.ts";
 
 const supabase = getSupabaseAdmin();
 
@@ -83,7 +84,9 @@ const VALID_SOURCES = new Set([
 ]);
 
 function normalizeSource(source: string | null | undefined) {
-  const normalized = String(source || "").trim().toLowerCase();
+  const normalized = String(source || "")
+    .trim()
+    .toLowerCase();
   return VALID_SOURCES.has(normalized) ? normalized : "custom";
 }
 
@@ -275,6 +278,28 @@ const ADZUNA_SUPPORTED_COUNTRIES = new Set([
   "za",
 ]);
 
+const ADZUNA_COUNTRY_ALIASES: Record<string, string> = {
+  unitedkingdom: "gb",
+  uk: "gb",
+  england: "gb",
+  austria: "at",
+  belgium: "be",
+  brazil: "br",
+  canada: "ca",
+  germany: "de",
+  spain: "es",
+  france: "fr",
+  india: "in",
+  italy: "it",
+  mexico: "mx",
+  netherlands: "nl",
+  newzealand: "nz",
+  poland: "pl",
+  russia: "ru",
+  singapore: "sg",
+  southafrica: "za",
+};
+
 async function fetchAdzuna(
   params: ScrapeParams,
   userId: string,
@@ -282,12 +307,12 @@ async function fetchAdzuna(
   const candidateKeys = await getCandidateKeys(supabase, userId, "adzuna");
   if (candidateKeys.length === 0) return [];
 
-  const rawCountry = (params.countries?.[0] || "se").toLowerCase();
-  const country = ADZUNA_SUPPORTED_COUNTRIES.has(rawCountry)
-    ? rawCountry
-    : rawCountry === "uk"
-      ? "gb"
-      : null;
+  const rawCountry = (params.countries?.[0] || "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+  const country =
+    ADZUNA_COUNTRY_ALIASES[rawCountry] ||
+    (ADZUNA_SUPPORTED_COUNTRIES.has(rawCountry) ? rawCountry : null);
 
   if (!country) {
     console.log(
@@ -319,7 +344,8 @@ async function fetchAdzuna(
 
       const allResults: Array<Record<string, unknown>> = [];
 
-      for (let page = 1; page <= PAGES_PER_SCRAPE; page++) {
+      const startPage = params.page && params.page > 0 ? params.page : 1;
+      for (let page = startPage; page < startPage + PAGES_PER_SCRAPE; page++) {
         const endpoint = `https://api.adzuna.com/v1/api/jobs/${country}/search/${page}`;
         const queryParams = new URLSearchParams({
           app_id: appId,
@@ -614,7 +640,15 @@ Deno.serve(async (req: Request) => {
 
     // 2. Run scrapers in parallel
     const scrapePromises: Promise<NormalizedJob[]>[] = [];
-
+    scrapePromises.push(fetchJSearch(searchParams, userId));
+    scrapePromises.push(scrapeAdzuna(supabase, searchParams, userId));
+    scrapePromises.push(fetchLinkedIn(searchParams, userId));
+    scrapePromises.push(
+      scrapeJobTechSweden(
+        searchParams.keywords?.join(" ") || "",
+        searchParams.cities?.[0] || "",
+      ),
+    );
     const country = (searchParams.countries?.[0] || "").toUpperCase();
     const city = searchParams.cities?.[0] || "";
     const keywordQuery = searchParams.keywords?.join(" ") || "";
@@ -708,16 +742,58 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
 
     const userRole = userProfile?.role || "member";
-    const defaultCap =
-      userRole === "admin" ? 60 : userRole === "premium" ? 50 : 25;
+    const maximumCap =
+      userRole === "admin" ? 200 : userRole === "premium" ? 50 : 25;
+    const defaultCap = userRole === "admin" ? 60 : maximumCap;
 
-    // Enforce Admin cap logic scaling safely between 30 and 60
+    // Members remain bounded, while admins can deliberately request larger
+    // batches for a broad radar sweep without changing the default workload.
     const batchCap =
       typeof searchParams.batchSize === "number" && searchParams.batchSize > 0
-        ? Math.min(searchParams.batchSize, defaultCap)
+        ? Math.min(searchParams.batchSize, maximumCap)
         : defaultCap;
 
-    const finalListings = deduped
+    const { data: existingHashes, error: existingHashesError } = await supabase
+      .from("job_vault")
+      .select("dedup_hash")
+      .eq("user_id", userId)
+      .limit(5000);
+
+    if (existingHashesError) {
+      console.error(
+        "[Scrape-Jobs] Could not read existing job identities:",
+        existingHashesError,
+      );
+      throw existingHashesError;
+    }
+
+    const knownHashes = new Set(
+      (existingHashes || [])
+        .map((row) => row.dedup_hash)
+        .filter((hash): hash is string => Boolean(hash)),
+    );
+
+    // Keep a refresh from being dominated by whichever adapter happens to
+    // resolve first. New listings are interleaved by provider, then capped.
+    const unseenBySource = new Map<string, typeof deduped>();
+    for (const listing of deduped) {
+      if (knownHashes.has(listing.dedup_hash)) continue;
+      const source = normalizeSource(listing.source);
+      const sourceListings = unseenBySource.get(source) || [];
+      sourceListings.push(listing);
+      unseenBySource.set(source, sourceListings);
+    }
+
+    const unseenListings: typeof deduped = [];
+    let sourceIndex = 0;
+    const sourceQueues = Array.from(unseenBySource.values());
+    while (sourceQueues.some((queue) => queue.length > 0)) {
+      const queue = sourceQueues[sourceIndex % sourceQueues.length];
+      if (queue.length > 0) unseenListings.push(queue.shift()!);
+      sourceIndex++;
+    }
+
+    const finalListings = unseenListings
       .filter(
         (listing) =>
           listing.title.trim().length > 0 &&
@@ -808,6 +884,8 @@ Deno.serve(async (req: Request) => {
         success: true,
         count: finalListings.length,
         totalScraped: allListings.length,
+        totalUniqueFetched: deduped.length,
+        totalNew: finalListings.length,
         listings: finalListings,
       },
       { headers: corsHeaders },
