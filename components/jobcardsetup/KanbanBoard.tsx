@@ -15,6 +15,7 @@ import {
   Pressable,
   Linking,
   TouchableOpacity,
+  useWindowDimensions,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -33,6 +34,7 @@ import {
   Sparkles,
   CheckCircle2,
   XCircle,
+  Trash2,
   Clock,
   ArrowRight,
 } from "lucide-react-native";
@@ -95,11 +97,27 @@ export const COLUMNS: {
 ];
 
 const COLUMN_WIDTH = 290;
+const COMPACT_BREAKPOINT = 760;
+
+function formatSource(source: string | null | undefined) {
+  if (!source) return "Source unavailable";
+  const labels: Record<string, string> = {
+    adzuna: "Adzuna",
+    indeed: "Indeed",
+    jobtech: "JobTech",
+    linkedin: "LinkedIn",
+    custom: "Custom source",
+    jsearch: "RapidAPI · JSearch",
+    thehub: "The Hub",
+  };
+  return labels[source.toLowerCase()] || source;
+}
 
 interface KanbanBoardProps {
   applications: Application[];
   isLoading: boolean;
   onSelectApplication?: (app: Application) => void;
+  onDeleteApplication?: (app: Application) => void;
 }
 
 function triggerHaptic(type: "grab" | "drop" | "action") {
@@ -121,11 +139,13 @@ function JobCardCompact({
   onPress,
   onAdvance,
   onReject,
+  onDelete,
 }: {
   app: Application;
   onPress: () => void;
   onAdvance: () => void;
   onReject: () => void;
+  onDelete: () => void;
 }) {
   const job = app.job_vault;
   const colConfig = COLUMNS.find((c) => c.key === app.status);
@@ -185,13 +205,37 @@ function JobCardCompact({
         <View style={styles.compactFooter}>
           <Badge
             variant="default"
-            label={(job?.source || "radar").toUpperCase()}
+            label={formatSource(job?.source)}
             size="sm"
             dot={false}
           />
 
           <View style={styles.cardActions}>
-            {app.status !== "rejected" && app.status !== "offer" && (
+            {(app.status === "saved" || app.status === "rejected") && (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                style={({ pressed }) => [
+                  styles.iconActionBtn,
+                  styles.deleteActionBtn,
+                  pressed && styles.actionPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  app.status === "rejected"
+                    ? "Delete passed job"
+                    : "Remove saved job"
+                }
+                hitSlop={4}
+              >
+                <Trash2 size={15} color={colors.accent.red} />
+              </Pressable>
+            )}
+            {app.status !== "rejected" &&
+              app.status !== "offer" &&
+              app.status !== "saved" && (
               <TouchableOpacity
                 onPress={(e) => {
                   e.stopPropagation();
@@ -199,6 +243,8 @@ function JobCardCompact({
                 }}
                 style={styles.iconActionBtn}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Mark job as passed"
               >
                 <XCircle size={15} color={colors.text.dim} />
               </TouchableOpacity>
@@ -246,6 +292,8 @@ interface DraggableCardProps {
   onPress: () => void;
   onAdvance: () => void;
   onReject: () => void;
+  onDelete: () => void;
+  isCompact: boolean;
 }
 
 function DraggableCard({
@@ -254,6 +302,8 @@ function DraggableCard({
   onPress,
   onAdvance,
   onReject,
+  onDelete,
+  isCompact,
 }: DraggableCardProps) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -261,6 +311,7 @@ function DraggableCard({
   const isDragging = useSharedValue(false);
 
   const pan = Gesture.Pan()
+    .enabled(!isCompact)
     .onBegin(() => {
       isDragging.value = true;
       scale.value = withSpring(1.04, springs.press);
@@ -312,6 +363,7 @@ function DraggableCard({
           onPress={onPress}
           onAdvance={onAdvance}
           onReject={onReject}
+          onDelete={onDelete}
         />
       </Animated.View>
     </GestureDetector>
@@ -322,13 +374,19 @@ export function KanbanBoard({
   applications,
   isLoading,
   onSelectApplication,
+  onDeleteApplication,
 }: KanbanBoardProps) {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
+  const { width } = useWindowDimensions();
+  const isCompact = width < COMPACT_BREAKPOINT;
 
   const updateStatus = async (appId: string, newStatus: Status) => {
     if (!user) return;
+
+    const app = applications.find((item) => item.id === appId);
+    if (!app) return;
 
     queryClient.setQueryData(["applications", user.id], (old: any) =>
       (old || []).map((a: Application) =>
@@ -336,10 +394,35 @@ export function KanbanBoard({
       ),
     );
 
-    await supabase
-      .from("job_applications")
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq("id", appId);
+    const isSynthetic = app.id.startsWith("synth-");
+    const result = isSynthetic
+      ? await supabase.from("job_applications").upsert(
+          {
+            user_id: user.id,
+            job_id: app.job_id,
+            status: newStatus,
+            applied_at:
+              newStatus === "applied" ? new Date().toISOString() : null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,job_id" },
+        )
+      : await supabase
+          .from("job_applications")
+          .update({
+            status: newStatus,
+            applied_at:
+              newStatus === "applied" ? new Date().toISOString() : undefined,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", appId)
+          .eq("user_id", user.id);
+    const { error } = result;
+
+    if (error) {
+      queryClient.invalidateQueries({ queryKey: ["applications", user.id] });
+      return;
+    }
 
     queryClient.invalidateQueries({ queryKey: ["applications", user.id] });
     queryClient.invalidateQueries({ queryKey: ["pipeline_metrics"] });
@@ -379,14 +462,20 @@ export function KanbanBoard({
   return (
     <>
       <ScrollView
-        horizontal
+        horizontal={!isCompact}
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.board}
+        contentContainerStyle={[
+          styles.board,
+          isCompact && styles.compactBoard,
+        ]}
       >
         {COLUMNS.map((col) => {
           const colApps = applications.filter((a) => a.status === col.key);
           return (
-            <View key={col.key} style={styles.column}>
+            <View
+              key={col.key}
+              style={[styles.column, isCompact && styles.compactColumn]}
+            >
               {/* Column Header */}
               <View style={styles.columnHeader}>
                 <View
@@ -412,7 +501,10 @@ export function KanbanBoard({
 
               {/* Cards Container */}
               <ScrollView
-                style={styles.columnScroll}
+                style={[
+                  styles.columnScroll,
+                  isCompact && styles.compactColumnScroll,
+                ]}
                 contentContainerStyle={styles.columnBody}
                 showsVerticalScrollIndicator={false}
               >
@@ -428,9 +520,11 @@ export function KanbanBoard({
                       key={app.id}
                       app={app}
                       onDrop={updateStatus}
+                      isCompact={isCompact}
                       onPress={() => handleOpenDetail(app)}
                       onAdvance={() => handleAdvance(app)}
                       onReject={() => handleReject(app)}
+                      onDelete={() => onDeleteApplication?.(app)}
                     />
                   ))
                 )}
@@ -561,7 +655,12 @@ const styles = StyleSheet.create({
   board: {
     paddingHorizontal: 16,
     paddingBottom: 40,
-    gap: 16,
+    columnGap: 16,
+  },
+  compactBoard: {
+    width: "100%",
+    paddingHorizontal: 12,
+    paddingBottom: 120,
   },
   loading: {
     paddingVertical: 80,
@@ -577,10 +676,16 @@ const styles = StyleSheet.create({
     padding: 12,
     maxHeight: 700,
   },
+  compactColumn: {
+    width: "100%",
+    maxHeight: 520,
+    marginBottom: 12,
+    padding: 10,
+  },
   columnHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    columnGap: 8,
     marginBottom: 12,
     paddingHorizontal: 4,
   },
@@ -598,8 +703,10 @@ const styles = StyleSheet.create({
   columnScroll: {
     flexGrow: 0,
   },
+  compactColumnScroll: {
+    maxHeight: 430,
+  },
   columnBody: {
-    gap: 10,
     paddingBottom: 8,
   },
   emptyColumn: {
@@ -613,6 +720,7 @@ const styles = StyleSheet.create({
   },
   compactCard: {
     padding: 12,
+    marginBottom: 10,
     backgroundColor: "rgba(18, 26, 44, 0.7)",
     borderColor: "rgba(0, 242, 254, 0.15)",
   },
@@ -620,12 +728,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   compactTitleWrap: {
-    gap: 3,
+    rowGap: 3,
   },
   companyRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    columnGap: 5,
     marginTop: 2,
   },
   metaRow: {
@@ -640,7 +748,7 @@ const styles = StyleSheet.create({
   metaItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    columnGap: 4,
   },
   compactFooter: {
     flexDirection: "row",
@@ -651,25 +759,45 @@ const styles = StyleSheet.create({
   cardActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    columnGap: 8,
   },
   iconActionBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    minWidth: 44,
     padding: 4,
+    zIndex: 10,
+  },
+  deleteActionBtn: {
+    width: 32,
+    height: 32,
+    minWidth: 32,
+    minHeight: 32,
+    padding: 0,
+    borderRadius: radius.sm,
+    backgroundColor: `${colors.accent.red}12`,
+    borderWidth: 1,
+    borderColor: `${colors.accent.red}45`,
+  },
+  actionPressed: {
+    opacity: 0.65,
+    transform: [{ scale: 0.94 }],
   },
   advanceBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    columnGap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radius.sm,
     borderWidth: 1,
   },
   modalContent: {
-    gap: 16,
+    rowGap: 16,
   },
   modalMeta: {
-    gap: 4,
+    rowGap: 4,
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.surface.border,
@@ -681,17 +809,19 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   modalStatusSelector: {
-    gap: 6,
+    rowGap: 6,
   },
   statusButtonGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    columnGap: 8,
+    rowGap: 8,
   },
   statusChoiceBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    columnGap: 6,
+    minHeight: 44,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: radius.md,
