@@ -18,6 +18,7 @@ import { Modal } from "../../../../components/ui/Modal";
 import { useToast } from "../../../../components/ui/Toast";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import * as Print from "expo-print";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../../../lib/supabase";
 import { useAuthStore } from "../../../../stores/authStore";
@@ -58,6 +59,7 @@ export default function DocumentsScreen() {
   const [refinedSourceName, setRefinedSourceName] = useState<string | null>(
     null,
   );
+  const [isExportingRefined, setIsExportingRefined] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<
     | { kind: "document"; id: string; path: string; name: string }
     | { kind: "certification"; id: string; name: string }
@@ -210,11 +212,11 @@ export default function DocumentsScreen() {
         body: { documentId: doc.id },
       });
       if (error) throw error;
-      if (!data?.refinedText || !data?.refinedDocument?.id) {
+      if (!data?.refinedText) {
         throw new Error("The refinement service returned no reviewable draft.");
       }
       setRefinedText(data.refinedText);
-      setRefinedDocumentId(data.refinedDocument.id);
+      setRefinedDocumentId(null);
       setRefinedSourceName(doc.file_name);
       await queryClient.invalidateQueries({
         queryKey: ["resume-documents", user?.id],
@@ -223,6 +225,102 @@ export default function DocumentsScreen() {
       showToast(err.message || "No refined draft was created.", "error");
     } finally {
       setProcessingId(null);
+    }
+  };
+
+  const escapeHtml = (value: string) =>
+    value.replace(
+      /[&<>"']/g,
+      (character) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[character] || character,
+    );
+
+  const exportRefinedResume = async () => {
+    if (!refinedText || !user) return;
+    setIsExportingRefined(true);
+    try {
+      const html = `<!doctype html>
+        <html><head><meta charset="utf-8"><style>
+          @page { margin: 18mm 16mm; }
+          body { font-family: Arial, sans-serif; color: #17202a; font-size: 10.5pt; line-height: 1.45; }
+          h1, h2 { margin: 0 0 8px; }
+          h1 { font-size: 20pt; }
+          h2 { font-size: 11pt; color: #087f9b; border-bottom: 1px solid #b7c7ce; padding-bottom: 3px; margin-top: 18px; }
+          p { white-space: pre-wrap; margin: 0 0 5px; }
+        </style></head><body>
+        ${refinedText
+          .split(/\n{2,}/)
+          .map((section) => {
+            const lines = section.split("\n");
+            const heading = lines[0]?.trim() || "";
+            const isHeading = /^(NAME|PROFESSIONAL SUMMARY|SKILLS|EXPERIENCE|EDUCATION|CERTIFICATIONS|PROJECTS|CONTACT)$/i.test(heading);
+            return `${isHeading ? `<h2>${escapeHtml(heading)}</h2>` : ""}<p>${escapeHtml(isHeading ? lines.slice(1).join("\n") : section)}</p>`;
+          })
+          .join("")}
+        </body></html>`;
+
+      const result = await Print.printToFileAsync({ html });
+      const pdfPath = `${user.id}/refined-${crypto.randomUUID()}.pdf`;
+      const pdfBlob = await (await fetch(result.uri)).blob();
+      const { error: uploadError } = await supabase.storage
+        .from("resumes")
+        .upload(pdfPath, pdfBlob, {
+          contentType: "application/pdf",
+          upsert: false,
+        });
+      if (uploadError) throw uploadError;
+
+      const baseName = (refinedSourceName || "resume").replace(
+        /\.[^.]+$/,
+        "",
+      );
+      const { data: refinedDocument, error: insertError } = await supabase
+        .from("resume_documents")
+        .insert({
+          user_id: user.id,
+          storage_path: pdfPath,
+          file_name: `${baseName} — refined.pdf`,
+          file_type: "application/pdf",
+          file_size_kb: Math.max(1, Math.round(pdfBlob.size / 1024)),
+          is_primary: false,
+          extraction_status: "complete",
+          label: `Refined from ${refinedSourceName || "resume"}`,
+        })
+        .select("*")
+        .single();
+      if (insertError) {
+        await supabase.storage.from("resumes").remove([pdfPath]);
+        throw insertError;
+      }
+      setRefinedDocumentId(refinedDocument.id);
+      await queryClient.invalidateQueries({
+        queryKey: ["resume-documents", user.id],
+      });
+
+      if (Platform.OS === "web") {
+        const link = document.createElement("a");
+        link.href = result.uri;
+        link.download = `${baseName} - refined.pdf`;
+        link.click();
+      } else if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(result.uri, {
+          mimeType: "application/pdf",
+          dialogTitle: "Share refined resume PDF",
+        });
+      } else {
+        await Linking.openURL(result.uri);
+      }
+      showToast("Formatted PDF created. Your original CV remains unchanged.", "success");
+    } catch (err: any) {
+      showToast(err.message || "The refined PDF could not be created.", "error");
+    } finally {
+      setIsExportingRefined(false);
     }
   };
 
@@ -648,6 +746,15 @@ export default function DocumentsScreen() {
             <Button
               variant="secondary"
               size="sm"
+              onPress={exportRefinedResume}
+              disabled={isExportingRefined}
+              style={styles.refinedAction}
+            >
+              {isExportingRefined ? "Creating PDF..." : "Export PDF"}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onPress={() => setRefinedText(null)}
               style={styles.refinedAction}
             >
@@ -657,7 +764,10 @@ export default function DocumentsScreen() {
               variant="primary"
               size="sm"
               onPress={async () => {
-                if (!refinedDocumentId) return;
+                if (!refinedDocumentId) {
+                  showToast("Export the refined PDF before making it primary.", "error");
+                  return;
+                }
                 if (await handleSetPrimaryDoc(refinedDocumentId)) {
                   setRefinedText(null);
                 }
