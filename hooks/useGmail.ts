@@ -56,6 +56,9 @@ export function useGmail() {
     scheme: "opushunter",
     path: "oauth/callback",
   });
+  const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const googleClientId =
+    googleWebClientId || process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
 
   // Authorization CODE flow, PKCE disabled — must match how the
   // oauth-link-email edge function performs its token exchange (client_secret,
@@ -64,7 +67,10 @@ export function useGmail() {
   // will reject the client_secret exchange server-side regardless of PKCE —
   // in that case the fix is on the Google Cloud Console client type, not here.
   const [request, response, promptAsync] = Google.useAuthRequest({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+    clientId: googleClientId,
+    webClientId: googleWebClientId || googleClientId,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
     redirectUri,
     scopes: GMAIL_SCOPES,
     responseType: ResponseType.Code,
