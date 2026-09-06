@@ -11,6 +11,7 @@ import {
   Modal as RNModal,
   View,
   Pressable,
+  ScrollView,
   StyleSheet,
   Platform,
 } from "react-native";
@@ -31,6 +32,7 @@ interface ModalProps {
   title?: string;
   children: React.ReactNode;
   maxWidth?: number;
+  scrollable?: boolean;
 }
 
 export function Modal({
@@ -39,6 +41,7 @@ export function Modal({
   title,
   children,
   maxWidth = 520,
+  scrollable = false,
 }: ModalProps) {
   const opacity = useSharedValue(0);
   const scale = useSharedValue(0.95);
@@ -119,7 +122,18 @@ export function Modal({
               </Pressable>
             </View>
           )}
-          <View style={styles.body}>{children}</View>
+          {scrollable ? (
+            <ScrollView
+              style={styles.bodyScroll}
+              contentContainerStyle={styles.body}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            <View style={styles.body}>{children}</View>
+          )}
         </Animated.View>
       </View>
     </RNModal>
@@ -182,5 +196,8 @@ const styles = StyleSheet.create({
   },
   body: {
     padding: 20,
+  },
+  bodyScroll: {
+    flexGrow: 0,
   },
 });
