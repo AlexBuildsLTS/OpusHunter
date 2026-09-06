@@ -499,32 +499,41 @@ Return ONLY a valid JSON object matching this exact structure (do not include ma
       .eq("user_id", userId)
       .maybeSingle();
 
-    const mergedSkills = Array.from(
-      new Set([
-        ...(existingContext?.extracted_skills || []),
-        ...(parsed.extracted_skills || []),
-      ]),
+    const extractedSkills = Array.from(
+      new Set(
+        (Array.isArray(parsed.extracted_skills)
+          ? parsed.extracted_skills
+          : []
+        )
+          .map((skill: unknown) => String(skill).trim())
+          .filter(Boolean),
+      ),
     );
 
     const mergedPayload = {
       user_id: userId,
-      extracted_skills: mergedSkills,
+      extracted_skills:
+        extractedSkills.length > 0
+          ? extractedSkills
+          : existingContext?.extracted_skills || [],
       extracted_experience:
-        parsed.extracted_experience ||
-        existingContext?.extracted_experience ||
-        [],
+        Array.isArray(parsed.extracted_experience)
+          ? parsed.extracted_experience
+          : existingContext?.extracted_experience || [],
       extracted_education:
-        parsed.extracted_education ||
-        existingContext?.extracted_education ||
-        [],
+        Array.isArray(parsed.extracted_education)
+          ? parsed.extracted_education
+          : existingContext?.extracted_education || [],
       extracted_certifications:
-        parsed.extracted_certifications ||
-        existingContext?.extracted_certifications ||
-        [],
+        Array.isArray(parsed.extracted_certifications)
+          ? parsed.extracted_certifications
+          : existingContext?.extracted_certifications || [],
       career_summary:
         parsed.career_summary || existingContext?.career_summary || "",
       key_achievements:
-        parsed.key_achievements || existingContext?.key_achievements || [],
+        Array.isArray(parsed.key_achievements)
+          ? parsed.key_achievements
+          : existingContext?.key_achievements || [],
       last_extracted_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
