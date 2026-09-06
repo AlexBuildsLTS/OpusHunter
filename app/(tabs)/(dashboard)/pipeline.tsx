@@ -364,6 +364,33 @@ export default function PipelineScreen() {
     setTimeout(() => setCopiedNotification(false), 2000);
   };
 
+  const openListing = async (app: Application) => {
+    const targetUrl = app.job_vault?.url || app.job_vault?.source_url;
+    if (!targetUrl) {
+      showToast("This listing does not have an available external URL.", "error");
+      return;
+    }
+    try {
+      await Linking.openURL(targetUrl);
+    } catch (error) {
+      console.error("Could not open listing URL:", error);
+      showToast("The listing URL could not be opened.", "error");
+    }
+  };
+
+  const prepareApplication = (app: Application) => {
+    if (!app.job_id) {
+      showToast("This listing cannot be prepared because it has no job ID.", "error");
+      return;
+    }
+    setSelectedApp(null);
+    setCoverLetterApp(null);
+    router.navigate({
+      pathname: "/apply/[id]",
+      params: { id: app.job_id },
+    } as any);
+  };
+
   // ── 4. Metric Calculations ───────────────────────────────────────────────
   const metrics = useMemo(() => {
     const counts: Record<string, number> = {
@@ -755,59 +782,6 @@ export default function PipelineScreen() {
             )}
           </View>
 
-          {/* Stage Filter Chips */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterChipsRow}
-          >
-            <TouchableOpacity
-              onPress={() => setStatusFilter("all")}
-              style={[
-                styles.filterChip,
-                statusFilter === "all" && styles.filterChipActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  statusFilter === "all" && styles.filterChipTextActive,
-                ]}
-              >
-                All Stages
-              </Text>
-            </TouchableOpacity>
-            {COLUMNS.map((col) => {
-              const isActive = statusFilter === col.key;
-              return (
-                <TouchableOpacity
-                  key={col.key}
-                  onPress={() => setStatusFilter(col.key)}
-                  style={[
-                    styles.filterChip,
-                    isActive && styles.filterChipActive,
-                    isActive && {
-                      borderColor: col.color,
-                      backgroundColor: col.color + "15",
-                    },
-                  ]}
-                >
-                  <View
-                    style={[styles.chipDot, { backgroundColor: col.color }]}
-                  />
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      isActive && styles.filterChipTextActive,
-                      isActive && { color: col.color },
-                    ]}
-                  >
-                    {col.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
         </View>
         {/* ── Main Pipeline Content: Board vs Matrix ── */}
         <View style={styles.contentContainer}>
@@ -864,6 +838,12 @@ export default function PipelineScreen() {
               onSelectApplication={(app) => setSelectedApp(app)}
               onUpdateStatus={handleUpdateStatus}
               onGenerateCoverLetter={handleGenerateCoverLetter}
+              onPrepareApplication={(app) =>
+                router.navigate({
+                  pathname: "/apply/[id]",
+                  params: { id: app.job_id },
+                } as any)
+              }
               onDeleteApplication={handleDeleteApplication}
               isCompact={isCompact}
             />
@@ -1088,15 +1068,12 @@ export default function PipelineScreen() {
                   </Text>
                 </Button>
 
-                {selectedApp.job_vault?.url && (
+                {(selectedApp.job_vault?.url ||
+                  selectedApp.job_vault?.source_url) && (
                   <Button
                     variant="secondary"
                     size="md"
-                    onPress={() => {
-                      if (selectedApp.job_vault?.url) {
-                        Linking.openURL(selectedApp.job_vault.url);
-                      }
-                    }}
+                    onPress={() => openListing(selectedApp)}
                   >
                     <ExternalLink size={16} color={colors.accent.cyan} />
                     <Text
@@ -1105,10 +1082,26 @@ export default function PipelineScreen() {
                         { color: colors.accent.cyan },
                       ]}
                     >
-                      Apply Link
+                      Open listing
                     </Text>
                   </Button>
                 )}
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onPress={() => prepareApplication(selectedApp)}
+                  style={{ flex: 1 }}
+                >
+                  <CheckCircle2 size={16} color={colors.accent.cyan} />
+                  <Text
+                    style={[
+                      styles.btnActionText,
+                      { color: colors.accent.cyan },
+                    ]}
+                  >
+                    Prepare application
+                  </Text>
+                </Button>
               </View>
             </ScrollView>
           )}
@@ -1253,6 +1246,49 @@ export default function PipelineScreen() {
                       </Text>
                     </Button>
                   </View>
+                  <View style={styles.letterFollowUpActions}>
+                    {(coverLetterApp.job_vault?.url ||
+                      coverLetterApp.job_vault?.source_url) && (
+                      <Button
+                        variant="secondary"
+                        size="md"
+                        onPress={() => openListing(coverLetterApp)}
+                        style={{ flex: 1 }}
+                      >
+                        <ExternalLink
+                          size={16}
+                          color={colors.accent.cyan}
+                        />
+                        <Text
+                          style={[
+                            styles.btnActionText,
+                            { color: colors.accent.cyan },
+                          ]}
+                        >
+                          Open listing
+                        </Text>
+                      </Button>
+                    )}
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      onPress={() => prepareApplication(coverLetterApp)}
+                      style={{ flex: 1 }}
+                    >
+                      <CheckCircle2
+                        size={16}
+                        color={colors.accent.cyan}
+                      />
+                      <Text
+                        style={[
+                          styles.btnActionText,
+                          { color: colors.accent.cyan },
+                        ]}
+                      >
+                        Prepare application
+                      </Text>
+                    </Button>
+                  </View>
                 </ScrollView>
               ) : null}
             </View>
@@ -1269,6 +1305,7 @@ function MatrixListView({
   onSelectApplication,
   onUpdateStatus,
   onGenerateCoverLetter,
+  onPrepareApplication,
   onDeleteApplication,
   isCompact,
 }: {
@@ -1276,6 +1313,7 @@ function MatrixListView({
   onSelectApplication: (app: Application) => void;
   onUpdateStatus: (app: Application, status: Status) => void;
   onGenerateCoverLetter: (app: Application) => void;
+  onPrepareApplication: (app: Application) => void;
   onDeleteApplication: (app: Application) => void;
   isCompact: boolean;
 }) {
@@ -1507,6 +1545,19 @@ function MatrixListView({
                       </TouchableOpacity>
                     )}
 
+                    <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        onPrepareApplication(app);
+                      }}
+                      style={styles.actionIconButton}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Prepare application for ${job?.title || "job"}`}
+                    >
+                      <CheckCircle2 size={15} color={colors.accent.cyan} />
+                    </TouchableOpacity>
+
                     {colConfig?.nextStatus && (
                       <TouchableOpacity
                         onPress={(e) => {
@@ -1556,7 +1607,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Platform.OS === "web" ? 24 : 16,
     paddingTop: 12,
     paddingBottom: 24,
-    maxWidth: 1100,
+    maxWidth: 1400,
     width: "100%",
     alignSelf: "center",
   },
@@ -1896,6 +1947,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
+  letterFollowUpActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+  },
   matrixScroll: {
     flex: 1,
   },
@@ -1985,7 +2041,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   matrixColActions: {
-    flex: 2,
+    flex: 2.5,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",

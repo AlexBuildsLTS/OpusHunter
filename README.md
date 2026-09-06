@@ -451,3 +451,20 @@ gantt
 
 All rights reserved by the project owner unless a repository policy states
 otherwise.
+# Provider application submission
+
+Application submission is intentionally provider-scoped and truthful. The app
+can submit a Greenhouse listing only through the `submit-application` Edge
+Function, after the candidate confirms and the deployment has the
+employer-authorized `GREENHOUSE_JOB_BOARD_API_KEY` secret configured. The
+function loads the authenticated user's primary extracted CV, profile, and
+listing-specific cover letter, retrieves the Greenhouse job questions, blocks
+submission when required custom answers are missing, and records the provider
+response in `job_applications`. It never stores the API key or document
+contents in the audit record.
+
+Lever direct submission is not enabled by default. Lever's authenticated API
+requires an employer-authorized integration, so Lever listings remain
+candidate-controlled: the app prepares the materials and opens the real
+employer form. Unsupported ATSs are handled the same way and are never shown
+as successfully submitted.
