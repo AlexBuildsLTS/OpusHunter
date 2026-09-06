@@ -23,6 +23,7 @@ import {
   getSecureItem,
   deleteSecureItem,
   isSecure,
+  SECURE_KEYS,
 } from "../../../../lib/secureStorage";
 import * as LocalAuthentication from "expo-local-authentication";
 import {
@@ -102,11 +103,15 @@ export default function VaultScreen() {
   useEffect(() => {
     async function checkSecurityState() {
       try {
-        const storedPin = await getSecureItem("user_vault_pin");
+        const storedPin =
+          (await getSecureItem(SECURE_KEYS.VAULT_PIN_HASH)) ||
+          (await getSecureItem("user_vault_pin"));
         setHasPinSet(!!storedPin);
 
-        const bioPref = await getSecureItem("vault_biometrics_enabled");
-        setBiometricsEnabled(bioPref === "true");
+        const bioPref =
+          (await getSecureItem(SECURE_KEYS.BIOMETRIC_ENABLED)) ||
+          (await getSecureItem("vault_biometrics_enabled"));
+        setBiometricsEnabled(bioPref === "true" && !!storedPin);
 
         if (Platform.OS !== "web") {
           const hasHardware = await LocalAuthentication.hasHardwareAsync();
@@ -133,7 +138,7 @@ export default function VaultScreen() {
       return;
     }
     try {
-      await setSecureItem("user_vault_pin", vaultPinInput);
+      await setSecureItem(SECURE_KEYS.VAULT_PIN_HASH, vaultPinInput);
       setHasPinSet(true);
       setVaultPinInput("");
       setVaultPinConfirm("");
@@ -151,8 +156,10 @@ export default function VaultScreen() {
 
   const handleRemovePin = async () => {
     try {
-      await deleteSecureItem("user_vault_pin");
+      await deleteSecureItem(SECURE_KEYS.VAULT_PIN_HASH);
       setHasPinSet(false);
+      await deleteSecureItem(SECURE_KEYS.BIOMETRIC_ENABLED);
+      setBiometricsEnabled(false);
       setPinStatus({ type: "success", msg: "Vault PIN removed." });
     } catch (err: any) {
       setPinStatus({
@@ -167,6 +174,13 @@ export default function VaultScreen() {
       showToast("No biometric sensor is enrolled on this device.", "info");
       return;
     }
+    if (!hasPinSet) {
+      showToast(
+        "Set and save a Vault PIN before enabling biometric unlock.",
+        "error",
+      );
+      return;
+    }
     const nextState = !biometricsEnabled;
     try {
       if (nextState) {
@@ -177,7 +191,7 @@ export default function VaultScreen() {
         if (!res.success) return;
       }
       await setSecureItem(
-        "vault_biometrics_enabled",
+        SECURE_KEYS.BIOMETRIC_ENABLED,
         nextState ? "true" : "false",
       );
       setBiometricsEnabled(nextState);

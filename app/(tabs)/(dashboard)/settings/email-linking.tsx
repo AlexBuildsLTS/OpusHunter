@@ -97,13 +97,6 @@ export default function EmailLinkingScreen() {
       ],
     });
 
-  // Load connected accounts on mount
-  useEffect(() => {
-    if (user?.id) {
-      loadAccounts();
-    }
-  }, [user?.id]);
-
   const loadAccounts = async () => {
     if (!user?.id) return;
     try {
@@ -124,6 +117,13 @@ export default function EmailLinkingScreen() {
     }
   };
 
+  // Load connected accounts on mount.
+  useEffect(() => {
+    if (user?.id) {
+      void loadAccounts();
+    }
+  }, [user?.id]);
+
   const handleGoogleLink = useCallback(async () => {
     if (!googleClientId) {
       const message =
@@ -140,9 +140,11 @@ export default function EmailLinkingScreen() {
     try {
       const result = await googlePromptAsync();
       if (result?.type === "success") {
-        const { authentication } = result;
-        if (!authentication?.accessToken) {
-          throw new Error("No access token returned");
+        const authCode = result.params?.code;
+        if (!authCode) {
+          throw new Error(
+            "Google did not return an authorization code. The account was not linked.",
+          );
         }
 
         // Call backend edge function to exchange code for refresh token
@@ -152,7 +154,7 @@ export default function EmailLinkingScreen() {
             body: {
               userId: user?.id,
               provider: "google",
-              authCode: result.params.code,
+              authCode,
               redirectUri,
             },
           },
