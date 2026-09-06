@@ -69,7 +69,7 @@ export default function ApplicationPreparationScreen() {
   const missingFields = [
     !profile?.first_name && "first name",
     !profile?.last_name && "last name",
-    !profile?.email && "email",
+    !(profile?.application_email || profile?.email) && "application email",
     !primaryResume && "primary CV",
   ].filter(Boolean) as string[];
 
@@ -131,6 +131,19 @@ export default function ApplicationPreparationScreen() {
             <Phone size={17} color={profile?.phone ? colors.accent.green : colors.text.dim} />
             <Typography color="secondary">
               {profile?.phone || "Phone not provided (optional)"}
+            </Typography>
+          </View>
+          <View style={styles.row}>
+            <FileText
+              size={17}
+              color={
+                profile?.application_email
+                  ? colors.accent.green
+                  : colors.text.dim
+              }
+            />
+            <Typography color="secondary">
+              {profile?.application_email || "Application email uses login email"}
             </Typography>
           </View>
           <View style={styles.row}>
