@@ -62,8 +62,16 @@ export default function DocumentsScreen() {
   const [refinementReview, setRefinementReview] = useState<{
     improvements: string[];
     warnings: string[];
+    designAssessment: string[];
+    atsRisks: string[];
     atsChecks: Record<string, boolean>;
-  }>({ improvements: [], warnings: [], atsChecks: {} });
+  }>({
+    improvements: [],
+    warnings: [],
+    designAssessment: [],
+    atsRisks: [],
+    atsChecks: {},
+  });
   const [refinedSourceName, setRefinedSourceName] = useState<string | null>(
     null,
   );
@@ -235,6 +243,10 @@ export default function DocumentsScreen() {
       setRefinementReview({
         improvements: Array.isArray(data.improvements) ? data.improvements : [],
         warnings: Array.isArray(data.warnings) ? data.warnings : [],
+        designAssessment: Array.isArray(data.designAssessment)
+          ? data.designAssessment
+          : [],
+        atsRisks: Array.isArray(data.atsRisks) ? data.atsRisks : [],
         atsChecks: data.atsChecks && typeof data.atsChecks === "object"
           ? data.atsChecks
           : {},
@@ -266,22 +278,31 @@ export default function DocumentsScreen() {
     if (!refinedText || !user) return;
     setIsExportingRefined(true);
     try {
+      const headings = /^(NAME|CONTACT|PROFESSIONAL SUMMARY|SUMMARY|PROFILE|PROFIL|SAMMANFATTNING|SKILLS|KOMPETENSER|EXPERIENCE|ARBETSLIVSERFARENHET|WORK EXPERIENCE|EDUCATION|UTBILDNING|CERTIFICATIONS|CERTIFIERINGAR|PROJECTS|PROJEKT)$/i;
       const html = `<!doctype html>
         <html><head><meta charset="utf-8"><style>
-          @page { margin: 18mm 16mm; }
-          body { font-family: Arial, sans-serif; color: #17202a; font-size: 10.5pt; line-height: 1.45; }
-          h1, h2 { margin: 0 0 8px; }
-          h1 { font-size: 20pt; }
-          h2 { font-size: 11pt; color: #087f9b; border-bottom: 1px solid #b7c7ce; padding-bottom: 3px; margin-top: 18px; }
+          @page { margin: 17mm 18mm; }
+          body { font-family: system-ui, sans-serif; color: #17202a; font-size: 10.5pt; line-height: 1.42; }
+          h1 { font-size: 22pt; margin: 0 0 4px; color: #0f172a; }
+          h2 { font-size: 11pt; color: #0f6f82; border-bottom: 1px solid #c8d4d9; padding-bottom: 4px; margin: 18px 0 7px; letter-spacing: .3px; }
           p { white-space: pre-wrap; margin: 0 0 5px; }
+          ul { margin: 3px 0 7px 18px; padding: 0; }
+          li { margin: 0 0 3px; }
+          .contact { color: #41515a; margin-bottom: 14px; }
         </style></head><body>
         ${refinedText
           .split(/\n{2,}/)
           .map((section) => {
             const lines = section.split("\n");
             const heading = lines[0]?.trim() || "";
-            const isHeading = /^(NAME|PROFESSIONAL SUMMARY|SKILLS|EXPERIENCE|EDUCATION|CERTIFICATIONS|PROJECTS|CONTACT)$/i.test(heading);
-            return `${isHeading ? `<h2>${escapeHtml(heading)}</h2>` : ""}<p>${escapeHtml(isHeading ? lines.slice(1).join("\n") : section)}</p>`;
+            const isHeading = headings.test(heading);
+            const bodyLines = isHeading ? lines.slice(1) : lines;
+            const isContact = /^(CONTACT|KONTAKT)$/i.test(heading);
+            const bullets = bodyLines.filter((line) => /^\s*[-•*]\s+/.test(line));
+            const body = bullets.length === bodyLines.length && bullets.length > 0
+              ? `<ul>${bullets.map((line) => `<li>${escapeHtml(line.replace(/^\s*[-•*]\s+/, ""))}</li>`).join("")}</ul>`
+              : `<p>${escapeHtml(bodyLines.join("\n"))}</p>`;
+            return `${isHeading ? (heading === "NAME" ? `<h1>${escapeHtml(heading)}</h1>` : `<h2>${escapeHtml(heading)}</h2>`) : ""}<div class="${isContact ? "contact" : ""}">${body}</div>`;
           })
           .join("")}
         </body></html>`;
@@ -773,6 +794,16 @@ export default function DocumentsScreen() {
             {refinementReview.warnings.map((item, index) => (
               <Typography key={`warning-${item}-${index}`} variant="caption" color="secondary">
                 ⚠ {item}
+              </Typography>
+            ))}
+            {refinementReview.designAssessment.map((item, index) => (
+              <Typography key={`design-${item}-${index}`} variant="caption" color="secondary">
+                Design: {item}
+              </Typography>
+            ))}
+            {refinementReview.atsRisks.map((item, index) => (
+              <Typography key={`risk-${item}-${index}`} variant="caption" color="secondary">
+                ATS risk: {item}
               </Typography>
             ))}
             <Typography variant="caption" color="dim">
