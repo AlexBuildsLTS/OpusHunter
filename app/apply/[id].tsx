@@ -6,6 +6,7 @@ import { ExternalLink, FileText, Phone, UserRound } from "lucide-react-native";
 import { SafeAreaWrapper } from "../../components/shared/SafeAreaWrapper";
 import { Card } from "../../components/ui/GlassCard";
 import { Button } from "../../components/ui/Button";
+import { Modal } from "../../components/ui/Modal";
 import { Typography } from "../../components/ui/Typography";
 import { colors } from "../../constants/theme";
 import { supabase } from "../../lib/supabase";
@@ -18,6 +19,7 @@ export default function ApplicationPreparationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { user, profile } = useAuthStore();
+  const [confirmExternalOpen, setConfirmExternalOpen] = React.useState(false);
 
   const { data: job, isLoading } = useQuery({
     queryKey: ["application-preparation-job", id],
@@ -82,6 +84,11 @@ export default function ApplicationPreparationScreen() {
       </SafeAreaWrapper>
     );
   }
+
+  const openEmployerApplication = async () => {
+    setConfirmExternalOpen(false);
+    if (job.url) await Linking.openURL(job.url);
+  };
 
   return (
     <SafeAreaWrapper edges={["top", "bottom"]} style={styles.container}>
@@ -159,10 +166,35 @@ export default function ApplicationPreparationScreen() {
         <Button
           variant="primary"
           disabled={missingFields.length > 0}
-          onPress={() => router.push(`/job/${job.id}` as any)}
+          onPress={() =>
+            router.push(
+              (coverLetter
+                ? `/cover-letter/${coverLetter.id}`
+                : `/job/${job.id}`) as any,
+            )
+          }
         >
-          Review CV, cover letter, and fields
+          {coverLetter ? "Review cover letter and fields" : "Generate cover letter"}
         </Button>
+
+        <Card style={styles.nextStepCard}>
+          <Typography variant="bodySm" weight="bold" color="primary">
+            Next step: candidate-controlled application
+          </Typography>
+          <Typography variant="caption" color="secondary">
+            OpusHunter prepares the reviewed CV, contact details, and cover
+            letter. It does not silently submit forms or claim universal
+            browser automation. The employer page opens only after you confirm.
+          </Typography>
+          <Button
+            variant="secondary"
+            disabled={missingFields.length > 0 || !job.url}
+            onPress={() => setConfirmExternalOpen(true)}
+          >
+            <ExternalLink size={16} color={colors.accent.cyan} />
+            Open employer application
+          </Button>
+        </Card>
 
         <Pressable
           accessibilityRole="button"
@@ -180,6 +212,33 @@ export default function ApplicationPreparationScreen() {
           manually with your reviewed CV and cover letter.
         </Typography>
       </ScrollView>
+      <Modal
+        visible={confirmExternalOpen}
+        onClose={() => setConfirmExternalOpen(false)}
+        title="Open employer application?"
+      >
+        <Typography variant="bodySm" color="secondary">
+          Your primary CV and reviewed application details are ready. The
+          employer website will open in a new browser view; OpusHunter will not
+          submit anything automatically.
+        </Typography>
+        <View style={styles.confirmActions}>
+          <Button
+            variant="ghost"
+            onPress={() => setConfirmExternalOpen(false)}
+            style={styles.confirmButton}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onPress={openEmployerApplication}
+            style={styles.confirmButton}
+          >
+            Continue
+          </Button>
+        </View>
+      </Modal>
     </SafeAreaWrapper>
   );
 }
@@ -191,5 +250,8 @@ const styles = StyleSheet.create({
   card: { padding: 18, gap: 10 },
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
   linkButton: { minHeight: 48, borderWidth: 1, borderColor: colors.accent.cyan, borderRadius: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  nextStepCard: { padding: 18, gap: 10 },
+  confirmActions: { flexDirection: "row", gap: 10, marginTop: 20 },
+  confirmButton: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 });
