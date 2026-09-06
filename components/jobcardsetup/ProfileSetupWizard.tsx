@@ -161,6 +161,9 @@ export function ProfileSetupWizard({
   const [formData, setFormData] = useState({
     first_name: profile?.first_name || "",
     last_name: profile?.last_name || "",
+    application_email: profile?.application_email || profile?.email || user?.email || "",
+    phone: profile?.phone || "",
+    linkedin_url: profile?.linkedin_url || "",
     professional_title: profile?.professional_title || "",
     target_roles: profile?.target_roles || ([] as string[]),
     skills: [] as string[],
@@ -219,6 +222,9 @@ export function ProfileSetupWizard({
       if (context) {
         setFormData((prev) => ({
           ...prev,
+          phone: profile?.phone || prev.phone,
+          application_email:
+            profile?.application_email || profile?.email || user.email || prev.application_email,
           skills: context.extracted_skills?.length
             ? context.extracted_skills
             : prev.skills,
@@ -283,6 +289,10 @@ export function ProfileSetupWizard({
         ...prev,
         first_name: profile.first_name || prev.first_name,
         last_name: profile.last_name || prev.last_name,
+        phone: profile.phone || prev.phone,
+        application_email:
+          profile.application_email || profile.email || user?.email || prev.application_email,
+        linkedin_url: profile.linkedin_url || prev.linkedin_url,
         professional_title:
           profile.professional_title || prev.professional_title,
         target_roles:
@@ -485,6 +495,10 @@ export function ProfileSetupWizard({
         setError("Last name is required.");
         return false;
       }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.application_email.trim())) {
+        setError("Enter a valid application email address.");
+        return false;
+      }
       if (!formData.professional_title.trim()) {
         setError(
           "Primary target job title is required (e.g. Java Fullstack Developer).",
@@ -534,6 +548,11 @@ export function ProfileSetupWizard({
         .update({
           first_name: formData.first_name.trim(),
           last_name: formData.last_name.trim(),
+          application_email: formData.application_email.trim().toLowerCase(),
+          phone: formData.phone.trim() || null,
+          linkedin_url: formData.linkedin_url.trim() || null,
+          github_url: formData.github_url.trim() || null,
+          portfolio_url: formData.portfolio_url.trim() || null,
           professional_title: formData.professional_title.trim(),
           bio: formData.bio.trim() || null,
           years_experience: parseInt(formData.years_experience) || 0,
@@ -703,7 +722,7 @@ export function ProfileSetupWizard({
         </View>
 
         <View style={styles.rowInputs}>
-          <View style={{ flex: 1 }}>
+          <View style={styles.fieldColumn}>
             <Text style={styles.label}>FIRST NAME</Text>
             <TextInput
               style={styles.input}
@@ -716,7 +735,8 @@ export function ProfileSetupWizard({
               autoCapitalize="words"
             />
           </View>
-          <View style={{ flex: 1 }}>
+
+          <View style={styles.fieldColumn}>
             <Text style={styles.label}>LAST NAME</Text>
             <TextInput
               style={styles.input}
@@ -727,6 +747,50 @@ export function ProfileSetupWizard({
               placeholder="e.g., Lindqvist"
               placeholderTextColor={C.dim}
               autoCapitalize="words"
+            />
+          </View>
+        </View>
+
+        <View style={styles.sectionDivider}>
+          <Text style={styles.sectionHeader}>APPLICATION CONTACT DETAILS</Text>
+          <View style={styles.badgeOptional}>
+            <Text style={styles.badgeOptionalText}>REVIEW BEFORE SENDING</Text>
+          </View>
+        </View>
+        <Text style={styles.fieldHint}>
+          These are the details included in applications. Your login email is
+          shown from your authenticated account and cannot be accidentally
+          replaced by an AI-generated placeholder.
+        </Text>
+        <View style={styles.contactCard}>
+          <View style={styles.contactEmailRow}>
+            <Text style={styles.contactLabel}>APPLICATION EMAIL</Text>
+            <Text style={styles.contactEmail} numberOfLines={1}>
+              Candidate-controlled
+            </Text>
+          </View>
+          <TextInput
+            style={styles.input}
+            value={formData.application_email}
+            onChangeText={(text) =>
+              setFormData((prev) => ({ ...prev, application_email: text }))
+            }
+            placeholder="name@domain.com"
+            placeholderTextColor={C.dim}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <View style={styles.fieldColumn}>
+            <Text style={styles.label}>PHONE NUMBER (OPTIONAL)</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.phone}
+              onChangeText={(text) =>
+                setFormData((prev) => ({ ...prev, phone: text }))
+              }
+              placeholder="+46 70 123 45 67"
+              placeholderTextColor={C.dim}
+              keyboardType="phone-pad"
             />
           </View>
         </View>
@@ -1943,7 +2007,43 @@ const styles = StyleSheet.create({
   },
   rowInputs: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
+  },
+  fieldColumn: {
+    flex: 1,
+    minWidth: 220,
+  },
+  contactCard: {
+    backgroundColor: "rgba(0, 210, 255, 0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 210, 255, 0.18)",
+    borderRadius: radius.md,
+    padding: 12,
+    marginBottom: 4,
+  },
+  contactEmailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingBottom: 10,
+    marginBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.08)",
+  },
+  contactLabel: {
+    color: "#64748B",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  contactEmail: {
+    flex: 1,
+    color: "#F1F5F9",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "right",
   },
   label: {
     fontSize: 11,
