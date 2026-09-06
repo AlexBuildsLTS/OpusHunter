@@ -16,7 +16,12 @@ import {
 import { corsHeaders } from "../_shared/cors.ts";
 
 const supabase = getSupabaseAdmin();
-const MODELS = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash"];
+const MODELS = [
+  "gemini-3.7-flash",
+  "gemini-3.6-flash",
+  "gemini-3.5-flash",
+  "gemini-3.5-flash-lite",
+];
 
 function jsonError(message: string, status: number) {
   return Response.json(
@@ -56,7 +61,9 @@ Deno.serve(async (req) => {
     const [profileRes, contextRes, certificationsRes] = await Promise.all([
       supabase
         .from("profiles")
-        .select("first_name,last_name,professional_title,bio,target_roles")
+        .select(
+          "first_name,last_name,professional_title,bio,target_roles,application_email,phone,linkedin_url,github_url,portfolio_url",
+        )
         .eq("id", jwtUser.userId)
         .maybeSingle(),
       supabase
@@ -107,23 +114,33 @@ Deno.serve(async (req) => {
     });
     const prompt = `You are a senior resume editor optimizing a real resume for truthful ATS parsing and human review.
 
-Rewrite the supplied resume into a clean, plain-text, ATS-readable resume.
+Rewrite the supplied resume into a clean, plain-text, ATS-readable resume while preserving the source language (the uploaded resume is Swedish, so write Swedish unless the source is clearly another language).
 
 Rules:
 - Use only facts present in the supplied resume or VERIFIED CONTEXT.
 - Never invent employers, dates, job titles, degrees, certifications, technologies, metrics, responsibilities, or achievements.
 - Preserve every material fact unless it is clearly duplicated or malformed.
-- Use standard headings: NAME, PROFESSIONAL SUMMARY, SKILLS, EXPERIENCE, EDUCATION, CERTIFICATIONS.
+- Use standard, localized headings equivalent to NAME, PROFESSIONAL SUMMARY, SKILLS, EXPERIENCE, EDUCATION, and CERTIFICATIONS.
 - Put the most relevant verified skills and experience first, but do not keyword-stuff.
 - Use plain text bullets, normal section headings, and no tables, columns, icons, graphics, text boxes, or decorative symbols.
 - If a fact is missing, omit it; never fill the gap.
-- Return only the revised resume text.
+- Preserve verified contact details exactly when they appear in the source or profile. Never create an email, phone number, URL, employer, date, metric, or credential.
+- Assess the source design for ATS risks: multi-column reading order, sidebars, text inside graphics, photos, icons, low contrast, decorative color, tiny text, unusual fonts, tables, headers/footers, and missing text alternatives.
+- The refined output should be a professional, readable, single-column PDF-ready resume. Use restrained black/dark text, one subtle accent at most, normal fonts, consistent spacing, and clear page hierarchy. Do not reproduce a photo, icon-only contact details, colored sidebar, text boxes, columns, or decorative graphics in the ATS version.
+- Keep the source document available as the visual/original version. Explain design trade-offs in the review metadata so the candidate can choose the original for human presentation or the refined version for ATS-heavy applications.
+- Return JSON only with this exact shape:
+{"resume_text":"...","improvements":["..."],"warnings":["..."],"design_assessment":["..."],"ats_risks":["..."],"ats_checks":{"standard_headings":true,"plain_text_structure":true,"no_invented_facts":true,"contact_details_preserved":true,"single_column":true,"readable_contrast":true}}
 
 VERIFIED CONTEXT:
 ${evidence}`;
 
     let refined = "";
     let modelUsed = "";
+    let improvements: string[] = [];
+    let warnings: string[] = [];
+    let designAssessment: string[] = [];
+    let atsRisks: string[] = [];
+    let atsChecks: Record<string, boolean> = {};
     for (const keyObj of candidateKeys) {
       for (const model of MODELS) {
         const response = await fetch(
@@ -153,7 +170,41 @@ ${evidence}`;
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (typeof text === "string" && text.trim().length >= 200) {
-          refined = text.trim().replace(/^```(?:text|markdown)?\s*/i, "").replace(/\s*```$/, "");
+          const clean = text.trim().replace(/^```json\s*/i, "").replace(/\s*```$/, "");
+          let structured: {
+            resume_text?: string;
+            improvements?: string[];
+            warnings?: string[];
+            design_assessment?: string[];
+            ats_risks?: string[];
+            ats_checks?: Record<string, boolean>;
+          };
+          try {
+            structured = JSON.parse(clean);
+          } catch {
+            continue;
+          }
+          if (
+            typeof structured.resume_text !== "string" ||
+            structured.resume_text.trim().length < 200 ||
+            structured.ats_checks?.no_invented_facts !== true
+          ) {
+            continue;
+          }
+          refined = structured.resume_text.trim();
+          improvements = Array.isArray(structured.improvements)
+            ? structured.improvements.filter((item) => typeof item === "string")
+            : [];
+          warnings = Array.isArray(structured.warnings)
+            ? structured.warnings.filter((item) => typeof item === "string")
+            : [];
+          designAssessment = Array.isArray(structured.design_assessment)
+            ? structured.design_assessment.filter((item) => typeof item === "string")
+            : [];
+          atsRisks = Array.isArray(structured.ats_risks)
+            ? structured.ats_risks.filter((item) => typeof item === "string")
+            : [];
+          atsChecks = structured.ats_checks || {};
           modelUsed = model;
           await markKeyUsed(supabase, keyObj);
           await logUsage(supabase, jwtUser.userId, "gemini", keyObj.source, true, 0, "refine-resume");
@@ -171,6 +222,11 @@ ${evidence}`;
         modelUsed,
         sourceDocumentId: sourceDoc.id,
         refinedText: refined,
+        improvements,
+        warnings,
+        designAssessment,
+        atsRisks,
+        atsChecks,
       },
       { headers: corsHeaders },
     );

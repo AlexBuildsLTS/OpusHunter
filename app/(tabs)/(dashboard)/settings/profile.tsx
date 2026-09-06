@@ -75,11 +75,6 @@ const PRESET_SWEDISH_CITIES = [
 ];
 
 type BioTone = "formal" | "executive" | "technical" | "modern";
-type CitySuggestion = {
-  name: string;
-  country?: string;
-  countryCode?: string;
-};
 
 export default function ProfileScreen() {
   const { profile, setProfile, user } = useAuthStore();
@@ -256,45 +251,23 @@ export default function ProfileScreen() {
 
   // GeoDB / City Search
   const [cityQuery, setCityQuery] = useState("");
-  const [cityResults, setCityResults] = useState<CitySuggestion[]>([]);
-  const [citySearchError, setCitySearchError] = useState<string | null>(null);
+  const [cityResults, setCityResults] = useState<string[]>([]);
 
   useEffect(() => {
     const searchCities = async () => {
       if (cityQuery.length < 2) {
         setCityResults([]);
-        setCitySearchError(null);
         return;
       }
       try {
-        const { data, error } = await supabase.functions.invoke(
-          "geo-autocomplete",
-          {
-            body: { query: cityQuery },
-          },
-        );
-        if (error) throw error;
-        const suggestions = Array.isArray(data?.cities)
-          ? data.cities
-              .filter((city: CitySuggestion) => city?.name)
-              .map((city: CitySuggestion) => ({
-                name: city.name,
-                country: city.country,
-                countryCode: city.countryCode,
-              }))
-          : [];
-        setCityResults(suggestions);
-        setCitySearchError(
-          suggestions.length === 0
-            ? "No matching cities found. Try a larger city or check the spelling."
-            : null,
-        );
+        const { data } = await supabase.functions.invoke("geo-autocomplete", {
+          body: { query: cityQuery, countryCode: "SE" },
+        });
+        if (data?.cities) {
+          setCityResults(data.cities.map((c: any) => c.name));
+        }
       } catch (err) {
         console.warn("City autocomplete error", err);
-        setCityResults([]);
-        setCitySearchError(
-          "City search is temporarily unavailable. Preset cities remain available below.",
-        );
       }
     };
     const timer = setTimeout(searchCities, 300);
@@ -426,20 +399,10 @@ export default function ProfileScreen() {
                 color="secondary"
                 style={styles.headerSubtitle}
               >
-                Manage your professional identity, candidate criteria, and AI
-                generation context.
+                       Manage your Account               
               </Typography>
             </View>
-            <Button
-              variant="primary"
-              size="sm"
-              onPress={handleSave}
-              loading={saving}
-              style={styles.headerSaveBtn}
-            >
-              <Save size={15} color={colors.text.inverse} />
-              {saved ? "Saved!" : "Save"}
-            </Button>
+    
           </View>
 
           {/* Feedback Banner */}
@@ -877,33 +840,20 @@ export default function ProfileScreen() {
               <View style={styles.autocompleteResults}>
                 {cityResults.map((city) => (
                   <Pressable
-                    key={`${city.name}-${city.countryCode || city.country || ""}`}
+                    key={city}
                     onPress={() => {
-                      toggleArrayItem("target_cities", city.name);
+                      toggleArrayItem("target_cities", city);
                       setCityQuery("");
                       setCityResults([]);
-                      setCitySearchError(null);
                     }}
                     style={styles.autocompleteItem}
                   >
-                    <View>
-                      <Typography variant="bodySm" color="primary">
-                        {city.name}
-                      </Typography>
-                      {!!city.country && (
-                        <Typography variant="caption" color="dim">
-                          {city.country}
-                        </Typography>
-                      )}
-                    </View>
+                    <Typography variant="bodySm" color="primary">
+                      {city}
+                    </Typography>
                   </Pressable>
                 ))}
               </View>
-            )}
-            {!!citySearchError && cityQuery.length >= 2 && (
-              <Typography variant="caption" color="dim">
-                {citySearchError}
-              </Typography>
             )}
 
             <Typography variant="caption" color="dim" style={styles.subHeading}>
