@@ -33,24 +33,29 @@ export interface NavItem {
 
 /** Main navigation items — strictly core workflows (Profile/Settings/Admin belong in ProfileDropdown) */
 export const NAV_ITEMS: NavItem[] = [
-  { key: "discover", label: "Discover", icon: Search, route: "/(tabs)/index" },
+  {
+    key: "discover",
+    label: "Discover",
+    icon: Search,
+    route: "/(tabs)/(dashboard)",
+  },
   {
     key: "rules",
     label: "Rules",
     icon: SlidersHorizontal,
-    route: "/(tabs)/rules",
+    route: "/(tabs)/(dashboard)/rules",
   },
   {
     key: "pipeline",
     label: "Pipeline",
     icon: Kanban,
-    route: "/(tabs)/pipeline",
+    route: "/(tabs)/(dashboard)/pipeline",
   },
   {
     key: "documents",
     label: "Documents",
     icon: FolderKanban,
-    route: "/(tabs)/settings/documents",
+    route: "/(tabs)/(dashboard)/settings/documents",
   },
 ];
 
@@ -77,12 +82,12 @@ export const AUTH_ROUTES = {
 
 /** App routes */
 export const APP_ROUTES = {
-  discover: "/(tabs)",
-  rules: "/(tabs)/rules",
-  pipeline: "/(tabs)/pipeline",
-  documents: "/(tabs)/settings/documents",
-  profile: "/(tabs)/settings/profile",
-  settings: "/(tabs)/settings",
+  discover: "/(tabs)/(dashboard)",
+  rules: "/(tabs)/(dashboard)/rules",
+  pipeline: "/(tabs)/(dashboard)/pipeline",
+  documents: "/(tabs)/(dashboard)/settings/documents",
+  profile: "/(tabs)/(dashboard)/settings/profile",
+  settings: "/(tabs)/(dashboard)/settings",
   jobDetail: "/job/[id]",
   coverLetter: "/cover-letter/[id]",
 } as const;
