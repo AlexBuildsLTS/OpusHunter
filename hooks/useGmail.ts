@@ -36,7 +36,8 @@ import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../stores/authStore";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
-import { makeRedirectUri, ResponseType } from "expo-auth-session";
+import { ResponseType } from "expo-auth-session";
+import { getEmailOAuthRedirectUri } from "../lib/emailOAuthRedirect";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -52,10 +53,7 @@ export function useGmail() {
   const [linking, setLinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const redirectUri = makeRedirectUri({
-    scheme: "opushunter",
-    path: "oauth/callback",
-  });
+  const redirectUri = getEmailOAuthRedirectUri();
   const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
   const googleClientId =
     googleWebClientId || process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;

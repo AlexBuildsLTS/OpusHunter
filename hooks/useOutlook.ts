@@ -35,7 +35,8 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../stores/authStore";
 import * as WebBrowser from "expo-web-browser";
-import { AuthRequest, ResponseType, makeRedirectUri } from "expo-auth-session";
+import { AuthRequest, ResponseType } from "expo-auth-session";
+import { getEmailOAuthRedirectUri } from "../lib/emailOAuthRedirect";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -52,10 +53,7 @@ export function useOutlook() {
   const [linking, setLinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const redirectUri = makeRedirectUri({
-    scheme: "opushunter",
-    path: "oauth/callback",
-  });
+  const redirectUri = getEmailOAuthRedirectUri();
 
   const linkOutlook = async () => {
     if (!user) {
