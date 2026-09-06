@@ -75,7 +75,7 @@ export function DocumentUploader({
       const totalFiles = result.assets.length;
       const bucket = type === "cv" ? "resumes" : "certifications";
       const table = type === "cv" ? "resume_documents" : "certifications";
-      let lastUploadedCVPath = "";
+      const uploadedCVPaths: string[] = [];
       const uploadedCertificationPaths: string[] = [];
 
       for (let i = 0; i < totalFiles; i++) {
@@ -126,22 +126,30 @@ export function DocumentUploader({
         if (dbError) throw dbError;
 
         if (type === "cv") {
-          lastUploadedCVPath = path;
+          uploadedCVPaths.push(path);
         } else {
           uploadedCertificationPaths.push(path);
         }
       }
 
       // 4. Trigger AI Context Extraction if it's a CV
-      if (type === "cv" && lastUploadedCVPath) {
-        setStatusMessage("Extracting skills & achievements with AI...");
-        const { error: extractionError } = await supabase.functions.invoke(
-          "extract-context",
-          {
-          body: { userId: user.id, documentPath: lastUploadedCVPath, bucket },
-          },
-        );
-        if (extractionError) throw extractionError;
+      if (type === "cv" && uploadedCVPaths.length > 0) {
+        for (let i = 0; i < uploadedCVPaths.length; i++) {
+          setStatusMessage(
+            `Extracting CV ${i + 1} of ${uploadedCVPaths.length}: verified skills, experience, and education...`,
+          );
+          const { error: extractionError } = await supabase.functions.invoke(
+            "extract-context",
+            {
+              body: {
+                userId: user.id,
+                documentPath: uploadedCVPaths[i],
+                bucket,
+              },
+            },
+          );
+          if (extractionError) throw extractionError;
+        }
       } else if (uploadedCertificationPaths.length > 0) {
         for (const documentPath of uploadedCertificationPaths) {
           setStatusMessage("Extracting certification details with AI...");
