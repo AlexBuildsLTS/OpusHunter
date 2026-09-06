@@ -206,6 +206,30 @@ cover-letter generation use the candidate's configured information and the
 selected job. Generated letters are stored in `cover_letters` and can be
 reviewed before the candidate opens the external application URL.
 
+The document vault keeps uploaded resumes immutable. Resume refinement sends the
+source PDF/DOCX plus verified profile/context evidence to the `refine-resume`
+Edge Function, which returns an evidence-grounded draft, an improvement
+summary, warnings, and ATS checks. A refined version is only persisted as a
+separate PDF after the candidate reviews and exports it; it is never made
+primary automatically. The vault supports opening/downloading the original or
+refined artifact, sharing on native devices, and explicitly choosing either
+version for applications. Unsupported or ambiguous facts are omitted or
+flagged rather than invented.
+
+The refinement is intentionally two-track: the original visual CV is retained
+for human-facing applications, while the generated version is a restrained
+single-column, text-first PDF for ATS-heavy workflows. It evaluates common ATS
+risks such as columns, sidebars, photos, icon-only contact details, low
+contrast, decorative color, unusual fonts, tables, and text embedded in
+graphics. It does not claim that any ATS can be predicted perfectly.
+
+“Quick application” currently means candidate-controlled preparation, not
+silent universal auto-submit. The application screen checks identity, the
+primary CV, application email, and optional cover letter; the candidate reviews
+the materials, confirms a handoff, and then opens the employer’s real
+application URL. Provider-specific autofill or email submission must be added
+only behind verified adapters and an explicit final approval step.
+
 ### Administration
 
 The admin area includes user and API-key management. It is not a substitute
