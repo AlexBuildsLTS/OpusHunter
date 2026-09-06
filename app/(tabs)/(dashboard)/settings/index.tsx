@@ -577,7 +577,9 @@ export default function SettingsScreen() {
               badgeLabel={userSeniority}
               badgeVariant="cyan"
               accentColor={colors.accent.cyan}
-              onPress={() => router.push("/(tabs)/settings/profile" as any)}
+              onPress={() =>
+                router.navigate("/(tabs)/(dashboard)/settings/profile" as any)
+              }
             />
 
             <NavModuleCard
@@ -587,7 +589,9 @@ export default function SettingsScreen() {
               badgeLabel={isSecure() ? "ENCLAVE ACTIVE" : "KEYCHAIN READY"}
               badgeVariant="green"
               accentColor="#10B981"
-              onPress={() => router.push("/(tabs)/settings/vault" as any)}
+              onPress={() =>
+                router.navigate("/(tabs)/(dashboard)/settings/vault" as any)
+              }
             />
           </View>
 
@@ -612,7 +616,9 @@ export default function SettingsScreen() {
               badgeLabel="AI EXTRACTED"
               badgeVariant="amber"
               accentColor={colors.accent.amber}
-              onPress={() => router.push("/(tabs)/settings/documents" as any)}
+              onPress={() =>
+                router.navigate("/(tabs)/(dashboard)/settings/documents" as any)
+              }
             />
 
             <NavModuleCard
@@ -622,7 +628,7 @@ export default function SettingsScreen() {
               badgeLabel="RULES ACTIVE"
               badgeVariant="default"
               accentColor="#A855F7"
-              onPress={() => router.push("/(tabs)/rules" as any)}
+              onPress={() => router.navigate("/(tabs)/(dashboard)/rules" as any)}
             />
           </View>
 
