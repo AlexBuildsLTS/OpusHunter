@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       supabase
         .from("profiles")
         .select(
-          "first_name,last_name,professional_title,bio,target_roles,application_email,phone,linkedin_url,github_url,portfolio_url",
+          "first_name,last_name,professional_title,bio,target_roles,application_email,phone,linkedin_url,github_url,portfolio_url,preferred_ai_language",
         )
         .eq("id", jwtUser.userId)
         .maybeSingle(),
@@ -84,6 +84,11 @@ Deno.serve(async (req) => {
 
     const context = contextRes.data;
     const profile = profileRes.data;
+    const requestedLanguage =
+      typeof profile?.preferred_ai_language === "string" &&
+        profile.preferred_ai_language.trim().length > 0
+        ? profile.preferred_ai_language.trim()
+        : "the source document's language";
     const uploadedCertifications = certificationsRes.data || [];
     const hasEvidence =
       Boolean(profile?.bio) ||
@@ -114,7 +119,7 @@ Deno.serve(async (req) => {
     });
     const prompt = `You are a senior resume editor optimizing a real resume for truthful ATS parsing and human review.
 
-Rewrite the supplied resume into a clean, plain-text, ATS-readable resume while preserving the source language (the uploaded resume is Swedish, so write Swedish unless the source is clearly another language).
+Rewrite the supplied resume into a clean, plain-text, ATS-readable resume in ${requestedLanguage}. If the requested language is "the source document's language", preserve the uploaded document's language.
 
 Rules:
 - Use only facts present in the supplied resume or VERIFIED CONTEXT.
