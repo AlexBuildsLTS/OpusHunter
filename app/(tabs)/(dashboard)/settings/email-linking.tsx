@@ -44,8 +44,9 @@ import {
 } from "lucide-react-native";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
-import { makeRedirectUri } from "expo-auth-session";
+import { ResponseType } from "expo-auth-session";
 import { Database } from "../../../../types/database.types";
+import { getEmailOAuthRedirectUri } from "../../../../lib/emailOAuthRedirect";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -71,6 +72,7 @@ export default function EmailLinkingScreen() {
   const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
   const googleClientId =
     googleWebClientId || process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
+  const redirectUri = getEmailOAuthRedirectUri();
 
   // Google OAuth setup
   const [googleRequest, googleResponse, googlePromptAsync] =
@@ -79,10 +81,13 @@ export default function EmailLinkingScreen() {
       webClientId: googleWebClientId || googleClientId,
       androidClientId: googleAndroidClientId,
       iosClientId: googleIosClientId,
-      redirectUri: makeRedirectUri({
-        scheme: "opushunter",
-        path: "oauth/callback",
-      }),
+      redirectUri,
+      responseType: ResponseType.Code,
+      usePKCE: false,
+      extraParams: {
+        access_type: "offline",
+        prompt: "consent",
+      },
       scopes: [
         "openid",
         "email",
@@ -148,10 +153,7 @@ export default function EmailLinkingScreen() {
               userId: user?.id,
               provider: "google",
               authCode: result.params.code,
-              redirectUri: makeRedirectUri({
-                scheme: "opushunter",
-                path: "oauth/callback",
-              }),
+              redirectUri,
             },
           },
         );
@@ -171,7 +173,7 @@ export default function EmailLinkingScreen() {
     } finally {
       setLinking(false);
     }
-  }, [googleRequest, googlePromptAsync, showToast, user?.id]);
+  }, [googleRequest, googlePromptAsync, redirectUri, showToast, user?.id]);
 
   // Outlook is not wired to an OAuth provider in this project yet. Be explicit
   // rather than presenting a button that appears to have completed a link.
@@ -463,6 +465,13 @@ export default function EmailLinkingScreen() {
                 Link Outlook
               </Button>
             </View>
+            <Typography
+              variant="caption"
+              color="dim"
+              style={styles.redirectHint}
+            >
+              Google callback URI: {redirectUri}
+            </Typography>
           </Card>
 
           {/* Info Section */}
@@ -682,6 +691,11 @@ const styles = StyleSheet.create({
   },
   buttonGrid: {
     gap: 12,
+  },
+  redirectHint: {
+    marginTop: 14,
+    lineHeight: 18,
+    fontFamily: "monospace",
   },
   linkButton: {
     flex: 1,

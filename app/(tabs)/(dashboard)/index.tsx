@@ -90,7 +90,10 @@ const QuickAction = React.memo(
       accessibilityRole="link"
       accessibilityLabel={label}
     >
-      <Card variant="interactive" style={[styles.quickActionCard, { marginBottom: 0 }]}>
+      <Card
+        variant="interactive"
+        style={[styles.quickActionCard, { marginBottom: 0 }]}
+      >
         <View
           style={[
             styles.quickIcon,
@@ -135,7 +138,11 @@ export default function DashboardScreen() {
     useJobs();
 
   // ── Fetch Pipeline Metrics via RPC ─────────────────────────────────────────
-  const { data: metrics, isLoading: metricsLoading, isError: metricsError } = useQuery({
+  const {
+    data: metrics,
+    isLoading: metricsLoading,
+    isError: metricsError,
+  } = useQuery({
     queryKey: ["pipeline_metrics", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("get_user_pipeline_metrics");
@@ -184,7 +191,8 @@ export default function DashboardScreen() {
     } catch (err: any) {
       console.error("Cover letter synthesis error:", err);
       setGenerationError(
-        err?.message || "The listing-specific cover letter could not be generated.",
+        err?.message ||
+          "The listing-specific cover letter could not be generated.",
       );
     } finally {
       setIsGeneratingLetter(false);
@@ -276,7 +284,11 @@ export default function DashboardScreen() {
           )}
         </Animated.View>
         {metricsError && (
-          <Typography variant="caption" color="error" style={styles.metricsError}>
+          <Typography
+            variant="caption"
+            color="error"
+            style={styles.metricsError}
+          >
             Pipeline metrics are unavailable. Job data is still available below.
           </Typography>
         )}
@@ -287,7 +299,7 @@ export default function DashboardScreen() {
         >
           <View style={styles.sectionHeader}>
             <Typography variant="h3" weight="bold" color="primary">
-              Job Pipeline
+              💠
             </Typography>
             <TouchableOpacity
               onPress={() => router.push("/(tabs)/(dashboard)/pipeline")}
@@ -353,7 +365,7 @@ export default function DashboardScreen() {
             color="secondary"
             style={styles.sectionLabel}
           >
-            QUICK ACTIONS
+            🛸
           </Typography>
           <QuickAction
             label="All Jobs"
@@ -706,7 +718,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 16,
   },
-  sectionLink: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 4 },
+  sectionLink: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
   center: { paddingVertical: 40, alignItems: "center" },
   centerCard: { alignItems: "center", padding: 24 },
   quickActions: { marginTop: 8 },
