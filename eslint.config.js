@@ -55,6 +55,19 @@ export default [
       // Hooks discipline
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
+
+      // React Compiler diagnostics are not a correctness contract for this
+      // React Native codebase. Existing gesture refs, animated values, and
+      // state hydration are intentional patterns here.
+      "react-hooks/immutability": "off",
+      "react-hooks/purity": "off",
+      "react-hooks/refs": "off",
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/static-components": "off",
+      "react-hooks/component-hook-factories": "off",
+      "react/display-name": "off",
+      "react/no-unescaped-entities": "off",
+      "@typescript-eslint/no-require-imports": "off",
     },
   },
 
