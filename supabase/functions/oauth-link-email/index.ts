@@ -25,7 +25,7 @@
  * }
  */
 
-import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { getSupabaseAdmin, verifyJwt } from "../_shared/supabaseAdmin.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
 const supabase = getSupabaseAdmin();
@@ -243,18 +243,33 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const jwtUser = await verifyJwt(req);
+    if (!jwtUser) {
+      return Response.json(
+        { error: "unauthorized", message: "A valid Supabase session is required." },
+        { status: 401, headers: corsHeaders },
+      );
+    }
+
     const { userId, provider, authCode, redirectUri } = await req.json();
 
     // Validate inputs
-    if (!userId || !provider || !authCode || !redirectUri) {
+    if (!provider || !authCode || !redirectUri) {
       return Response.json(
         {
           error: "missing_fields",
-          message: "userId, provider, authCode, redirectUri required",
+          message: "provider, authCode, redirectUri required",
         },
         { status: 400, headers: corsHeaders },
       );
     }
+    if (userId && userId !== jwtUser.userId) {
+      return Response.json(
+        { error: "user_mismatch", message: "The account does not match the active session." },
+        { status: 403, headers: corsHeaders },
+      );
+    }
+    const authenticatedUserId = jwtUser.userId;
 
     if (!["google", "outlook"].includes(provider)) {
       return Response.json(
@@ -328,7 +343,7 @@ Deno.serve(async (req: Request) => {
     const { data: existingAccount } = await supabase
       .from("connected_email_accounts")
       .select("id")
-      .eq("user_id", userId)
+      .eq("user_id", authenticatedUserId)
       .eq("email", oauthResult.email)
       .maybeSingle();
 
@@ -363,14 +378,14 @@ Deno.serve(async (req: Request) => {
       const { count: accountCount } = await supabase
         .from("connected_email_accounts")
         .select("id", { count: "exact" })
-        .eq("user_id", userId);
+        .eq("user_id", authenticatedUserId);
 
       const isPrimary = (accountCount || 0) === 0;
 
       const { data: newAccount, error: insertError } = await supabase
         .from("connected_email_accounts")
         .insert({
-          user_id: userId,
+          user_id: authenticatedUserId,
           email: oauthResult.email,
           provider,
           refresh_token: oauthResult.refreshToken,
@@ -395,7 +410,7 @@ Deno.serve(async (req: Request) => {
 
     // Log the OAuth event
     await supabase.from("api_key_usage_logs").insert({
-      user_id: userId,
+      user_id: authenticatedUserId,
       function_name: "oauth-link-email",
       provider: provider === "google" ? "google_oauth" : "outlook_oauth",
       key_source: "oauth_token",
