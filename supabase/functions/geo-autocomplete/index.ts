@@ -244,26 +244,27 @@ Deno.serve(async (req: Request) => {
     }
 
     // 1. Hardcoded Swedish & European priority
+    const normalizedQuery = String(query).trim().toLowerCase();
     const swedishMatches: CityItem[] = SWEDISH_CITIES.filter(
       (city) =>
-        city.name.toLowerCase().startsWith(query.toLowerCase()) &&
+        city.name.toLowerCase().includes(normalizedQuery) &&
         (!countryCode || countryCode.toUpperCase() === "SE"),
     );
 
     const europeanMatches: CityItem[] = EUROPEAN_HUBS.filter((city) =>
-      city.name.toLowerCase().startsWith(query.toLowerCase()),
+      city.name.toLowerCase().includes(normalizedQuery),
     );
 
     // 2. Fetch from GeoDB (if API key available)
     let geodbResults: CityItem[] = [];
     if (GEODB_API_KEY) {
       const url = new URL(`https://${GEODB_HOST}/v1/geo/cities`);
-      url.searchParams.set("namePrefix", query);
+      url.searchParams.set("namePrefix", String(query).trim());
       url.searchParams.set("limit", "10");
       url.searchParams.set("sort", "-population");
 
       // If specific country requested (and not SE), filter by it. Otherwise, prioritize EU.
-      if (countryCode && countryCode !== "SE") {
+      if (countryCode && countryCode.toUpperCase() !== "SE") {
         url.searchParams.set("countryIds", countryCode.toUpperCase());
       } else {
         url.searchParams.set("countryIds", "SE,NO,DK,FI,DE,GB,NL,FR,ES,IT,PL");
@@ -277,17 +278,21 @@ Deno.serve(async (req: Request) => {
           },
         });
 
-        if (response.ok) {
+        if (!response.ok) {
+          console.warn(
+            `GeoDB returned ${response.status}: ${await response.text()}`,
+          );
+        } else {
           const data = (await response.json()) as {
             data?: Array<Record<string, unknown>>;
           };
           geodbResults = (data.data || []).map((city) => ({
-            name: String(city.name || ""),
-            country: String(city.country || ""),
-            countryCode: String(city.countryCode || ""),
-            latitude: Number(city.latitude || 0),
-            longitude: Number(city.longitude || 0),
-          }));
+              name: String(city.name || ""),
+              country: String(city.country || ""),
+              countryCode: String(city.countryCode || ""),
+              latitude: Number(city.latitude || 0),
+              longitude: Number(city.longitude || 0),
+            }));
         }
       } catch (e) {
         console.error("GeoDB fetch failed:", e);
