@@ -1,413 +1,429 @@
 <div align="center">
-  <img src="assets/icon.png" width="120" alt="OpusHunter Logo" />
-  <h1>OpusHunter 🎯</h1>
-  <p><strong>Autonomous Cross-Platform Job Application Engine & Local AI Gateway</strong></p>
-  <p><i>Engineered for the future of work. Stop hunting. Let OpusHunter do it for you.</i></p>
+  <img src="assets/icon.png" width="112" alt="OpusHunter logo" />
+
+  # OpusHunter
+
+  **A cross-platform job discovery, triage, and application workspace.**
+
+  OpusHunter helps candidates collect relevant jobs, organize their pipeline,
+  generate tailored cover letters, and keep application assets in one place.
 
   <p>
-    <a href="https://expo.dev"><img src="https://img.shields.io/badge/Platform-Web%20%7C%20iOS%20%7C%20Android-0A0D14.svg?style=flat-square&logo=expo" alt="Platform" /></a>
-    <a href="https://reactnative.dev"><img src="https://img.shields.io/badge/Framework-Expo%20Router%20v57%20%2B%20React%20Native%200.86-61DAFB.svg?style=flat-square&logo=react" alt="Framework" /></a>
-    <a href="https://supabase.com"><img src="https://img.shields.io/badge/Backend-Supabase%20Edge%20Network-3ECF8E.svg?style=flat-square&logo=supabase" alt="Backend" /></a>
-    <a href="#trilateral-system-architecture"><img src="https://img.shields.io/badge/Inference-Antigravity%20Proxy%20%7C%20Gemini%20%7C%20Claude-FF6F00.svg?style=flat-square" alt="Inference" /></a>
+    <a href="https://expo.dev"><img src="https://img.shields.io/badge/Expo%20SDK-57-000020?style=flat-square&logo=expo" alt="Expo SDK 57" /></a>
+    <a href="https://reactnative.dev"><img src="https://img.shields.io/badge/React%20Native-0.86.3-61DAFB?style=flat-square&logo=react" alt="React Native 0.86.3" /></a>
+    <a href="https://supabase.com"><img src="https://img.shields.io/badge/Backend-Supabase-3ECF8E?style=flat-square&logo=supabase" alt="Supabase" /></a>
+    <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/Language-TypeScript-3178C6?style=flat-square&logo=typescript" alt="TypeScript" /></a>
   </p>
 </div>
 
 ---
 
-## 🏗️ Trilateral System Architecture
+## Product vision
 
-OpusHunter operates through three integrated, highly segregated layers working in orchestration to deliver secure data ingestion, fast local state synchronization, and high-fidelity client interactions.
+Job searching is usually split across job boards, notes, documents, browser tabs,
+and manually written applications. OpusHunter is being built as a single,
+privacy-conscious workspace around that process:
 
-### The Network Topology
+```text
+Discover  →  Understand  →  Prioritize  →  Prepare  →  Apply  →  Learn
+   │             │              │             │          │        │
+   └─ sources   └─ job data     └─ pipeline   └─ AI      └─ link  └─ future analytics
+```
+
+The long-term goal is not blind automation. It is **controlled automation**:
+the candidate remains in charge of what is selected, what is generated, and
+what is submitted.
+
+## What works today
+
+- Cross-platform Expo app targeting Android, iOS, and web.
+- Supabase authentication with email/password and Google OAuth flows.
+- Profile setup and candidate configuration.
+- Job ingestion through Supabase Edge Functions and provider adapters.
+- Job normalization and duplicate protection before records enter the job vault.
+- Job pipeline views with triage-oriented cards and status management.
+- Cover-letter generation through the `generate-cover-letter` Edge Function.
+- Cover-letter viewing, editing, copying, sharing, regeneration, and job-link
+  opening.
+- Routed application preparation at `/apply/[id]` with readiness checks,
+  primary-CV and cover-letter visibility, and a preserved direct website-link
+  action.
+- Editable candidate contact fields including phone, LinkedIn, GitHub,
+  portfolio, and a candidate-controlled application email.
+- Multi-select seniority targeting is stored in `profiles.seniority_levels`;
+  the legacy `seniority_level` remains as the primary compatibility value.
+- Resume/document workflows backed by Supabase Storage.
+- Geo autocomplete through the `geo-autocomplete` Edge Function.
+- User API-key and shared-key resolution through the shared key resolver.
+- Admin surfaces for users and API-key management, protected by server-side
+  role checks.
+- Android preview APK builds through EAS. The clean preview build was verified
+  successfully after making `babel-preset-expo` an explicit dependency.
+
+## Current boundaries
+
+The following are intentionally not described as finished:
+
+- Fully unattended ATS form submission is not yet a general production
+  capability.
+- The fast-apply roadmap is provider-specific and candidate-reviewed. An
+  unsupported or unknown ATS must use the manual handoff path; opening a
+  website is never recorded as a submitted application.
+- The linked Gmail/Outlook account is separate from the OpusHunter login
+  identity and must be explicitly selected and approved for email dispatch.
+- Candidate contact columns can be installed directly from
+  `supabase/sql/candidate-contact-fields.sql` in the Supabase SQL Editor,
+  including `application_email` and `seniority_levels`.
+  Regenerate `types/database.types.ts` after running it.
+- Provider coverage and provider quotas vary by configured API keys.
+- Cost analytics and per-provider token accounting are planned, not complete.
+- Application outcomes and feedback loops are not yet a complete optimization
+  system.
+- The application flow should be treated as candidate-reviewed until the
+  upcoming verification work is complete.
+
+### Email-linking callback configuration
+
+Gmail linking uses an authorization-code exchange. Register the exact callback
+URI in the Google OAuth Web client:
+
+- Local web: `http://localhost:8081`
+- Deployed web: the exact deployed origin, such as
+  `https://your-vercel-domain.example`
+- Native builds: `opushunter://oauth/callback`
+
+For a fixed deployed callback, set
+`EXPO_PUBLIC_WEB_OAUTH_REDIRECT_URI=https://your-real-domain.example` in the
+Vercel/EAS environment and add that exact value to Google. If this variable is
+not set, web uses the origin currently shown in the browser.
+
+The Email Accounts screen displays the URI the app is currently using. The
+same value is sent to Google and to the `oauth-link-email` Edge Function. Do
+not add an extra slash or `/oauth/callback` to a web origin. The Google Web
+client must also have the Gmail API enabled and the requested `gmail.send`
+scope approved for the project.
+
+---
+
+## Architecture
+
 ```mermaid
 flowchart LR
-  U[User] --> C[Expo Client\nWeb/iOS/Android]
-  C --> Q[React Query + Zustand]
-  Q --> E[Supabase Edge Network]
+  User[Candidate] --> App[Expo Router app]
+  App --> Auth[Supabase Auth]
+  App --> Query[TanStack Query]
+  App --> Store[Zustand stores]
+  Query --> API[Supabase client]
+  API --> DB[(Postgres + RLS)]
+  API --> Storage[(Supabase Storage)]
+  API --> Functions[Supabase Edge Functions]
 
-  E --> SJ[Ingestion Layer\nscrape-jobs]
-  E --> SC[Geo-Spatial Layer\nsearch-cities]
-  E --> GCL[Synthesis Layer\ngenerate-cover-letter]
-  E --> AA[Orchestration Layer\nauto-apply]
+  Functions --> Scrape[scrape-jobs]
+  Functions --> Geo[geo-autocomplete]
+  Functions --> Context[extract-context]
+  Functions --> Letter[generate-cover-letter]
+  Functions --> Score[score-cover-letter]
+  Functions --> Apply[auto-apply]
+  Functions --> Keys[_shared/keyResolver]
 
-  SJ --> RAPID[RapidAPI\nJSearch, LinkedIn, Adzuna]
-  
-  %% Local AI Gateway Integration
-  GCL --> AG[Antigravity Local Gateway\nLocalhost Proxy: 8420]
-  AG --> GEM[Gemini Flash / Pro]
-  AG --> CLAUDE[Claude Opus / Sonnet]
-
-  C --> DB[(Supabase DB + Storage)]
-  E --> DB
-  DB --> R[Realtime Updates]
-  R --> C
+  Scrape --> Providers[Job provider adapters]
+  Letter --> AI[Configured AI provider]
+  Apply --> DB
+  Apply --> Storage
 ```
+
+### Request lifecycle
 
 ```mermaid
 sequenceDiagram
   autonumber
-  participant User
-  participant App as OpusHunter App
-  participant Edge as Supabase Edge
-  participant AI as Gemini 3.1
-  participant DB as Supabase DB & Storage
+  participant C as Client
+  participant F as Edge Function
+  participant K as Key Resolver
+  participant P as Job Provider
+  participant D as Supabase Database
 
-  User->>App: Configure Search Rules & Geofences
-  App->>Edge: Dispatch scrape payload
-  Edge->>Edge: Resolve API Key (BYOK Cascade)
-  Edge->>DB: Upsert deduplicated job records
-  DB-->>App: Realtime pipeline queue update
-
-  User->>App: Triage: Swipe Right (Approve)
-  App->>DB: Update job status -> 'approved'
-
-  User->>App: Trigger Application Engine
-  App->>Edge: Dispatch auto-apply sequence
-
-  Edge->>DB: Fetch Primary CV + Certifications
-  Edge->>AI: Build strict context prompt + execute inference
-  AI-->>Edge: Structured personalized cover letter
-
-  Edge->>DB: Persist cover letter & update status -> 'applied'
-  DB-->>App: Realtime status + data updates
+  C->>F: Submit search configuration
+  F->>K: Resolve an available provider key
+  K-->>F: Candidate key or no-key result
+  F->>P: Fetch provider pages
+  P-->>F: Raw job records
+  F->>F: Normalize and deduplicate
+  F->>D: Persist records in job_vault
+  D-->>C: Query/refetch updated pipeline
 ```
 
-- **Inference & Orchestration Layer (Backend):** 11 dedicated Deno-based Supabase Edge Functions orchestrate job scraping, Gmail OAuth linking, resume ATS-quality extraction, and automated applying. High-context LLM payloads are routed dynamically via a local Antigravity Gateway (Port 8420) to bypass strict provider quotas.
-- **State & Motion Layer (Frontend Client):** An adaptive Expo Router v57 and React Native 0.86 client compiling to iOS, Android, and Web from a unified source of truth. Handles complex UI caching via TanStack Query and utilizes a lightweight Zustand store for high-throughput layout manipulation, rendering interactive 120fps swipeable triage decks and ambient animation loops directly on the native UI thread.
-- **Cryptographic Persistence Layer (Database & Storage):** Powered by PostgreSQL in Supabase. Ensures ironclad multi-tenant isolation using Row-Level Security (RLS) policies on all tables. Personal assets (CVs, cover letters, certifications) are cryptographically stored, while sensitive items like third-party Gmail OAuth tokens are locked behind Service-Role-only visibility, preventing direct client exposure.
-
----
-
-## 🛡️ Core Pillars (Technical Moats)
-
-| Pillar                            | Technical Implementation                                                                                                                                                                                | Strategic Benefit                                                                                                                                           |
-| :-------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Intelligent Context Synthesis** | Aggregates user CVs, certifications, and active JSearch job descriptions into structured Deno-side prompt templates, parsed strictly into structured JSON payloads via Google Gemini 3.1 Flash.         | Eliminates generic, low-relevancy applications. Maximizes organic applicant-to-job matching score and adapts to different ATS scanning algorithms natively. |
-| **Triple-Tier Key Resolution**    | A unified `keyResolver.ts` module cascade resolving API keys in sequence: User BYOK profiles check → Admin Shared Key Pool with fair `last_used` rotation → Environment Secrets.                        | Maximizes global service uptime and provides zero platform overhead for heavy power-users, shifting processing costs away from the system owner.            |
-| **Service-Role Isolation**        | Third-party credentials, SMTP settings, and Gmail OAuth refresh tokens are written to system-restricted tables with no public SELECT policies. Interfaced strictly via `SECURITY DEFINER` RPC triggers. | Establishes bank-grade data security. Eliminates risk of token leaking, client-side reverse engineering, or arbitrary credential exfiltration.              |
-| **Ambient Physics Engine**        | Animates heavy backdrop fluid gradients and gesture-driven Tinder decks entirely on the native UI thread via React Native Reanimated Worklets, bypassing React's main JS thread.                        | Ensures consistent, fluid 120fps UI performance on both budget mobile devices and web browsers, eliminating layout-tear and JSE lag.                        |
-
----
-
-## 🚀 Key Features
-
-### 🏦 Ingestion & Location Services (Backend Orchestration)
-
-- **High-Throughput Aggregator:** Real-time job ingestion powered by JSearch (RapidAPI) normalization, delivering automated deduplication and schema alignment.
-- **Global Geospatial Autocomplete:** Interactive location autocompletion using GeoDB Cities, fully proxied through a Deno-based edge function with rate-limit buffers and automated geolocation fallbacks.
-- **BYOK Fallback Architecture:** Resilient, multi-tier API rotation that gracefully handles `429 Too Many Requests` by instantly cycling key candidates in the admin pool.
-
-### 💼 Cognitive Synthesis (Asset Engine)
-
-- **Deep Context Extraction:** Multi-document contextual synthesis combining primary resumes, specialized certifications, and active target job roles.
-- **Adaptive Cover-Letter Generation:** Instant, tailored cover-letter generator configured to the applicant's choice of professional tone, key highlights, and career trajectory.
-- **Binary Stream Vaulting:** Native CV uploads bypass heavy Base64 parsing, streaming directly to Supabase Storage via `ArrayBuffer` payloads, eliminating mobile V8 heap crashes.
-
-### 🤖 Client Terminal & Surveillance (UI/UX)
-
-- **Unified Layout Engine:** A single routing definition (`lib/navConfig.ts`) driving both desktop sidebar drawers and mobile floating tab layouts seamlessly.
-- **120fps Gesture Triage:** Interactive, physics-based swipe decks and Kanban boards compiled to native platform threads.
-- **Admin Control Center:** Premium administrative fleet dashboard containing user roles mutation grids, live shared API-key management, and system routing gates.
-
----
-
-## 🛠️ Technology Stack
-
-| Component            | Technology                | Version         | Purpose                                                 |
-| :------------------- | :------------------------ | :-------------- | :------------------------------------------------------ |
-| **Frontend Shell**   | Expo SDK                  | ~57.0.19       | Cross-platform build system & SDK orchestration         |
-| **Router**           | Expo Router               | ~57.0.14        | Typed filesystem-based routing schema                   |
-| **UI Core**          | React Native / React      | 0.86.2 / 19.2.3 | Native UI engine and layout shell                       |
-| **Styles**           | NativeWind / Tailwind CSS | 4.2.5 / 3.4.19  | Utility-first compilation across Native and Web targets |
-| **Motion**           | Reanimated / Worklets     | 4.5.1 / 0.10.1  | UI-thread isolated physics and gestures                 |
-| **Local State**      | Zustand                   | 4.5.2           | High-performance ephemeral client-side state            |
-| **Server State**     | TanStack Query            | 5.28.0          | Cache management, optimistic mutations, and refetches   |
-| **Inference Engine** | Gemini Flash Lite         | 3.1             | Micro-cost semantic analysis and document drafting      |
-| **Database**         | PostgreSQL (Supabase)     | 16              | ACID-compliant state, relational tables, and RLS        |
-| **Edge Compute**     | Deno Runtime              | Latest          | Secure, isolated edge functions serving routing logic   |
-| **Storage**          | Supabase Storage          | v2              | RLS-enforced static document hosting (resumes/PDFs)     |
-
----
-
-## 🎨 Design System & Motion Tokens
-
-OpusHunter is governed by a precise, WCAG AAA-compliant visual palette structured strictly in `lib/theme.ts`.
-
-- **Accessibility Compliance:** Contrast ratios are strictly evaluated against backdrops (Brand Accents achieve 8:1+ contrast ratios, secondary accents maintain 4.5:1 minimums).
-- **Color Hierarchy:**
-  - **Brand Accents:** Cyan (`#22D3EE`), Purple (`#8B7CF6`), Rose/Pink (`#F0466E`).
-  - **Surfaces:** Core Background (`#0A0714`), Surface Obsidian (`#120D1E`), Frosted Card (`#0D0914`).
-- **Motion Physics:** Fast UI micro-interactions are tuned between `150ms` and `300ms` with precise spring physics. Idle ambient background animations drift on long-running `8000ms` non-blocking UI thread loops.
-
----
-
-## 🔒 Security & Performance Practices
-
-- **Zero-Trust Hydration Guards:** Specialized `isMounted` state locks block React 19 from mismatched DOM representation across Server-Side Rendered (SSR) Web layouts and Native client mounts.
-- **Data Sovereignty:** OAuth tokens and personal API keys reside exclusively in strict Service-Role Postgres tables. Direct database rows are invisible to standard client select queries.
-- **Dynamic Binary Buffering:** Files and resumes stream directly into Supabase Storage as native binary arrays, preventing heavy Base64 strings from choking V8 memory allocations.
-- **Strict Role Verification:** Administrative layouts and API modifications are protected by `SECURITY DEFINER` Postgres procedures, validating clearance on the server rather than trust-bound client parameters.
-
----
-
-## 🎯 Lifecycle, Status & Roadmap
-
-### 🔍 Honest Engineering Disclosures (Current Status)
-
-This section is actively updated to prevent reverse-engineering of project progress.
-
-- **Unified Cross-Platform Navigation:** Driven by a single config source (`lib/navConfig.ts`).
-- **Identity Resolution:** Unified email/password and Google OAuth fully active via Supabase.
-- **Target Scraper Engine:** Powered exclusively by JSearch (RapidAPI). Multi-source scraping is not yet implemented.
-- **Auto-Apply Execution:** Automated application generation operates as a highly personalized cover-letter draft creator and hard-link dispatcher. Playwright-based automated form filing on ATS platforms (Greenhouse/Lever) remains to be confirmed.
-- **API Cost Analytics:** The Admin panel manages active shared API keys but does not currently log specific tokens consumed or monthly costs.
-
-### 🚀 (Strategic Roadmap) WHEN we made sure everythign else works
-
-1. **Apply Service Verification:** Validate Playwright's headless execution state and synchronize auto-submission capability with the UI.
-2. **Cost & Usage Surveillance:** Deploy an `api_key_usage_logs` schema, capture Gemini's exact `usageMetadata` tokens, and render real-time cost-tracking statistics inside the Admin Panel.
-3. **Multi-Source Scraping Expansion:** Add Adzuna as a free secondary job-ingestion partner to prevent JSearch API quota exhaustion.
-4. **Reliability Infrastructure:** Implement unit testing suites for `keyResolver.ts` and scrape-normalization triggers, and integrate Sentry crash reporting.
-
----
-
-## 🏗️ Project Structure
+### Data protection model
 
 ```text
-opushunter/
-├── app/                                  Expo Router — file path IS the route
-│   ├── _layout.tsx                       Root Stack: mounts AmbientBackground, wires (auth)/(tabs)/admin
-│   ├── index.tsx                         Root "/" — session check, redirects to login or dashboard
-│   ├── (auth)/                           Unauthenticated flow — email/password + Google OAuth
-│   ├── (tabs)/                           Authenticated shell
-│   │   ├── dashboard.tsx                 Pipeline view — scraped jobs queue, swipe-to-decide, metrics
-│   │   ├── jobs.tsx                      Job list/detail
-│   │   ├── configure.tsx                 Renders ConfigureScreen (Engine/Rules tabs)
-│   │   └── settings/                     Settings home, security, documents (CV vault), profile
-│   └── admin/                            Server-verified role gate; dashboard, users, api-keys
-├── components/
-│   ├── features/configure/               The single Configure-screen implementation
-│   ├── onboarding/SetupWizard.tsx        First-run five-step guided setup
-│   ├── pipeline/                         SwipeableJobCard, JobDetailModal
-│   ├── layout/                           AdaptiveLayout (Sidebar), AmbientBackground (live), PageContainer
-│   ├── charts/                           BarChart, DonutChart (SVG, no extra dependency)
-│   └── ui/                               GlassCard, AnimatedPressable, ProfileDropdown, etc.
-│       └── ⚠ AmbientBackground.tsx — dead duplicate of layout/AmbientBackground.tsx, pending deletion
-├── hooks/                                useCVVault, useEdgeScraper, useCitySearch
-├── store/usePipelineStore.ts             Zustand — job queue + pipeline metrics, no Supabase calls
-├── lib/
-│   ├── supabase.ts                       Supabase client
-│   ├── theme.ts                          Single source of truth for color/spacing/radius (`C`)
-│   ├── navConfig.ts                      Single source of truth for primary nav, shared by desktop+mobile
-│   └── queryClient.ts / utils.ts
-├── types/
-│   ├── database.types.ts                 Generated — read-only, never hand-edited
-│   └── app.types.ts                      Hand-written app-level types
+Client
+  │
+  ├── authenticated Supabase session
+  ├── public application data permitted by RLS
+  └── Edge Function calls for privileged operations
+          │
+          ├── service-role database access
+          ├── provider-key resolution
+          ├── document/context processing
+          └── server-side role and ownership checks
+```
+
+RLS remains the primary database boundary. Service-role operations are kept in
+Edge Functions rather than exposed to the client. Secrets must be supplied
+through the local environment or the EAS environment; never commit them.
+
+---
+
+## Feature areas
+
+### Job discovery and location
+
+The `scrape-jobs` function coordinates provider adapters for job collection,
+normalization, pagination, and deduplication. The current adapter directory is:
+
+```text
+supabase/functions/scrape-jobs/
+├── index.ts
+└── adapters/
+    ├── adzuna.ts
+    ├── jobtech.ts
+    └── thehub.ts
+```
+
+`geo-autocomplete` provides location suggestions and the client sends the
+selected search parameters to the scraper.
+
+### Pipeline and triage
+
+The authenticated dashboard exposes the job pipeline, cards, filtering, and
+status changes. Local UI state is held in the stores under `stores/`; server
+state and refetching are handled with TanStack Query.
+
+### Candidate assets and AI drafting
+
+Candidate documents are stored in Supabase Storage. Context extraction and
+cover-letter generation use the candidate's configured information and the
+selected job. Generated letters are stored in `cover_letters` and can be
+reviewed before the candidate opens the external application URL.
+
+### Administration
+
+The admin area includes user and API-key management. It is not a substitute
+for database security: authorization must continue to be enforced in the Edge
+Functions and database policies.
+
+---
+
+## Repository map
+
+```text
+OpusHunter/
+├── app/
+│   ├── _layout.tsx                         Root providers and auth redirect
+│   ├── (auth)/                             Authentication and onboarding
+│   └── (tabs)/
+│       ├── _layout.tsx                     Authenticated shell
+│       └── (dashboard)/
+│           ├── index.tsx                   Dashboard home
+│           ├── pipeline.tsx                Job pipeline and triage
+│           ├── rules.tsx                   Search/rule configuration
+│           ├── admin/                      Admin dashboard and controls
+│           └── settings/                   Profile and document vault
+├── components/                             Reusable UI and feature components
+├── constants/                              Theme and animation tokens
+├── hooks/                                  Client hooks
+├── lib/                                    Supabase, navigation, query helpers
+├── stores/                                 Auth, jobs, UI, and pipeline state
+├── types/                                  Application and generated DB types
 ├── supabase/
-│   ├── seed.sql / config.toml
+│   ├── migrations/                         Database migrations
 │   └── functions/
-│       ├── _shared/                      supabaseAdmin, auth, cors, keyResolver
-│       ├── scrape-jobs/                  JSearch queries, dedup, insert into job_vault
-│       ├── generate-cover-letter/        Gemini-personalized cover letters
-│       ├── generate-rule-template/       Gemini rule-template generation
-│       ├── auto-apply/                   Orchestrates letter generation + ATS detection
-│       ├── link-gmail-account/           Persists Gmail refresh token, service-role-only
-│       └── search-cities/                Worldwide city autocomplete, proxies GeoDB
+│       ├── _shared/                        Auth, CORS, rate limits, key logic
+│       ├── auto-apply/
+│       ├── extract-context/
+│       ├── generate-cover-letter/
+│       ├── geo-autocomplete/
+│       ├── oauth-link-email/
+│       ├── refine-resume/
+│       ├── save-api-key/
+│       ├── score-cover-letter/
+│       └── scrape-jobs/
+├── app.json                               Expo configuration
+├── eas.json                               EAS build profiles
+├── metro.config.cjs                       Metro + NativeWind + Reanimated
+├── package.json                            Scripts and dependencies
+└── pnpm-lock.yaml                          Reproducible dependency graph
+```
+
+Expo Router route groups such as `(auth)`, `(tabs)`, and `(dashboard)` organize
+the filesystem without appearing in the public URL. When adding a dynamic
+screen, the filename must include the parameter, for example `[id].tsx`.
+
+---
+
+## Technology stack
+
+| Area | Technology |
+| --- | --- |
+| Client | Expo SDK 57, React Native 0.86.3, React 19.2.3 |
+| Routing | Expo Router 57 |
+| Styling | NativeWind 4, Tailwind CSS 3 |
+| Motion | Reanimated 4, React Native Worklets |
+| UI state | Zustand |
+| Server state | TanStack Query |
+| Backend | Supabase Auth, PostgreSQL, Storage, Edge Functions |
+| Edge runtime | Deno |
+| AI integration | Provider-backed Edge Function workflows |
+| Android delivery | EAS preview APK / production builds |
+| Package manager | pnpm |
+
+---
+
+## Local development
+
+### Requirements
+
+- Node.js 20 or newer
+- pnpm 11 or compatible
+- A linked Supabase project for Edge Function and database work
+- Expo/EAS access for device builds
+
+### Install and run
+
+```bash
+pnpm install
+pnpm start
+```
+
+Useful commands:
+
+```bash
+pnpm run typecheck       # TypeScript validation
+pnpm run lint            # Expo ESLint entry point
+pnpm run build:web       # Web export
+pnpm run android         # Local native Android run
+pnpm run metro:clear     # Start Metro with a clean cache
+```
+
+### Environment
+
+Create a local `.env` file with the values required by the client and Edge
+Functions. Keep service-role keys and provider secrets server-side. Public
+Expo variables should use the `EXPO_PUBLIC_` prefix only when they are safe to
+ship to the client.
+
+### Supabase functions
+
+```bash
+npx supabase functions serve
+npx supabase functions deploy <function-name>
+```
+
+Use the linked project and migrations as the source of truth for database
+changes. Regenerate client types after schema changes:
+
+```bash
+pnpm run supabase:gen-types
 ```
 
 ---
 
-## ⚖️ License
+## Android builds
 
-All rights reserved by project owner unless stated otherwise in repository policy.
+The preview profile produces an internal APK:
+
+```bash
+npx eas-cli@latest build \
+  --profile preview \
+  --platform android \
+  --clear-cache
+```
+
+The release JavaScript bundle must be able to resolve `babel-preset-expo`.
+It is intentionally declared directly in `devDependencies` so pnpm's isolated
+dependency layout and the EAS worker resolve the Babel configuration
+consistently.
+
+Profiles are defined in `eas.json`:
+
+```text
+development → internal development client APK
+preview     → internal preview APK
+production  → store-ready Android App Bundle
+```
 
 ---
 
-```opushunter
+## Milestones
 
-└── 📁OpusHunter
+The roadmap is deliberately staged: reliability and observability come before
+larger automation. Dates are sequence markers for the coming days, not promises
+of a feature being production-ready before its verification gate.
 
-    └── 📁.expo
-        └── 📁dev
-            └── 📁logs
-                ├── start.log
-        └── 📁static-tmp
-            ├── _error.js
-        └── 📁types
-            ├── router.d.ts
-        └── 📁web
-            └── 📁cache
-                └── 📁production
-                    └── 📁images
-                        └── 📁favicon
-                            └── 📁favicon-d3bf733a86eefe9cd8ced00fec99002c68f1eb6aa88d9f55a5de56888e9ecdcc-contain-transparent
-                                ├── favicon-48.png
-        ├── devices.json
-        ├── README.md
-    └── 📁.vscode
-        └── 📁.react
-        ├── settings.json
-    └── 📁app
-        └── 📁(auth)
-            ├── _layout.tsx
-            ├── auth.tsx
-            ├── onboarding.tsx
-            ├── profile-setup.tsx
-        └── 📁(tabs)
-            └── 📁(dashboard)
-                └── 📁admin
-                    ├── _layout.tsx
-                    ├── api-keys.tsx
-                    ├── index.tsx
-                    ├── users.tsx
-                └── 📁configuration
-                    ├── _layout.tsx
-                    ├── cover-letter.tsx
-                    ├── job.tsx
-                └── 📁settings
-                    ├── DocumentUploader.tsx
-                    ├── index.tsx
-                    ├── profile.tsx
-                    ├── vault.tsx
-                ├── _layout.tsx
-                ├── index.tsx
-            ├── _layout.tsx
-            ├── index.tsx
-            ├── pipeline.tsx
-            ├── profile.tsx
-            ├── vault.tsx
-        ├── _layout.tsx
-        ├── +not-found.tsx
-        ├── index.tsx
-    └── 📁assets
-        ├── adaptive-icon-background.png
-        ├── adaptive-icon-foreground.png
-        ├── favicon.png
-        ├── google-logo.png
-        ├── icon.png
-        ├── splash-icon.png
-        ├── splash.png
-    └── 📁components
-        └── 📁jobcardsetup
-            ├── EmptyState.tsx
-            ├── KanbanBoard.tsx
-            ├── RateLimitBanner.tsx
-            ├── SwipeDeck.tsx
-        └── 📁layout
-            ├── AdaptiveLayout.tsx
-            ├── PageContainer.tsx
-        └── 📁shared
-            ├── AnimatedBackground.tsx
-            ├── FadeIn.tsx
-            ├── KeyboardAvoidingWrapper.tsx
-            ├── ProfileDropdown.tsx
-            ├── ResponsiveNavShell.tsx
-            ├── SafeAreaWrapper.tsx
-        └── 📁ui
-            ├── Badge.tsx
-            ├── Button.tsx
-            ├── Chip.tsx
-            ├── GlassCard.tsx
-            ├── Input.tsx
-            ├── LoadingOverlay.tsx
-            ├── Modal.tsx
-            ├── Skeleton.tsx
-            ├── Toast.tsx
-            ├── Typography.tsx
-    └── 📁constants
-        ├── animations.ts
-        ├── theme.ts
-    └── 📁hooks
-        ├── useAdaptiveLayout.ts
-        ├── useGmail.ts
-        ├── useJobs.ts
-    └── 📁lib
-        ├── navConfig.ts
-        ├── queryClient.ts
-        ├── secureStorage.ts
-        ├── supabase.ts
-        ├── theme.ts
-        ├── utils.ts
-    └── 📁stores
-        ├── authStore.ts
-        ├── coverLetterStore.ts
-        ├── jobStore.ts
-        ├── uiStore.ts
-        ├── usePipelineStore.ts
-    └── 📁supabase
-            └── 📁start-secrets
-                └── 📁supabase_edge_runtime_OpusHunter
-                    └── 📁env
-                        ├── docker.env
-                    └── 📁main
-                        ├── index.ts
-            ├── cli-latest
-            ├── gotrue-version
-            ├── linked-project.json
-            ├── pooler-url
-            ├── postgres-version
-            ├── project-ref
-            ├── rest-version
-            ├── storage-migration
-            ├── storage-version
-        └── 📁functions
-            └── 📁_shared
-                ├── ambient.d.ts
-                ├── cors.ts
-                ├── geo.ts
-                ├── keyResolver.ts
-                ├── rateLimit.ts
-                ├── supabaseAdmin.ts
-            └── 📁auto-apply
-                ├── index.ts
-            └── 📁extract-context
-                ├── index.ts
-            └── 📁generate-cover-letter
-                ├── index.ts
-            └── 📁geo-autocomplete
-                ├── index.ts
-            └── 📁save-api-key
-                ├── index.ts
-            └── 📁score-cover-letter
-                ├── index.ts
-            └── 📁scrape-jobs
-                ├── index.ts
-            ├── deno.json
-        └── 📁import 'react-native-url-polyfill
-        └── 📁migrations
-            ├── 20260827214533_migration_test.sql
-            ├── total_data.sql
-            ├── total_structure.sql
-        └── 📁snippets
-        ├── .env
-        ├── .gitignore
-        ├── config.toml
-        ├── polyfill.native.ts
-        ├── polyfill.ts
-    └── 📁types
-        ├── app.types.ts
-        ├── database.types.ts
-    ├── .directory
-    ├── .env
-    ├── .gitignore
-    ├── .npmrc
-    ├── .prettierrc
-    ├── .repomixignore
-    ├── app.json
-    ├── babel.config.cjs
-    ├── eslint.config.js
-    ├── expo-env.d.ts
-    ├── global.css
-    ├── INFO.md
-    ├── metro.config.cjs
-    ├── nativewind-env.d.ts
-    ├── package.json
-    ├── pnpm-lock.yaml
-    ├── pnpm-workspace.yaml
-    ├── README.md
-    ├── repomix-output.xml
-    ├── tailwind.config.js
-    ├── tsconfig.json
-    └── vercel.json
-
+```mermaid
+gantt
+  title OpusHunter delivery milestones
+  dateFormat  YYYY-MM-DD
+  axisFormat  %b %d
+  section Foundation
+  Build and routing hardening       :done, foundation, 2026-09-06, 2d
+  Edge-function verification        :active, edge, 2026-09-07, 3d
+  section Intelligence
+  Context and cover-letter quality  :context, 2026-09-10, 4d
+  Application scoring feedback      :score, 2026-09-14, 4d
+  section Automation
+  ATS compatibility experiments    :ats, 2026-09-18, 5d
+  Human approval gates              :gates, 2026-09-23, 3d
+  section Scale
+  Usage and cost analytics          :analytics, 2026-09-26, 4d
+  Reliability and release checks    :reliability, 2026-09-30, 4d
 ```
+
+### Milestone 1 — Harden the foundation
+
+- Keep Android preview and production builds reproducible.
+- Align filesystem routes with every navigation target.
+- Remove dead duplicate implementations without changing active behavior.
+- Add focused checks for Edge Function imports, dynamic routes, and ownership.
+
+### Milestone 2 — Make the AI workflow dependable
+
+- Improve extraction quality for resumes and certifications.
+- Add structured generation contracts and clearer failure states.
+- Score generated letters with explainable signals.
+- Preserve candidate edits and make regeneration intentional and reversible.
+
+### Milestone 3 — Build responsible application automation
+
+- Detect supported ATS providers rather than assuming compatibility.
+- Introduce a preview of every proposed field before submission.
+- Add explicit candidate approval gates.
+- Capture submission evidence, status, and failure reasons.
+
+### Milestone 4 — Operate it like a real product
+
+- Track provider usage, quotas, latency, and estimated cost.
+- Add crash/error reporting and actionable operational logs.
+- Expand provider adapters behind a shared normalization contract.
+- Establish release checks for Android, web, database migrations, and Edge
+  Functions.
+
+---
+
+## Engineering principles
+
+1. **Truthful status:** documentation must distinguish shipped behavior from
+   planned behavior.
+2. **Candidate control:** generated or submitted content requires visible,
+   understandable approval boundaries.
+3. **Server-side trust boundaries:** client parameters never replace auth,
+   ownership, or role checks.
+4. **Small, reversible changes:** protect working flows and validate before
+   broad refactors.
+5. **Observable automation:** every external call should have a useful outcome,
+   error path, and usage story.
+
+## License
+
+All rights reserved by the project owner unless a repository policy states
+otherwise.
