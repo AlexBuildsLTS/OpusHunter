@@ -75,6 +75,11 @@ const PRESET_SWEDISH_CITIES = [
 ];
 
 type BioTone = "formal" | "executive" | "technical" | "modern";
+type CitySuggestion = {
+  name: string;
+  country?: string;
+  countryCode?: string;
+};
 
 export default function ProfileScreen() {
   const { profile, setProfile, user } = useAuthStore();
@@ -88,13 +93,20 @@ export default function ProfileScreen() {
   const [form, setForm] = useState({
     first_name: profile?.first_name || "",
     last_name: profile?.last_name || "",
+    application_email: profile?.application_email || profile?.email || user?.email || "",
+    phone: profile?.phone || "",
+    linkedin_url: profile?.linkedin_url || "",
+    github_url: profile?.github_url || "",
+    portfolio_url: profile?.portfolio_url || "",
     avatar_url: profile?.avatar_url || "",
     professional_title: profile?.professional_title || "",
     bio: profile?.bio || "",
     years_experience:
       profile?.years_experience != null ? String(profile.years_experience) : "",
-    seniority_levels: (profile?.seniority_level
-      ? [profile.seniority_level as SeniorityLevel]
+    seniority_levels: (profile?.seniority_levels?.length
+      ? (profile.seniority_levels as SeniorityLevel[])
+      : profile?.seniority_level
+        ? [profile.seniority_level as SeniorityLevel]
       : ["mid" as SeniorityLevel]) as SeniorityLevel[],
     target_roles: profile?.target_roles || [],
     work_type_preferences: (profile?.work_type_preferences || []) as WorkType[],
@@ -115,6 +127,12 @@ export default function ProfileScreen() {
       setForm({
         first_name: profile.first_name || "",
         last_name: profile.last_name || "",
+        application_email:
+          profile.application_email || profile.email || user?.email || "",
+        phone: profile.phone || "",
+        linkedin_url: profile.linkedin_url || "",
+        github_url: profile.github_url || "",
+        portfolio_url: profile.portfolio_url || "",
         avatar_url: profile.avatar_url || "",
         professional_title: profile.professional_title || "",
         bio: profile.bio || "",
@@ -122,8 +140,10 @@ export default function ProfileScreen() {
           profile.years_experience != null
             ? String(profile.years_experience)
             : "",
-        seniority_levels: profile.seniority_level
-          ? [profile.seniority_level as SeniorityLevel]
+        seniority_levels: profile.seniority_levels?.length
+          ? (profile.seniority_levels as SeniorityLevel[])
+          : profile.seniority_level
+            ? [profile.seniority_level as SeniorityLevel]
           : ["mid"],
         target_roles: profile.target_roles || [],
         work_type_preferences: (profile.work_type_preferences || []) as WorkType[],
@@ -236,23 +256,45 @@ export default function ProfileScreen() {
 
   // GeoDB / City Search
   const [cityQuery, setCityQuery] = useState("");
-  const [cityResults, setCityResults] = useState<string[]>([]);
+  const [cityResults, setCityResults] = useState<CitySuggestion[]>([]);
+  const [citySearchError, setCitySearchError] = useState<string | null>(null);
 
   useEffect(() => {
     const searchCities = async () => {
       if (cityQuery.length < 2) {
         setCityResults([]);
+        setCitySearchError(null);
         return;
       }
       try {
-        const { data } = await supabase.functions.invoke("geo-autocomplete", {
-          body: { query: cityQuery, countryCode: "SE" },
-        });
-        if (data?.cities) {
-          setCityResults(data.cities.map((c: any) => c.name));
-        }
+        const { data, error } = await supabase.functions.invoke(
+          "geo-autocomplete",
+          {
+            body: { query: cityQuery },
+          },
+        );
+        if (error) throw error;
+        const suggestions = Array.isArray(data?.cities)
+          ? data.cities
+              .filter((city: CitySuggestion) => city?.name)
+              .map((city: CitySuggestion) => ({
+                name: city.name,
+                country: city.country,
+                countryCode: city.countryCode,
+              }))
+          : [];
+        setCityResults(suggestions);
+        setCitySearchError(
+          suggestions.length === 0
+            ? "No matching cities found. Try a larger city or check the spelling."
+            : null,
+        );
       } catch (err) {
         console.warn("City autocomplete error", err);
+        setCityResults([]);
+        setCitySearchError(
+          "City search is temporarily unavailable. Preset cities remain available below.",
+        );
       }
     };
     const timer = setTimeout(searchCities, 300);
@@ -285,6 +327,10 @@ export default function ProfileScreen() {
     setSaving(true);
     setSaveError(null);
     try {
+      const applicationEmail = form.application_email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(applicationEmail)) {
+        throw new Error("Enter a valid application email address.");
+      }
       const primarySeniority = (form.seniority_levels[0] ||
         "mid") as Database["public"]["Enums"]["seniority_level_enum"];
 
@@ -293,12 +339,18 @@ export default function ProfileScreen() {
         .update({
           first_name: form.first_name.trim() || null,
           last_name: form.last_name.trim() || null,
+          application_email: applicationEmail,
+          phone: form.phone.trim() || null,
+          linkedin_url: form.linkedin_url.trim() || null,
+          github_url: form.github_url.trim() || null,
+          portfolio_url: form.portfolio_url.trim() || null,
           professional_title: form.professional_title.trim() || null,
           bio: form.bio.trim() || null,
           years_experience: form.years_experience
             ? parseInt(form.years_experience)
             : null,
           seniority_level: primarySeniority,
+          seniority_levels: form.seniority_levels,
           target_roles: form.target_roles,
           work_type_preferences: form.work_type_preferences,
           target_cities: form.target_cities,
@@ -316,15 +368,35 @@ export default function ProfileScreen() {
       if (error) throw error;
 
       // Re-fetch profile to update Zustand state
-      const { data: updatedProfile } = await supabase
+      const {
+        data: updatedProfile,
+        error: reloadError,
+      } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", profile.id)
         .maybeSingle();
 
-      if (updatedProfile) {
-        setProfile(updatedProfile);
+      if (reloadError) throw reloadError;
+      if (!updatedProfile) {
+        throw new Error(
+          "Profile was not returned after saving. Check the profiles UPDATE policy and run supabase/sql/candidate-contact-fields.sql.",
+        );
       }
+      if (
+        (updatedProfile.application_email || null) !== applicationEmail ||
+        (updatedProfile.linkedin_url || null) !==
+          (form.linkedin_url.trim() || null) ||
+        (updatedProfile.github_url || null) !==
+          (form.github_url.trim() || null) ||
+        (updatedProfile.portfolio_url || null) !==
+          (form.portfolio_url.trim() || null)
+      ) {
+        throw new Error(
+          "The profile update was not persisted. Check the profiles UPDATE policy and confirm the candidate contact columns exist.",
+        );
+      }
+      setProfile(updatedProfile);
 
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -521,6 +593,58 @@ export default function ProfileScreen() {
                   }
                   placeholder="e.g. 7"
                   keyboardType="numeric"
+                />
+              </View>
+            </View>
+
+            <View style={styles.gridTwoCols}>
+              <View style={styles.gridCol}>
+                <Input
+                  label="Phone number (optional)"
+                  value={form.phone}
+                  onChangeText={(t) => setForm({ ...form, phone: t })}
+                  placeholder="+46 70 123 45 67"
+                  keyboardType="phone-pad"
+                />
+              </View>
+              <View style={styles.gridCol}>
+                <Input
+                  label="Application email"
+                  value={form.application_email}
+                  onChangeText={(t) =>
+                    setForm({ ...form, application_email: t })
+                  }
+                  placeholder="name@domain.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            <Input
+              label="LinkedIn URL (optional)"
+              value={form.linkedin_url}
+              onChangeText={(t) => setForm({ ...form, linkedin_url: t })}
+              placeholder="https://www.linkedin.com/in/your-name"
+              autoCapitalize="none"
+            />
+            <View style={styles.gridTwoCols}>
+              <View style={styles.gridCol}>
+                <Input
+                  label="GitHub URL (optional)"
+                  value={form.github_url}
+                  onChangeText={(t) => setForm({ ...form, github_url: t })}
+                  placeholder="https://github.com/username"
+                  autoCapitalize="none"
+                />
+              </View>
+              <View style={styles.gridCol}>
+                <Input
+                  label="Portfolio URL (optional)"
+                  value={form.portfolio_url}
+                  onChangeText={(t) => setForm({ ...form, portfolio_url: t })}
+                  placeholder="https://your-site.example"
+                  autoCapitalize="none"
                 />
               </View>
             </View>
@@ -753,20 +877,33 @@ export default function ProfileScreen() {
               <View style={styles.autocompleteResults}>
                 {cityResults.map((city) => (
                   <Pressable
-                    key={city}
+                    key={`${city.name}-${city.countryCode || city.country || ""}`}
                     onPress={() => {
-                      toggleArrayItem("target_cities", city);
+                      toggleArrayItem("target_cities", city.name);
                       setCityQuery("");
                       setCityResults([]);
+                      setCitySearchError(null);
                     }}
                     style={styles.autocompleteItem}
                   >
-                    <Typography variant="bodySm" color="primary">
-                      {city}
-                    </Typography>
+                    <View>
+                      <Typography variant="bodySm" color="primary">
+                        {city.name}
+                      </Typography>
+                      {!!city.country && (
+                        <Typography variant="caption" color="dim">
+                          {city.country}
+                        </Typography>
+                      )}
+                    </View>
                   </Pressable>
                 ))}
               </View>
+            )}
+            {!!citySearchError && cityQuery.length >= 2 && (
+              <Typography variant="caption" color="dim">
+                {citySearchError}
+              </Typography>
             )}
 
             <Typography variant="caption" color="dim" style={styles.subHeading}>
@@ -879,7 +1016,7 @@ export default function ProfileScreen() {
               materials. English is the default.
             </Typography>
             <View style={styles.toneRow}>
-              {(["english", "swedish"] as const).map((language) => {
+              {(["english ", "swedish"] as const).map((language) => {
                 const active = form.preferred_ai_language === language;
                 return (
                   <Pressable
@@ -900,7 +1037,7 @@ export default function ProfileScreen() {
                           : colors.text.secondary,
                       }}
                     >
-                      {language === "english" ? "English" : "Swedish"}
+                      {language === "swedish" ? "English" : "Swedish"}
                     </Typography>
                   </Pressable>
                 );

@@ -54,7 +54,6 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import Svg, {
   Circle,
-  Path,
   G,
   Line,
   Defs,
@@ -66,76 +65,16 @@ import Svg, {
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  useAnimatedProps,
   withRepeat,
   withTiming,
   withSequence,
   Easing,
-  interpolate,
 } from "react-native-reanimated";
 
 WebBrowser.maybeCompleteAuthSession();
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const AnimatedG = Animated.createAnimatedComponent(G) as any;
-const AnimatedPath = Animated.createAnimatedComponent(Path);
-
 // ─── AMBIENT HEADER GLYPH (Reactive Cybernetic SVG) ─────────────────────────
 function AnimatedSettingsIcon({ size = 84 }: { size?: number }) {
-  const rotationOuter = useSharedValue(0);
-  const rotationInner = useSharedValue(0);
-  const corePulse = useSharedValue(1);
-  const laserSweep = useSharedValue(0);
-
-  useEffect(() => {
-    // Outer gear rotation (clockwise)
-    rotationOuter.value = withRepeat(
-      withTiming(360, { duration: 18000, easing: Easing.linear }),
-      -1,
-      false,
-    );
-
-    // Inner reticle rotation (counter-clockwise)
-    rotationInner.value = withRepeat(
-      withTiming(-360, { duration: 12000, easing: Easing.linear }),
-      -1,
-      false,
-    );
-
-    // Core pulsing reactor
-    corePulse.value = withRepeat(
-      withSequence(
-        withTiming(1.25, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0.9, { duration: 1800, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-      true,
-    );
-
-    // Laser scanning sweep
-    laserSweep.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 2400, easing: Easing.inOut(Easing.quad) }),
-        withTiming(0, { duration: 2400, easing: Easing.inOut(Easing.quad) }),
-      ),
-      -1,
-      true,
-    );
-  }, []);
-
-  const outerGearProps = useAnimatedProps(() => ({
-    transform: `rotate(${rotationOuter.value} 50 50)`,
-  }));
-
-  const innerReticleProps = useAnimatedProps(() => ({
-    transform: `rotate(${rotationInner.value} 50 50)`,
-  }));
-
-  const coreGlowProps = useAnimatedProps(() => ({
-    transform: `translate(50, 50) scale(${corePulse.value}) translate(-50, -50)`,
-    opacity: interpolate(corePulse.value, [0.9, 1.25], [0.65, 1]),
-  }));
-
   return (
     <View
       style={{
@@ -182,7 +121,7 @@ function AnimatedSettingsIcon({ size = 84 }: { size?: number }) {
         />
 
         {/* Outer Rotating Cyber Gear */}
-        <AnimatedG animatedProps={outerGearProps}>
+        <G>
           <Circle
             cx="50"
             cy="50"
@@ -206,10 +145,10 @@ function AnimatedSettingsIcon({ size = 84 }: { size?: number }) {
               />
             );
           })}
-        </AnimatedG>
+        </G>
 
         {/* Inner Counter-Rotating Reticle & Crosshairs */}
-        <AnimatedG animatedProps={innerReticleProps}>
+        <G>
           <Circle
             cx="50"
             cy="50"
@@ -250,14 +189,14 @@ function AnimatedSettingsIcon({ size = 84 }: { size?: number }) {
             stroke="#00F0FF"
             strokeWidth="1.5"
           />
-        </AnimatedG>
+        </G>
 
         {/* Pulsing Central Reactor Core */}
-        <AnimatedG animatedProps={coreGlowProps}>
+        <G>
           <Circle cx="50" cy="50" r="19" fill="url(#coreGlowGrad)" />
           <Circle cx="50" cy="50" r="9" fill="#00F0FF" opacity={0.85} />
           <Circle cx="50" cy="50" r="4.5" fill="#FFFFFF" />
-        </AnimatedG>
+        </G>
       </Svg>
     </View>
   );
