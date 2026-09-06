@@ -112,11 +112,11 @@ export default function ProfileScreen() {
     salary_max: profile?.salary_max != null ? String(profile.salary_max) : "",
     salary_currency: profile?.salary_currency || "",
     languages: profile?.languages || [],
-    preferred_ai_language:
-      profile?.preferred_ai_language === "swedish" ? "swedish" : "english",
+    preferred_ai_language: profile?.preferred_ai_language?.trim() || "english",
   });
 
-  // Keep form in sync when profile updates
+  // Hydrate when switching accounts, but do not overwrite edits during a
+  // background profile refresh on the same account.
   useEffect(() => {
     if (profile) {
       setForm({
@@ -152,10 +152,10 @@ export default function ProfileScreen() {
         salary_currency: profile.salary_currency || "",
         languages: profile.languages || [],
         preferred_ai_language:
-          profile.preferred_ai_language === "swedish" ? "swedish" : "english",
+          profile.preferred_ai_language?.trim() || "english",
       });
     }
-  }, [profile]);
+  }, [profile?.id, user?.email]);
 
   // AI Context query
   const { data: userContext } = useQuery({
@@ -357,21 +357,29 @@ export default function ProfileScreen() {
         );
       }
       if (
+        (updatedProfile.first_name || null) !==
+          (form.first_name.trim() || null) ||
+        (updatedProfile.last_name || null) !==
+          (form.last_name.trim() || null) ||
         (updatedProfile.application_email || null) !== applicationEmail ||
+        (updatedProfile.phone || null) !== (form.phone.trim() || null) ||
         (updatedProfile.linkedin_url || null) !==
           (form.linkedin_url.trim() || null) ||
         (updatedProfile.github_url || null) !==
           (form.github_url.trim() || null) ||
         (updatedProfile.portfolio_url || null) !==
-          (form.portfolio_url.trim() || null)
+          (form.portfolio_url.trim() || null) ||
+        (updatedProfile.preferred_ai_language || "english").trim().toLowerCase() !==
+          (form.preferred_ai_language.trim() || "english").toLowerCase()
       ) {
         throw new Error(
-          "The profile update was not persisted. Check the profiles UPDATE policy and confirm the candidate contact columns exist.",
+          "The profile update was not persisted. Check the profiles UPDATE policy and confirm the profile columns exist.",
         );
       }
       setProfile(updatedProfile);
 
       setSaved(true);
+      showToast("Profile settings saved and synced.", "success");
       setTimeout(() => setSaved(false), 3000);
     } catch (err: any) {
       setSaveError(err.message || "Failed to update profile");
@@ -963,10 +971,18 @@ export default function ProfileScreen() {
             </Typography>
             <Typography variant="caption" color="secondary">
               Used for AI-generated cover letters and other written career
-              materials. English is the default.
+              materials. Enter any language name; English is the default.
             </Typography>
+            <Input
+              label="Preferred AI language"
+              value={form.preferred_ai_language}
+              onChangeText={(preferred_ai_language) =>
+                setForm({ ...form, preferred_ai_language })
+              }
+              placeholder="English"
+            />
             <View style={styles.toneRow}>
-              {(["english ", "swedish"] as const).map((language) => {
+              {(["english", "swedish"] as const).map((language) => {
                 const active = form.preferred_ai_language === language;
                 return (
                   <Pressable
@@ -987,7 +1003,7 @@ export default function ProfileScreen() {
                           : colors.text.secondary,
                       }}
                     >
-                      {language === "swedish" ? "English" : "Swedish"}
+                      {language[0].toUpperCase() + language.slice(1)}
                     </Typography>
                   </Pressable>
                 );
@@ -1049,6 +1065,39 @@ export default function ProfileScreen() {
               <Save size={18} color={colors.text.inverse} />
               {saved ? "Profile Changes Saved! ✓" : "Save Profile Changes"}
             </Button>
+            {saving && (
+              <Typography
+                variant="caption"
+                color="secondary"
+                style={styles.saveStatus}
+              >
+                Saving and verifying your profile…
+              </Typography>
+            )}
+            {!saving && saved && (
+              <View style={styles.saveStatusRow}>
+                <CheckCircle2 size={15} color={colors.accent.green} />
+                <Typography
+                  variant="caption"
+                  weight="medium"
+                  style={{ color: colors.accent.green }}
+                >
+                  Saved successfully and synced.
+                </Typography>
+              </View>
+            )}
+            {!saving && saveError && (
+              <View style={styles.saveStatusRow}>
+                <AlertCircle size={15} color={colors.accent.red} />
+                <Typography
+                  variant="caption"
+                  weight="medium"
+                  style={{ color: colors.accent.red, flex: 1 }}
+                >
+                  Save failed: {saveError}
+                </Typography>
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -1247,8 +1296,16 @@ const styles = StyleSheet.create({
   },
   fullWidthSaveBtn: {
     width: "100%",
+  },
+  saveStatus: {
+    textAlign: "center",
+    marginTop: 8,
+  },
+  saveStatusRow: {
     flexDirection: "row",
-    gap: 8,
+    alignItems: "center",
     justifyContent: "center",
+    gap: 6,
+    marginTop: 8,
   },
 });

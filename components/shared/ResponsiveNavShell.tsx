@@ -130,7 +130,7 @@ export default function ResponsiveNavShell({ children }: { children: React.React
             {NAV_ITEMS.map(item => (
               <Pressable
                 key={item.id}
-                onPress={() => router.push(item.route as any)}
+                onPress={() => router.navigate(item.route as any)}
                 className="min-h-[44px] items-center justify-center p-2"
                 accessibilityRole="link"
                 accessibilityLabel={`Open ${item.label}`}
@@ -177,7 +177,7 @@ export default function ResponsiveNavShell({ children }: { children: React.React
               return (
                 <Pressable
                   key={item.id}
-                  onPress={() => router.push(item.route as any)}
+                  onPress={() => router.navigate(item.route as any)}
                   className="h-full min-h-[44px] w-16 items-center justify-center"
                   accessibilityRole="tab"
                   accessibilityLabel={`Open ${item.label}`}

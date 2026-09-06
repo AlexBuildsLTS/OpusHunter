@@ -80,7 +80,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
         <View style={styles.sidebar}>
           <View style={styles.sidebarInner}>
             <TouchableOpacity
-              onPress={() => router.navigate(NAV_ITEMS[0].route as any)}
+              onPress={() => router.push(NAV_ITEMS[0].route as any)}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel="Open Discover"
@@ -100,7 +100,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
                 return (
                   <TouchableOpacity
                     key={item.key}
-                    onPress={() => router.navigate(item.route as any)}
+                    onPress={() => router.push(item.route as any)}
                     activeOpacity={0.7}
                     style={[styles.navItem, isActive && styles.navItemActive]}
                     accessibilityRole="button"
@@ -177,7 +177,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
                 return (
                   <TouchableOpacity
                     key={item.key}
-                    onPress={() => router.navigate(item.route as any)}
+                    onPress={() => router.push(item.route as any)}
                     activeOpacity={0.7}
                     style={styles.mobileTabItem}
                     accessibilityRole="tab"
