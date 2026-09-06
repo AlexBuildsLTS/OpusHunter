@@ -172,7 +172,7 @@ const PasswordStrengthMeter = ({ password }: { password: string }) => {
 const TERMS_SECTIONS: { title: string; body: string }[] = [
   {
     title: "Terms of Service",
-    body: "By accessing, downloading, or utilizing the OpusHunter platform, you expressly agree to comply with these Terms of Service. OpusHunter is designed for professional job application automation.",
+    body: "By accessing, downloading, or utilizing the OpusHunter platform, you expressly agree to comply with these Terms of Service. OpusHunter helps you discover jobs, prepare application materials, and complete supported application steps under your control.",
   },
   {
     title: "Acceptable Use",
@@ -187,8 +187,8 @@ const TERMS_SECTIONS: { title: string; body: string }[] = [
     body: "If you choose to link a Gmail or Outlook account for sending applications, you grant OpusHunter permission to send email on your behalf using that account's send scope only. OpusHunter never reads your inbox, contacts, or unrelated messages, and you may revoke this access at any time from Settings or directly from your Google/Microsoft account permissions.",
   },
   {
-    title: "Automated Applications",
-    body: "Certain application routes (e.g. direct Greenhouse/Lever submission, or email dispatch to a listed contact address) may be sent automatically once you approve a job. You remain responsible for the accuracy of your profile, resume, and cover letter content used in these submissions.",
+    title: "Application Submission",
+    body: "OpusHunter prepares application materials and opens employer forms after you confirm. A direct Greenhouse submission is available only when the deployment has an employer-authorized Greenhouse Job Board API key and the listing's required questions are answered. Lever, LinkedIn, arbitrary employer forms, and email applications remain manual. You remain responsible for reviewing every field before submission.",
   },
   {
     title: "Data Privacy",
@@ -200,7 +200,7 @@ const TERMS_SECTIONS: { title: string; body: string }[] = [
   },
   {
     title: "Termination",
-    body: "You may stop using the Service and delete your account at any time. OpusHunter may suspend or terminate accounts found to be in violation of these Terms, including abuse of automated submission features or violation of third-party platform terms.",
+    body: "You may stop using the Service and delete your account at any time. OpusHunter may suspend or terminate accounts found to be in violation of these Terms, including abuse of scraping or generation features or violation of third-party platform terms.",
   },
   {
     title: "Limitation of Liability",
@@ -1089,8 +1089,11 @@ const AuthForm = ({
 };
 
 // ─── Marketing Content (Exact Reference Match) ─────────────────────────────
-const MarketingContent = () => (
-  <View style={styles.marketingContainer}>
+const MarketingContent = () => {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  return (
+    <View style={styles.marketingContainer}>
     <View style={styles.heroTextContainer}>
       <Typography
         variant="h3"
@@ -1135,23 +1138,21 @@ const MarketingContent = () => (
         desc: "Dynamic BYOK proxy rotation to bypass rate-limiting and 429 firewalls.",
         color: colors.accent.amber,
       },
-    ].map((item, index) => {
-      const [isHovered, setIsHovered] = useState(false);
-      return (
+    ].map((item, index) => (
         <Animated.View
           key={index}
           entering={FadeInDown.delay(200 + index * 150).duration(800)}
           style={[
             styles.marketingCard,
-            isHovered && {
+            hoveredIndex === index && {
               borderColor: item.color,
               transform: [{ scale: 1.02 }],
             },
           ]}
           // @ts-ignore
-          onMouseEnter={() => setIsHovered(true)}
+          onMouseEnter={() => setHoveredIndex(index)}
           // @ts-ignore
-          onMouseLeave={() => setIsHovered(false)}
+          onMouseLeave={() => setHoveredIndex(null)}
         >
           <View
             style={[
@@ -1183,8 +1184,7 @@ const MarketingContent = () => (
             </Typography>
           </View>
         </Animated.View>
-      );
-    })}
+      ))}
 
     <View style={styles.socialIconsRow}>
       <TouchableOpacity
@@ -1209,8 +1209,9 @@ const MarketingContent = () => (
         <ExternalLink size={18} color={colors.accent.cyan} />
       </TouchableOpacity>
     </View>
-  </View>
-);
+    </View>
+  );
+};
 
 // ─── Security Footer ───────────────────────────────────────────────────────
 const SecurityFooter = () => (
