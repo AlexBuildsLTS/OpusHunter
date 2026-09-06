@@ -99,6 +99,7 @@
     "@babel/core": "^7.24.0",
     "@types/node": "^20.0.0",
     "@types/react": "~19.2.14",
+    "babel-preset-expo": "~57.0.10",
     "babel-plugin-module-resolver": "^5.0.3",
     "babel-plugin-transform-remove-console": "^6.9.4",
     "eas-cli-local-build-plugin": "^20.3.0",
