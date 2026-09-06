@@ -17,6 +17,7 @@ import { Button } from "../../../../components/ui/Button";
 import { Typography } from "../../../../components/ui/Typography";
 import { LoadingOverlay } from "../../../../components/ui/LoadingOverlay";
 import { colors } from "../../../../constants/theme";
+import { useToast } from "../../../../components/ui/Toast";
 
 /** Props for the DocumentUploader modal component. */
 interface DocumentUploaderProps {
@@ -43,6 +44,7 @@ export function DocumentUploader({
 }: DocumentUploaderProps) {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -173,6 +175,12 @@ export function DocumentUploader({
         queryKey: [queryKey, user.id],
       });
 
+      showToast(
+        type === "cv"
+          ? `${totalFiles} CV${totalFiles === 1 ? "" : "s"} uploaded and added to your candidate context.`
+          : `${totalFiles} certification${totalFiles === 1 ? "" : "s"} uploaded and extracted.`,
+        "success",
+      );
       onClose();
     } catch (err: any) {
       setError(err.message || "Upload failed");

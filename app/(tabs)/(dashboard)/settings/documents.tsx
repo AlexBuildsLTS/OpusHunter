@@ -307,8 +307,32 @@ export default function DocumentsScreen() {
           .join("")}
         </body></html>`;
 
+      const baseName = (refinedSourceName || "resume").replace(
+        /\.[^.]+$/,
+        "",
+      );
+      if (Platform.OS === "web") {
+        const printWindow = window.open("", "_blank", "noopener,noreferrer");
+        if (!printWindow) {
+          throw new Error(
+            "The browser blocked the CV export window. Allow pop-ups for this site and try again.",
+          );
+        }
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.addEventListener("load", () => printWindow.print(), {
+          once: true,
+        });
+        showToast(
+          "The improved CV is ready. Choose “Save to PDF” in the print dialog.",
+          "success",
+        );
+        return;
+      }
+
       const result = await Print.printToFileAsync({ html });
-      const pdfPath = `${user.id}/refined-${crypto.randomUUID()}.pdf`;
+      const pdfPath = `${user.id}/ai-improved-${crypto.randomUUID()}.pdf`;
       const pdfBlob = await (await fetch(result.uri)).blob();
       const { error: uploadError } = await supabase.storage
         .from("resumes")
@@ -318,21 +342,17 @@ export default function DocumentsScreen() {
         });
       if (uploadError) throw uploadError;
 
-      const baseName = (refinedSourceName || "resume").replace(
-        /\.[^.]+$/,
-        "",
-      );
       const { data: refinedDocument, error: insertError } = await supabase
         .from("resume_documents")
         .insert({
           user_id: user.id,
           storage_path: pdfPath,
-          file_name: `${baseName} — refined.pdf`,
+          file_name: `${baseName} — AI-improved ATS.pdf`,
           file_type: "application/pdf",
           file_size_kb: Math.max(1, Math.round(pdfBlob.size / 1024)),
           is_primary: false,
           extraction_status: "complete",
-          label: `Refined from ${refinedSourceName || "resume"}`,
+          label: `AI-improved from ${refinedSourceName || "resume"}`,
         })
         .select("*")
         .single();
@@ -346,20 +366,18 @@ export default function DocumentsScreen() {
         queryKey: ["resume-documents", user.id],
       });
 
-      if (Platform.OS === "web") {
-        const link = document.createElement("a");
-        link.href = result.uri;
-        link.download = `${baseName} - refined.pdf`;
-        link.click();
-      } else if (await Sharing.isAvailableAsync()) {
+      if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(result.uri, {
           mimeType: "application/pdf",
-          dialogTitle: "Share refined resume PDF",
+          dialogTitle: "Share AI-improved ATS resume PDF",
         });
       } else {
         await Linking.openURL(result.uri);
       }
-      showToast("Formatted PDF created. Your original CV remains unchanged.", "success");
+      showToast(
+        "AI-improved ATS PDF created. Your original CV remains unchanged.",
+        "success",
+      );
     } catch (err: any) {
       showToast(err.message || "The refined PDF could not be created.", "error");
     } finally {
@@ -488,7 +506,9 @@ export default function DocumentsScreen() {
             >
               Upload PDF or DOCX resumes. The primary resume is automatically
               referenced by OpusHunter when scoring jobs and drafting tailored
-              cover letters.
+              cover letters. Use the sparkle action on an original CV to
+              create a separate AI-improved, ATS-friendly PDF. Your upload is
+              never overwritten.
             </Typography>
 
             {resumeDocs.length === 0 ? (
@@ -514,6 +534,10 @@ export default function DocumentsScreen() {
             ) : (
               <View>
                 {resumeDocs.map((doc) => {
+                  const isAiImproved =
+                    /ai-improved|refined/i.test(
+                      `${doc.file_name} ${doc.label || ""}`,
+                    );
                   const isPending =
                     (doc as any).extraction_status === "pending";
                   const isExtracted =
@@ -559,7 +583,11 @@ export default function DocumentsScreen() {
                           )}
                           {isExtracted && (
                             <Badge
-                              label="AI INDEXED"
+                              label={
+                                isAiImproved
+                                  ? "IMPROVED CV READY"
+                                  : "CV CONTEXT READY"
+                              }
                               variant="green"
                               size="sm"
                             />
@@ -576,19 +604,19 @@ export default function DocumentsScreen() {
                       </View>
 
                       <View style={styles.actionRow}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onPress={() =>
-                            handleRefineResume(doc)
-                          }
-                          loading={isExtracting}
-                          disabled={isExtracting}
-                          style={styles.actionIconBtn}
-                          accessibilityLabel={`Create a reviewable refined draft from ${doc.file_name}`}
-                        >
-                          <Sparkles size={16} color={colors.accent.cyan} />
-                        </Button>
+                        {!isAiImproved && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onPress={() => handleRefineResume(doc)}
+                            loading={isExtracting}
+                            disabled={isExtracting}
+                            style={styles.actionIconBtn}
+                            accessibilityLabel={`Improve ${doc.file_name} with AI`}
+                          >
+                            <Sparkles size={16} color={colors.accent.cyan} />
+                          </Button>
+                        )}
 
                         <Pressable
                           onPress={() => handleOpenDocument(doc)}
@@ -718,13 +746,23 @@ export default function DocumentsScreen() {
                     ]}
                   >
                     <View style={{ flex: 1 }}>
-                      <Typography
-                        variant="bodySm"
-                        weight="bold"
-                        color="primary"
-                      >
-                        {c.cert_name || c.file_name}
-                      </Typography>
+                      <View style={styles.documentTitleRow}>
+                        <Typography
+                          variant="bodySm"
+                          weight="bold"
+                          color="primary"
+                          numberOfLines={2}
+                        >
+                          {c.cert_name || c.file_name}
+                        </Typography>
+                        {(c.cert_name || c.cert_issuer || c.cert_tags?.length) && (
+                          <Badge
+                            label="CREDENTIAL DETAILS READY"
+                            variant="green"
+                            size="sm"
+                          />
+                        )}
+                      </View>
                       <Typography
                         variant="caption"
                         color="dim"
@@ -767,14 +805,16 @@ export default function DocumentsScreen() {
       <Modal
         visible={!!refinedText}
         onClose={() => setRefinedText(null)}
-        title="Refined resume draft"
+        title="AI-improved CV review"
         maxWidth={680}
+        scrollable
       >
         <View style={styles.refinedModalContent}>
           <Typography variant="caption" color="secondary">
-            Draft created from {refinedSourceName || "your resume"}. Your
-            original file remains unchanged. Review every line before making
-            this version primary.
+          This is an improved ATS-friendly version of{" "}
+          {refinedSourceName || "your CV"}. The original uploaded CV is
+          unchanged. Review the content and design trade-offs before
+          exporting this separate PDF or choosing it for applications.
           </Typography>
           <View style={styles.reviewSummary}>
             <Typography variant="bodySm" weight="bold" color="primary">
@@ -814,7 +854,7 @@ export default function DocumentsScreen() {
             </Typography>
           </View>
           <ScrollView
-            style={styles.refinedTextBox}
+            style={[styles.refinedTextBox, isCompact && styles.compactRefinedTextBox]}
             contentContainerStyle={styles.refinedTextContent}
             showsVerticalScrollIndicator
           >
@@ -822,7 +862,12 @@ export default function DocumentsScreen() {
               {refinedText}
             </Typography>
           </ScrollView>
-          <View style={styles.refinedActions}>
+          <View
+            style={[
+              styles.refinedActions,
+              isCompact && styles.compactRefinedActions,
+            ]}
+          >
             {refinedDocument && (
               <Button
                 variant="ghost"
@@ -830,7 +875,7 @@ export default function DocumentsScreen() {
                 onPress={() => handleOpenDocument(refinedDocument)}
                 style={styles.refinedAction}
               >
-                Open refined PDF
+                Open AI-improved PDF
               </Button>
             )}
             <Button
@@ -840,7 +885,9 @@ export default function DocumentsScreen() {
               disabled={isExportingRefined}
               style={styles.refinedAction}
             >
-              {isExportingRefined ? "Creating PDF..." : "Export PDF"}
+              {isExportingRefined
+                ? "Preparing improved PDF..."
+                : "Export improved PDF"}
             </Button>
             <Button
               variant="secondary"
@@ -864,7 +911,7 @@ export default function DocumentsScreen() {
               }}
               style={styles.refinedAction}
             >
-              Make primary
+              Use improved PDF
             </Button>
           </View>
         </View>
@@ -1010,6 +1057,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.06)",
   },
+  documentTitleRow: {
+    alignItems: "center",
+    columnGap: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
   compactDocItem: {
     alignItems: "flex-start",
     flexDirection: "column",
@@ -1073,6 +1126,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
   },
+  compactRefinedTextBox: {
+    maxHeight: 260,
+  },
   refinedTextContent: {
     padding: 14,
   },
@@ -1087,6 +1143,10 @@ const styles = StyleSheet.create({
   refinedActions: {
     flexDirection: "row",
     columnGap: 10,
+  },
+  compactRefinedActions: {
+    flexDirection: "column",
+    rowGap: 10,
   },
   refinedAction: {
     flex: 1,

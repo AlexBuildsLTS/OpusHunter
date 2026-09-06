@@ -40,6 +40,8 @@ import {
   Copy,
   Flame,
   Trash2,
+  FileText,
+  Award,
 } from "lucide-react-native";
 
 import { SafeAreaWrapper } from "@/components/shared/SafeAreaWrapper";
@@ -65,7 +67,7 @@ type ViewMode = "board" | "matrix";
 type StatusFilter = "all" | Status;
 
 export default function PipelineScreen() {
-  const { user } = useAuthStore();
+  const { user, profile } = useAuthStore();
   const queryClient = useQueryClient();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -78,6 +80,9 @@ export default function PipelineScreen() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Application | null>(null);
+  const [prepareApp, setPrepareApp] = useState<Application | null>(null);
+  const [isSubmittingPreparedApplication, setIsSubmittingPreparedApplication] =
+    useState(false);
 
   // Cover Letter Modal State
   const [coverLetterApp, setCoverLetterApp] = useState<Application | null>(
@@ -94,6 +99,49 @@ export default function PipelineScreen() {
     strategy?: string;
   } | null>(null);
   const [copiedNotification, setCopiedNotification] = useState(false);
+
+  const { data: prepareResume } = useQuery({
+    queryKey: ["pipeline-prepare-resume", user?.id],
+    enabled: !!user && !!prepareApp,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("resume_documents")
+        .select("file_name,extraction_status,is_primary")
+        .eq("user_id", user!.id)
+        .eq("is_primary", true)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  const { data: prepareCertifications = [] } = useQuery({
+    queryKey: ["pipeline-prepare-certifications", user?.id],
+    enabled: !!user && !!prepareApp,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("certifications")
+        .select("id,cert_name,cert_issuer,cert_tags,file_name")
+        .eq("user_id", user!.id);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+  const { data: prepareCoverLetter } = useQuery({
+    queryKey: ["pipeline-prepare-cover-letter", prepareApp?.job_id, user?.id],
+    enabled: !!user && !!prepareApp,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cover_letters")
+        .select("id,title,updated_at")
+        .eq("job_id", prepareApp!.job_id)
+        .eq("user_id", user!.id)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
 
   const deleteApplicationMutation = useMutation({
     mutationFn: async (app: Application) => {
@@ -339,6 +387,9 @@ export default function PipelineScreen() {
       } else {
         throw new Error("No letter content generated");
       }
+      await queryClient.invalidateQueries({
+        queryKey: ["pipeline-prepare-cover-letter", app.job_id, user.id],
+      });
     } catch (err) {
       console.error("Cover letter synthesis error:", err);
       setCoverLetterApp(null);
@@ -385,10 +436,46 @@ export default function PipelineScreen() {
     }
     setSelectedApp(null);
     setCoverLetterApp(null);
-    router.navigate({
-      pathname: "/apply/[id]",
-      params: { id: app.job_id },
-    } as any);
+    setPrepareApp(app);
+  };
+
+  const submitPreparedGreenhouseApplication = async () => {
+    if (!prepareApp || !user || isSubmittingPreparedApplication) return;
+    setIsSubmittingPreparedApplication(true);
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "submit-application",
+        {
+          body: {
+            jobId: prepareApp.job_id,
+            confirmation: true,
+            submissionRequestId: crypto.randomUUID(),
+          },
+        },
+      );
+      if (error) throw error;
+      if (!data?.success) {
+        throw new Error(
+          data?.message ||
+            "The provider did not accept the application. It was not marked as sent.",
+        );
+      }
+      showToast(
+        "Greenhouse accepted the application and returned a confirmation.",
+        "success",
+      );
+      setPrepareApp(null);
+      queryClient.invalidateQueries({ queryKey: ["applications", user.id] });
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : "The application was not sent. Nothing was marked as submitted.",
+        "error",
+      );
+    } finally {
+      setIsSubmittingPreparedApplication(false);
+    }
   };
 
   // ── 4. Metric Calculations ───────────────────────────────────────────────
@@ -802,6 +889,7 @@ export default function PipelineScreen() {
               isLoading={false}
               onSelectApplication={(app) => setSelectedApp(app)}
               onDeleteApplication={handleDeleteApplication}
+              onPrepareApplication={prepareApplication}
             />
           ) : filteredApplications.length === 0 ? (
             <Card style={styles.emptyStateCard}>
@@ -1107,6 +1195,238 @@ export default function PipelineScreen() {
           )}
         </Modal>
 
+        <Modal
+          visible={!!prepareApp}
+          onClose={() => setPrepareApp(null)}
+          title="Prepare application"
+          maxWidth={620}
+        >
+          {prepareApp && (
+            <ScrollView
+              style={styles.modalScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalHeaderBlock}>
+                <Typography variant="h3" weight="bold" color="primary">
+                  {prepareApp.job_vault?.title || "Application"}
+                </Typography>
+                <Typography variant="bodySm" color="secondary">
+                  {prepareApp.job_vault?.company || "Company unavailable"}
+                </Typography>
+                <Typography variant="caption" color="dim">
+                  {prepareApp.job_vault?.location || "Location not specified"}
+                </Typography>
+              </View>
+
+              <View style={styles.prepareReadinessBlock}>
+                <Typography
+                  variant="caption"
+                  weight="bold"
+                  color="dim"
+                  style={styles.modalSectionTitle}
+                >
+                  MATERIALS TO REVIEW
+                </Typography>
+                <View style={styles.prepareReadinessRow}>
+                  <CheckCircle2
+                    size={16}
+                    color={
+                      profile?.first_name &&
+                      profile?.last_name &&
+                      (profile?.application_email || profile?.email)
+                        ? colors.accent.green
+                        : colors.accent.amber
+                    }
+                  />
+                  <Typography variant="bodySm" color="secondary">
+                    {profile?.first_name || "First name"}{" "}
+                    {profile?.last_name || "Last name"} ·{" "}
+                    {profile?.application_email || profile?.email || "Email missing"}
+                  </Typography>
+                </View>
+                <View style={styles.prepareReadinessRow}>
+                  <FileText
+                    size={16}
+                    color={
+                      prepareResume &&
+                      ["complete", "completed", "extracted"].includes(
+                        prepareResume.extraction_status.toLowerCase(),
+                      )
+                        ? colors.accent.green
+                        : colors.accent.amber
+                    }
+                  />
+                  <Typography variant="bodySm" color="secondary">
+                    {prepareResume
+                      ? `${prepareResume.file_name} · ${
+                          ["complete", "completed", "extracted"].includes(
+                            prepareResume.extraction_status.toLowerCase(),
+                          )
+                            ? "CV context ready"
+                            : "CV extraction still processing"
+                        }`
+                      : "Primary CV missing"}
+                  </Typography>
+                </View>
+                <View style={styles.prepareReadinessRow}>
+                  <Award
+                    size={16}
+                    color={
+                      prepareCertifications.length
+                        ? colors.accent.green
+                        : colors.text.dim
+                    }
+                  />
+                  <Typography variant="bodySm" color="secondary">
+                    {prepareCertifications.length
+                      ? `${prepareCertifications.length} certification${
+                          prepareCertifications.length === 1 ? "" : "s"
+                        } uploaded · ${
+                          prepareCertifications.filter(
+                            (cert) =>
+                              cert.cert_name ||
+                              cert.cert_issuer ||
+                              cert.cert_tags?.length,
+                          ).length
+                        } extracted`
+                      : "No certifications uploaded"}
+                  </Typography>
+                </View>
+                <View style={styles.prepareReadinessRow}>
+                  <CheckCircle2
+                    size={16}
+                    color={
+                      prepareCoverLetter
+                        ? colors.accent.green
+                        : colors.text.dim
+                    }
+                  />
+                  <Typography variant="bodySm" color="secondary">
+                    {prepareCoverLetter
+                      ? `Cover letter ready · ${prepareCoverLetter.title}`
+                      : "Cover letter not generated yet"}
+                  </Typography>
+                </View>
+                <View style={styles.prepareDetailList}>
+                  <Typography variant="caption" color="dim">
+                    Candidate details sent to a supported provider
+                  </Typography>
+                  <Typography variant="caption" color="secondary">
+                    Name: {profile?.first_name || "Missing"}{" "}
+                    {profile?.last_name || ""}
+                  </Typography>
+                  <Typography variant="caption" color="secondary">
+                    Email: {profile?.application_email || profile?.email || "Missing"}
+                  </Typography>
+                  <Typography variant="caption" color="secondary">
+                    Phone: {profile?.phone || "Not provided"}
+                  </Typography>
+                  <Typography variant="caption" color="secondary">
+                    LinkedIn: {profile?.linkedin_url || "Not provided"}
+                  </Typography>
+                  <Typography variant="caption" color="secondary">
+                    GitHub: {profile?.github_url || "Not provided"}
+                  </Typography>
+                  <Typography variant="caption" color="secondary">
+                    Portfolio: {profile?.portfolio_url || "Not provided"}
+                  </Typography>
+                </View>
+                <View style={styles.prepareDetailList}>
+                  <Typography variant="caption" color="dim">
+                    Certification files
+                  </Typography>
+                  {prepareCertifications.length ? (
+                    prepareCertifications.map((cert) => (
+                      <Typography key={cert.id} variant="caption" color="secondary">
+                        {cert.cert_name || cert.file_name || "Credential"}
+                        {cert.cert_issuer ? ` · ${cert.cert_issuer}` : ""}
+                        {!cert.cert_name &&
+                        !cert.cert_issuer &&
+                        !cert.cert_tags?.length
+                          ? " · details still processing"
+                          : ""}
+                      </Typography>
+                    ))
+                  ) : (
+                    <Typography variant="caption" color="secondary">
+                      None uploaded
+                    </Typography>
+                  )}
+                </View>
+              </View>
+
+              <Typography variant="caption" color="dim" style={styles.prepareNote}>
+                Generate or review the listing-specific cover letter first.
+                Then open the real employer form. A submission is only marked
+                successful after a supported provider returns a confirmation.
+              </Typography>
+              <View style={styles.modalFooterActions}>
+                <Button
+                  variant="primary"
+                  size="md"
+                  onPress={() => {
+                    const targetApp = prepareApp;
+                    setPrepareApp(null);
+                    handleGenerateCoverLetter(targetApp);
+                  }}
+                  style={{ flex: 1 }}
+                >
+                  <Sparkles size={16} color={colors.text.inverse} />
+                  <Text style={styles.btnActionText}>
+                    {prepareCoverLetter
+                      ? "Regenerate cover letter"
+                      : "Generate cover letter"}
+                  </Text>
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  disabled={!(prepareApp.job_vault?.url || prepareApp.job_vault?.source_url)}
+                  onPress={() => void openListing(prepareApp)}
+                  style={{ flex: 1 }}
+                >
+                  <ExternalLink size={16} color={colors.accent.cyan} />
+                  <Text style={[styles.btnActionText, { color: colors.accent.cyan }]}>
+                    Open employer form
+                  </Text>
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onPress={() => setPrepareApp(null)}
+                  style={{ flex: 1 }}
+                >
+                  Done
+                </Button>
+                {(prepareApp.job_vault?.url ||
+                  prepareApp.job_vault?.source_url ||
+                  "")
+                  .toLowerCase()
+                  .includes("greenhouse.io") &&
+                  prepareCoverLetter && (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      disabled={
+                        isSubmittingPreparedApplication ||
+                        !prepareResume ||
+                        !profile?.first_name ||
+                        !profile?.last_name ||
+                        !(profile?.application_email || profile?.email)
+                      }
+                      onPress={() => void submitPreparedGreenhouseApplication()}
+                      style={{ flex: 1 }}
+                    >
+                      {isSubmittingPreparedApplication
+                        ? "Submitting..."
+                        : "Submit through Greenhouse"}
+                    </Button>
+                  )}
+              </View>
+            </ScrollView>
+          )}
+        </Modal>
+
         {/* ── AI Cover Letter Synthesis Modal ── */}
         <Modal
           visible={!!coverLetterApp}
@@ -1206,6 +1526,16 @@ export default function PipelineScreen() {
                   style={styles.letterScroll}
                   showsVerticalScrollIndicator={false}
                 >
+                  <View style={styles.generationSuccess}>
+                    <CheckCircle2 size={16} color={colors.accent.green} />
+                    <Typography
+                      variant="caption"
+                      color="secondary"
+                      style={styles.generationSuccessText}
+                    >
+                      Cover letter generated and saved for this listing
+                    </Typography>
+                  </View>
                   <Card style={styles.letterCard}>
                     <Text style={styles.letterBodyText}>
                       {generatedLetter.body}
@@ -1848,6 +2178,45 @@ const styles = StyleSheet.create({
   },
   modalDataBlock: {
     marginBottom: 14,
+  },
+  prepareReadinessBlock: {
+    gap: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.surface.border,
+    borderRadius: radius.md,
+    backgroundColor: "rgba(255,255,255,0.02)",
+  },
+  prepareReadinessRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+  },
+  prepareDetailList: {
+    gap: 4,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.surface.border,
+  },
+  prepareNote: {
+    lineHeight: 19,
+    marginTop: 14,
+  },
+  generationSuccess: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+    borderRadius: radius.sm,
+    backgroundColor: `${colors.accent.green}12`,
+    borderWidth: 1,
+    borderColor: `${colors.accent.green}35`,
+  },
+  generationSuccessText: {
+    color: colors.accent.green,
   },
   techTagsRow: {
     flexDirection: "row",
