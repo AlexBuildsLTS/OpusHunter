@@ -15,6 +15,9 @@
       },
       "env": {
         "EXPO_PUBLIC_APP_ENV": "development"
+      },
+      "cache": {
+        "key": "v1"
       }
     },
     "preview": {
@@ -24,6 +27,9 @@
       },
       "env": {
         "EXPO_PUBLIC_APP_ENV": "preview"
+      },
+      "cache": {
+        "key": "v1"
       }
     },
     "production": {
@@ -33,6 +39,9 @@
       },
       "env": {
         "EXPO_PUBLIC_APP_ENV": "production"
+      },
+      "cache": {
+        "key": "v1"
       }
     }
   },
