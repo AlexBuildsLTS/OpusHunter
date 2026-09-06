@@ -16,15 +16,15 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { SafeAreaWrapper } from "../../../../components/shared/SafeAreaWrapper";
-import { Typography } from "../../../../components/ui/Typography";
-import { Card } from "../../../../components/ui/GlassCard";
-import { Badge } from "../../../../components/ui/Badge";
-import { Button } from "../../../../components/ui/Button";
-import { LoadingOverlay } from "../../../../components/ui/LoadingOverlay";
-import { supabase } from "../../../../lib/supabase";
-import { useAuthStore } from "../../../../stores/authStore";
-import { colors, radius } from "../../../../constants/theme";
+import { SafeAreaWrapper } from "../../components/shared/SafeAreaWrapper";
+import { Typography } from "../../components/ui/Typography";
+import { Card } from "../../components/ui/GlassCard";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { LoadingOverlay } from "../../components/ui/LoadingOverlay";
+import { supabase } from "../../lib/supabase";
+import { useAuthStore } from "../../stores/authStore";
+import { colors, radius } from "../../constants/theme";
 import {
   ArrowLeft,
   MapPin,
@@ -34,7 +34,7 @@ import {
   Sparkles,
 } from "lucide-react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Database } from "../../../../types/database.types";
+import type { Database } from "../../types/database.types";
 
 type JobListing = Database["public"]["Tables"]["job_vault"]["Row"];
 
@@ -79,9 +79,7 @@ export default function JobDetailScreen() {
         queryKey: ["cover-letters", user.id],
       });
       if (data?.cover_letter_id) {
-        router.push(
-          `/configuration/cover-letter/${data.cover_letter_id}` as any,
-        );
+        router.push(`/cover-letter/${data.cover_letter_id}` as any);
       }
     } catch (err: any) {
       setGenerationError(err.message || "Failed to generate cover letter");
@@ -93,6 +91,11 @@ export default function JobDetailScreen() {
   const handleApplyNow = async () => {
     if (!job?.url) return;
     await Linking.openURL(job.url);
+  };
+
+  const handlePrepareApplication = () => {
+    if (!job) return;
+    router.push(`/apply/${job.id}` as any);
   };
 
   if (isLoading || !job) {
@@ -276,10 +279,18 @@ export default function JobDetailScreen() {
 
         <Button
           variant="primary"
+          onPress={handlePrepareApplication}
+          style={styles.applyBtn}
+        >
+          Prepare Application
+        </Button>
+
+        <Button
+          variant="secondary"
           onPress={handleApplyNow}
           style={styles.applyBtn}
         >
-          Apply Now
+          Apply on Website
         </Button>
       </ScrollView>
 

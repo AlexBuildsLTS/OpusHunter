@@ -15,14 +15,14 @@ import {
   Linking,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { SafeAreaWrapper } from "../../../../components/shared/SafeAreaWrapper";
-import { Typography } from "../../../../components/ui/Typography";
-import { Card } from "../../../../components/ui/GlassCard";
-import { Badge } from "../../../../components/ui/Badge";
-import { Button } from "../../../../components/ui/Button";
-import { supabase } from "../../../../lib/supabase";
-import { useAuthStore } from "../../../../stores/authStore";
-import { colors, radius } from "../../../../constants/theme";
+import { SafeAreaWrapper } from "../../components/shared/SafeAreaWrapper";
+import { Typography } from "../../components/ui/Typography";
+import { Card } from "../../components/ui/GlassCard";
+import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
+import { supabase } from "../../lib/supabase";
+import { useAuthStore } from "../../stores/authStore";
+import { colors, radius } from "../../constants/theme";
 import {
   ArrowLeft,
   Copy,
@@ -38,7 +38,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import * as Sharing from "expo-sharing";
 import * as Haptics from "expo-haptics";
-import { Database } from "types/database.types";
+import type { Database } from "../../types/database.types";
 
 
 type CoverLetter = Database["public"]["Tables"]["cover_letters"]["Row"];
@@ -136,6 +136,11 @@ export default function CoverLetterScreen() {
       // Fallback: copy letter to clipboard
       await handleCopy();
     }
+  };
+
+  const handlePrepareApplication = () => {
+    if (!letter?.job_id) return;
+    router.push(`/apply/${letter.job_id}` as any);
   };
 
   if (isLoading || !letter) {
@@ -326,8 +331,20 @@ export default function CoverLetterScreen() {
           </Typography>
         )}
 
-        {/* Apply Now */}
-        <Button variant="primary" onPress={handleApply} style={styles.applyBtn}>
+        <Button
+          variant="primary"
+          onPress={handlePrepareApplication}
+          style={styles.applyBtn}
+        >
+          <ExternalLink size={18} color={colors.text.inverse} /> Prepare
+          Application
+        </Button>
+
+        <Button
+          variant="secondary"
+          onPress={handleApply}
+          style={styles.applyBtn}
+        >
           <ExternalLink size={18} color={colors.text.inverse} /> Apply Now
         </Button>
 
@@ -337,9 +354,8 @@ export default function CoverLetterScreen() {
           textAlign="center"
           style={styles.hint}
         >
-          Apply Now opens the job application URL. Your cover letter is ready to
-          paste, and your CV & Certifications will be auto-attached once
-          auto-apply is enabled.
+          Prepare Application checks your materials first. Apply Now keeps the
+          direct website link available.
         </Typography>
       </ScrollView>
     </SafeAreaWrapper>
