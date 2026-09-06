@@ -56,6 +56,14 @@ export default function DocumentsScreen() {
   const [refinedDocumentId, setRefinedDocumentId] = useState<string | null>(
     null,
   );
+  const [refinedDocument, setRefinedDocument] = useState<ResumeDoc | null>(
+    null,
+  );
+  const [refinementReview, setRefinementReview] = useState<{
+    improvements: string[];
+    warnings: string[];
+    atsChecks: Record<string, boolean>;
+  }>({ improvements: [], warnings: [], atsChecks: {} });
   const [refinedSourceName, setRefinedSourceName] = useState<string | null>(
     null,
   );
@@ -97,6 +105,11 @@ export default function DocumentsScreen() {
   });
 
   const handleDeleteDoc = async (id: string, path: string) => {
+    const documentToDelete = resumeDocs.find((doc) => doc.id === id);
+    if (documentToDelete?.is_primary) {
+      showToast("Choose another resume as primary before deleting this one.", "error");
+      return;
+    }
     try {
       const { error: storageError } = await supabase.storage
         .from("resumes")
@@ -217,7 +230,15 @@ export default function DocumentsScreen() {
       }
       setRefinedText(data.refinedText);
       setRefinedDocumentId(null);
+      setRefinedDocument(null);
       setRefinedSourceName(doc.file_name);
+      setRefinementReview({
+        improvements: Array.isArray(data.improvements) ? data.improvements : [],
+        warnings: Array.isArray(data.warnings) ? data.warnings : [],
+        atsChecks: data.atsChecks && typeof data.atsChecks === "object"
+          ? data.atsChecks
+          : {},
+      });
       await queryClient.invalidateQueries({
         queryKey: ["resume-documents", user?.id],
       });
@@ -299,6 +320,7 @@ export default function DocumentsScreen() {
         throw insertError;
       }
       setRefinedDocumentId(refinedDocument.id);
+      setRefinedDocument(refinedDocument as ResumeDoc);
       await queryClient.invalidateQueries({
         queryKey: ["resume-documents", user.id],
       });
@@ -733,6 +755,33 @@ export default function DocumentsScreen() {
             original file remains unchanged. Review every line before making
             this version primary.
           </Typography>
+          <View style={styles.reviewSummary}>
+            <Typography variant="bodySm" weight="bold" color="primary">
+              What the AI changed
+            </Typography>
+            {refinementReview.improvements.length > 0 ? (
+              refinementReview.improvements.map((item, index) => (
+                <Typography key={`${item}-${index}`} variant="caption" color="secondary">
+                  • {item}
+                </Typography>
+              ))
+            ) : (
+              <Typography variant="caption" color="dim">
+                Structure and wording were improved only where supported by the source.
+              </Typography>
+            )}
+            {refinementReview.warnings.map((item, index) => (
+              <Typography key={`warning-${item}-${index}`} variant="caption" color="secondary">
+                ⚠ {item}
+              </Typography>
+            ))}
+            <Typography variant="caption" color="dim">
+              ATS checks: {Object.entries(refinementReview.atsChecks)
+                .filter(([, passed]) => passed)
+                .map(([name]) => name.replace(/_/g, " "))
+                .join(" · ") || "review required"}
+            </Typography>
+          </View>
           <ScrollView
             style={styles.refinedTextBox}
             contentContainerStyle={styles.refinedTextContent}
@@ -743,6 +792,16 @@ export default function DocumentsScreen() {
             </Typography>
           </ScrollView>
           <View style={styles.refinedActions}>
+            {refinedDocument && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onPress={() => handleOpenDocument(refinedDocument)}
+                style={styles.refinedAction}
+              >
+                Open refined PDF
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="sm"
@@ -967,6 +1026,14 @@ const styles = StyleSheet.create({
   },
   refinedModalContent: {
     rowGap: 14,
+  },
+  reviewSummary: {
+    gap: 5,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(6, 182, 212, 0.22)",
+    backgroundColor: "rgba(6, 182, 212, 0.06)",
   },
   refinedTextBox: {
     maxHeight: 420,
