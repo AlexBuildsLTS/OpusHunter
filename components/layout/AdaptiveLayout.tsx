@@ -21,11 +21,7 @@ import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProfileDropdown } from "../shared/ProfileDropdown";
 import { C } from "../../constants/theme";
-import {
-  NAV_ITEMS,
-  SIDEBAR_WIDTH,
-  TAB_BAR_HEIGHT,
-} from "../../lib/navConfig";
+import { NAV_ITEMS, SIDEBAR_WIDTH, TAB_BAR_HEIGHT } from "../../lib/navConfig";
 import { useAdaptiveLayout } from "../../hooks/useAdaptiveLayout";
 
 export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
@@ -39,7 +35,6 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
       return (
         pathname === "/" ||
         pathname === "/(tabs)" ||
-        pathname === "/(tabs)/index" ||
         pathname === "/(tabs)/(dashboard)" ||
         pathname === "/(tabs)/(dashboard)/index"
       );
@@ -85,7 +80,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
         <View style={styles.sidebar}>
           <View style={styles.sidebarInner}>
             <TouchableOpacity
-              onPress={() => router.push("/(tabs)/index" as any)}
+              onPress={() => router.navigate(NAV_ITEMS[0].route as any)}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel="Open Discover"
@@ -105,7 +100,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
                 return (
                   <TouchableOpacity
                     key={item.key}
-                    onPress={() => router.push(item.route as any)}
+                    onPress={() => router.navigate(item.route as any)}
                     activeOpacity={0.7}
                     style={[styles.navItem, isActive && styles.navItemActive]}
                     accessibilityRole="button"
@@ -130,21 +125,10 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
       )}
 
       {/* ── MAIN CONTENT CONTAINER ──────────────────────────────── */}
-      <View style={styles.mainContent}>
-        {/* 1. SCROLLABLE CONTENT (Bottom Layer with automatic top spacing to clear header) */}
-        <View
-          style={[
-            styles.mainContent,
-            {
-              paddingTop: Math.max(insets.top, 8) + 68,
-              paddingBottom: isDesktop
-                ? 16
-                : TAB_BAR_HEIGHT + Math.max(insets.bottom, 24) + 32,
-            },
-          ]}
-        >
-          {children}
-        </View>
+      <View style={styles.mainContent} pointerEvents="box-none">
+        {/* Keep the routed screen in a full-screen layer. Individual screens own
+            their ScrollView, so the shell must not become a second scroll trap. */}
+        <View style={styles.contentLayer}>{children}</View>
 
         {/* 2. ABSOLUTE FLOATING HEADER (Top Layer) */}
         <View
@@ -193,7 +177,7 @@ export const AdaptiveLayout = ({ children }: { children: React.ReactNode }) => {
                 return (
                   <TouchableOpacity
                     key={item.key}
-                    onPress={() => router.push(item.route as any)}
+                    onPress={() => router.navigate(item.route as any)}
                     activeOpacity={0.7}
                     style={styles.mobileTabItem}
                     accessibilityRole="tab"
@@ -285,10 +269,13 @@ const styles = StyleSheet.create({
     zIndex: 10,
     height: "100%",
     minHeight: 0,
-    overflow: "hidden",
     backgroundColor: "transparent",
   },
   contentBody: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 1,
+  },
+  contentLayer: {
     ...StyleSheet.absoluteFill,
     zIndex: 1,
   },
