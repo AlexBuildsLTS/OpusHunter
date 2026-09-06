@@ -12,8 +12,22 @@ import {
   logUsage,
 } from "../_shared/keyResolver.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { z } from "https://esm.sh/zod@3.23.8";
 
 const supabase = getSupabaseAdmin();
+const generatedLetterSchema = z.object({
+  body: z.string().min(200),
+  contact: z
+    .object({
+      name: z.string().optional(),
+      email: z.string().optional(),
+      phone: z.string().optional(),
+      linkedin_url: z.string().optional(),
+      github_url: z.string().optional(),
+      portfolio_url: z.string().optional(),
+    })
+    .optional(),
+});
 
 export const GEMINI_MODEL_CASCADE = [
   "gemini-3.7-flash", // Stable - August 2026 release (Deep reasoning & 64k output)
@@ -164,6 +178,7 @@ ${job.description || "No description provided."}
 
 CANDIDATE GROUND TRUTH (STRICT SOURCE OF FACT — NEVER FABRICATE OUTSIDE THIS):
 Candidate Name: ${profile.first_name || ""} ${profile.last_name || ""}
+Application Email: ${profile.application_email || profile.email}
 Professional Title: ${profile.professional_title || "Not provided"}
 Bio: ${profile.bio || "Not provided"}
 Career Summary: ${context.career_summary || "Not provided"}
@@ -190,7 +205,9 @@ CRITICAL ANTI-HALLUCINATION & APPLICATION INTEGRITY RULES:
    - Length: 250 - 350 words across 3-4 structured paragraphs.
    - Closing: Direct, confident call to action to discuss architectural alignment and engineering execution.
 
-Return ONLY the raw cover letter text with no conversational intro, markdown wrappers, or commentary.`;
+Return ONLY valid JSON matching this shape:
+{"body":"the cover letter text","contact":{"name":"...","email":"...","phone":"...","linkedin_url":"...","github_url":"...","portfolio_url":"..."}}
+The contact object is optional. Never invent or use example contact details.`;
 
     // 4. Call Gemini with canonical fallback chain
     const isExecutiveTone =
@@ -218,6 +235,7 @@ Return ONLY the raw cover letter text with no conversational intro, markdown wra
                 generationConfig: {
                   temperature: isExecutiveTone ? 0.6 : 0.7,
                   maxOutputTokens: 2048,
+                  responseMimeType: "application/json",
                 },
               }),
             },
@@ -250,7 +268,52 @@ Return ONLY the raw cover letter text with no conversational intro, markdown wra
           const generatedText =
             geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
           if (generatedText) {
-            content = generatedText;
+            const parsed = generatedLetterSchema.safeParse(
+              JSON.parse(generatedText.replace(/^```json\s*|\s*```$/gi, "")),
+            );
+            if (!parsed.success) {
+              console.warn("[generate-cover-letter] Rejected invalid structured output");
+              continue;
+            }
+
+            const candidateContact = parsed.data.contact;
+            const expectedContact = {
+              name: `${profile.first_name || ""} ${profile.last_name || ""}`.trim(),
+              email: profile.application_email || profile.email,
+              phone: profile.phone || undefined,
+              linkedin_url: profile.linkedin_url || undefined,
+              github_url: profile.github_url || undefined,
+              portfolio_url: profile.portfolio_url || undefined,
+            };
+            const contactMatches = !candidateContact || Object.entries(candidateContact).every(
+              ([key, value]) =>
+                !value ||
+                value === expectedContact[key as keyof typeof expectedContact],
+            );
+            if (!contactMatches) {
+              console.warn("[generate-cover-letter] Rejected mismatched contact details");
+              continue;
+            }
+
+            const bodyLower = parsed.data.body.toLowerCase();
+            const hasPlaceholderContact =
+              /(?:example\.com|jane doe|john doe|alex\.fredrik)/i.test(
+                parsed.data.body,
+              );
+            const containsWrongEmail =
+              [...bodyLower.matchAll(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi)]
+                .map(([email]) => email.toLowerCase())
+                .some(
+                  (email) =>
+                    email !==
+                    (profile.application_email || profile.email).toLowerCase(),
+                );
+            if (hasPlaceholderContact || containsWrongEmail) {
+              console.warn("[generate-cover-letter] Rejected placeholder or mismatched email");
+              continue;
+            }
+
+            content = parsed.data.body;
             successfulModel = model;
             successfulKeySource = keyObj.source;
             totalTokensUsed = geminiData.usageMetadata?.totalTokenCount || 0;
