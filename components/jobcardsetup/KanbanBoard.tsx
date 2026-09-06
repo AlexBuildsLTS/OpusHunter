@@ -37,6 +37,7 @@ import {
   Trash2,
   Clock,
   ArrowRight,
+  RobotVacuum,
 } from "lucide-react-native";
 import { Card } from "../ui/GlassCard";
 import { Badge } from "../ui/Badge";
@@ -95,7 +96,7 @@ export const COLUMNS: {
   },
 ];
 
-const COLUMN_WIDTH = 290;
+const COLUMN_WIDTH = 250;
 const COMPACT_BREAKPOINT = 760;
 
 function formatSource(source: string | null | undefined) {
@@ -117,6 +118,7 @@ interface KanbanBoardProps {
   isLoading: boolean;
   onSelectApplication?: (app: Application) => void;
   onDeleteApplication?: (app: Application) => void;
+  onPrepareApplication?: (app: Application) => void;
 }
 
 function triggerHaptic(type: "grab" | "drop" | "action") {
@@ -139,12 +141,14 @@ function JobCardCompact({
   onAdvance,
   onReject,
   onDelete,
+  onPrepareApplication,
 }: {
   app: Application;
   onPress: () => void;
   onAdvance: () => void;
   onReject: () => void;
   onDelete: () => void;
+  onPrepareApplication: () => void;
 }) {
   const job = app.job_vault;
   const colConfig = COLUMNS.find((c) => c.key === app.status);
@@ -177,6 +181,14 @@ function JobCardCompact({
               </Typography>
             </View>
           </View>
+          <View style={styles.sourceBadge}>
+            <Badge
+              variant="default"
+              label={formatSource(job?.source)}
+              size="sm"
+              dot={false}
+            />
+          </View>
         </View>
 
         {/* Location & Salary Info */}
@@ -202,13 +214,6 @@ function JobCardCompact({
 
         {/* Card Footer with Source Badge and Fast Progression Buttons */}
         <View style={styles.compactFooter}>
-          <Badge
-            variant="default"
-            label={formatSource(job?.source)}
-            size="sm"
-            dot={false}
-          />
-
           <View style={styles.cardActions}>
             {(app.status === "saved" || app.status === "rejected") && (
               <Pressable
@@ -248,6 +253,22 @@ function JobCardCompact({
                 <XCircle size={15} color={colors.text.dim} />
               </TouchableOpacity>
             )}
+
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                onPrepareApplication();
+              }}
+              style={({ pressed }) => [
+                styles.prepareBtn,
+                pressed && styles.actionPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Prepare application for ${job?.title || "job"}`}
+              hitSlop={4}
+            >
+              <RobotVacuum size={14} color={colors.accent.cyan} />
+            </Pressable>
 
             {colConfig?.nextStatus && (
               <TouchableOpacity
@@ -294,6 +315,7 @@ interface DraggableCardProps {
   onAdvance: () => void;
   onReject: () => void;
   onDelete: () => void;
+  onPrepareApplication: () => void;
   isCompact: boolean;
 }
 
@@ -304,6 +326,7 @@ function DraggableCard({
   onAdvance,
   onReject,
   onDelete,
+  onPrepareApplication,
   isCompact,
 }: DraggableCardProps) {
   const translateX = useSharedValue(0);
@@ -368,6 +391,7 @@ function DraggableCard({
           onAdvance={onAdvance}
           onReject={onReject}
           onDelete={onDelete}
+          onPrepareApplication={onPrepareApplication}
         />
       </Animated.View>
     </GestureDetector>
@@ -379,6 +403,7 @@ export function KanbanBoard({
   isLoading,
   onSelectApplication,
   onDeleteApplication,
+  onPrepareApplication,
 }: KanbanBoardProps) {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
@@ -527,6 +552,7 @@ export function KanbanBoard({
                       onAdvance={() => handleAdvance(app)}
                       onReject={() => handleReject(app)}
                       onDelete={() => onDeleteApplication?.(app)}
+                      onPrepareApplication={() => onPrepareApplication?.(app)}
                     />
                   ))
                 )}
@@ -728,6 +754,7 @@ const styles = StyleSheet.create({
   },
   compactHeader: {
     marginBottom: 6,
+    paddingRight: 72,
   },
   compactTitleWrap: {
     rowGap: 3,
@@ -737,6 +764,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     columnGap: 5,
     marginTop: 2,
+  },
+  sourceBadge: {
+    position: "absolute",
+    top: -2,
+    right: 0,
+    maxWidth: 70,
   },
   metaRow: {
     flexDirection: "row",
@@ -766,16 +799,16 @@ const styles = StyleSheet.create({
   iconActionBtn: {
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
-    minWidth: 44,
+    minHeight: 32,
+    minWidth: 32,
     padding: 4,
     zIndex: 10,
   },
   deleteActionBtn: {
-    width: 44,
-    height: 44,
-    minWidth: 44,
-    minHeight: 44,
+    width: 32,
+    height: 32,
+    minWidth: 32,
+    minHeight: 32,
     padding: 0,
     borderRadius: radius.sm,
     backgroundColor: `${colors.accent.red}12`,
@@ -791,10 +824,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     columnGap: 4,
     paddingHorizontal: 8,
-    minHeight: 44,
-    paddingVertical: 4,
+    minHeight: 32,
+    paddingVertical: 3,
     borderRadius: radius.sm,
     borderWidth: 1,
+  },
+  prepareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    columnGap: 4,
+    minHeight: 32,
+    paddingHorizontal: 7,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: `${colors.accent.cyan}50`,
+    backgroundColor: `${colors.accent.cyan}12`,
   },
   modalContent: {
     rowGap: 16,
