@@ -125,7 +125,13 @@ export function ActiveTargetCard({
   const countries = profile?.target_countries || [];
   const radiusKm = profile?.location_radius_km;
   const workTypes = profile?.work_type_preferences || [];
-  const seniority = profile?.seniority_level || "not configured";
+  const seniorityLevels =
+    profile?.seniority_levels?.length
+      ? profile.seniority_levels
+      : profile?.seniority_level
+        ? [profile.seniority_level]
+        : [];
+  const seniority = seniorityLevels.join(", ") || "not configured";
   const maxDaily = profile?.max_daily_applications;
   const salaryMin = profile?.salary_min;
   const salaryMax = profile?.salary_max;
@@ -169,6 +175,7 @@ export function ActiveTargetCard({
           cities,
           countries,
           workTypes,
+          seniorityLevels,
         },
         {
         batchSize,

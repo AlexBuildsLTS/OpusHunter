@@ -87,7 +87,6 @@ export const COLUMNS: {
     color: colors.status.interview,
     nextStatus: "offer",
   },
-  { key: "offer", label: "Offer", color: colors.status.offer },
   {
     key: "rejected",
     label: "Rejected",
